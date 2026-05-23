@@ -525,9 +525,12 @@ async function hydrateFromSaveIfAny() {
         if (radio) radio.checked = true;
       }
       if (typeof d.player?.permadeath === "boolean") el("permadeath").checked = d.player.permadeath;
+      return true;
     }
+    return false;
   } catch {
-    /* ignore */
+    el("savePill").textContent = `存档:${playerId.slice(0, 8)}...(无法连接服务端)`;
+    return false;
   }
 }
 
@@ -640,16 +643,33 @@ el("btnFinale").addEventListener("click", async () => {
 
 // 初始化
 async function init() {
-  const d = await pingModel();
-  if (d) {
-    el("modelPill").textContent = `模型：${d.model}${d.world ? ` · ${d.world}` : ""}`;
-  } else {
-    el("modelPill").textContent = "模型：离线";
+  try {
+    const d = await pingModel();
+    if (d) {
+      el("modelPill").textContent = `模型：${d.model}${d.world ? ` · ${d.world}` : ""}`;
+    } else {
+      el("modelPill").textContent = `模型：离线`;
+      el("modelPill").classList.add("pill", "danger");
+    }
+  } catch {
+    el("modelPill").textContent = `模型：离线`;
+    el("modelPill").classList.add("pill", "danger");
   }
   
   setupWASD();
   if (store.getState().playerId) {
-    void hydrateFromSaveIfAny();
+    try {
+      await hydrateFromSaveIfAny();
+    } catch {
+      // 存档恢复失败，静默处理
+    }
+  }
+
+  // 移除加载遮罩
+  const overlay = document.getElementById("loadingOverlay");
+  if (overlay) {
+    overlay.addEventListener("transitionend", () => overlay.remove(), { once: true });
+    overlay.classList.add("is-hidden-fade");
   }
 }
 
