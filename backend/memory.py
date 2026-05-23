@@ -66,39 +66,70 @@ def _generate_insight_text(old_text: str, new_text: str, old_importance: float) 
     - 如果旧记忆含「怀疑/传闻/某人」关键词 → 顿悟可能是「原来...」
     - 如果旧记忆含「约定/承诺/待办」关键词 → 顿悟可能是「此刻想起...」
     - 如果旧记忆含「物品/货物/买卖」关键词 → 顿悟可能是「这才明白...」
+    - 如果旧记忆含「情感/恩怨」关键词 → 顿悟可能是「心头翻涌...」
     - 其他情况 → 泛化顿悟「忽然想到..."
 
     这种简化的语义匹配降低了 LLM 开销,同时保留了"旧事看懂了"的核心体验。
+    2026-05-24 改进：新增情感/恩怨模式、泛化模板增至 5 种备选以增加多样性。
     """
-    # 关键词模式匹配
+    # 关键词模式匹配（5 类）
     suspicion_kw = ("怀疑", "传闻", "道听途说", "有人说", "似乎", "好像", "疑心", "可疑")
     promise_kw = ("约定", "承诺", "说过", "待办", "以后", "下次", "回头", "改日")
     goods_kw = ("物品", "货物", "买卖", "银子", "钱", "制钱", "货", "买", "卖", "价")
     person_kw = ("某人", "那人", "他", "她", "谁", "有人")
+    emotion_kw = ("恨", "怨", "怒", "悲", "痛", "悔", "愧", "思念", "感激", "欢喜", "恩", "仇")
 
     old_lower = old_text.lower()
+    snippet = old_text[:50].strip()
 
-    # 模式匹配
+    import random
     if any(kw in old_lower for kw in suspicion_kw):
-        # "原来那时候的传闻是这意思" → 确信型顿悟
-        template = f"想起之前{old_text[:40]}--原来如此,这才明白其中缘由。"
-    elif any(kw in old_lower for kw in promise_kw):
-        # "想起约好的事" → 回扣型顿悟
-        template = f"忽然想起之前{old_text[:40]},此刻心头一动,或许有了眉目。"
-    elif any(kw in old_lower for kw in goods_kw):
-        # "这买卖原来有这层意思" → 交易型顿悟
-        template = f"想起之前的{old_text[:40]}--如今才悟出其中门道。"
-    elif any(kw in old_lower for kw in person_kw):
-        # "那人原来是这样" → 人物型顿悟
-        template = f"想起{old_text[:50]}--此刻忽然看清了那人的真意。"
+        variants = [
+            f"想起之前{snippet}——原来如此，这才明白其中缘由。",
+            f"旧疑云忽散：{snippet}——与新见之事暗合，疑团豁然开朗。",
+            f"之前{snippet}如今有了答案，心头一块石头落了地。",
+        ]
+        return random.choice(variants)
+    if any(kw in old_lower for kw in emotion_kw):
+        variants = [
+            f"心头翻涌：{snippet}——今日回想，滋味又与当初不同。",
+            f"想起{snippet}——那股情绪至今还在心头打转。",
+            f"旧事重上心头：{snippet}，像是昨日才发生的一般。",
+        ]
+        return random.choice(variants)
+    if any(kw in old_lower for kw in promise_kw):
+        variants = [
+            f"忽然想起之前{snippet}，此刻心头一动，或许有了眉目。",
+            f"念及{snippet}——是时候去赴那个约了。",
+            f"旧约未践：{snippet}，心里忽然惦了起来。",
+        ]
+        return random.choice(variants)
+    if any(kw in old_lower for kw in goods_kw):
+        variants = [
+            f"想起之前的{snippet}——如今才悟出其中门道。",
+            f"生意经忽转：{snippet}，原来利在别处。",
+        ]
+        return random.choice(variants)
+    if any(kw in old_lower for kw in person_kw):
+        variants = [
+            f"想起{snippet}——此刻忽然看清了那人的真意。",
+            f"人物旧影：{snippet}，重新掂量，或许当初看走了眼。",
+            f"那人{snippet}的事，今天想来倒另有一层意思。",
+        ]
+        return random.choice(variants)
+    # 泛化顿悟：旧事与新事的碰撞（5 种备选模板）
+    if old_importance >= 7.0:
+        variants = [
+            f"想起{snippet}——心头忽然一动，悟出了些先前没想通的关窍。",
+            f"旧事重提：{snippet}，此刻才看清其中关节。",
+        ]
     else:
-        # 泛化顿悟:旧事与新事的碰撞
-        if old_importance >= 7.0:
-            template = f"想起{old_text[:50]}--心头忽然一动,悟出了些先前没想通的关窍。"
-        else:
-            template = f"忽忆旧事:{old_text[:50]}--与新近所见似有暗合。"
-
-    return template
+        variants = [
+            f"忽忆旧事：{snippet}——与新近所见似有暗合。",
+            f"不经意间想起{snippet}，与新事两厢对照，多了层理解。",
+            f"记忆泛起：{snippet}，此刻的背景让它显出另一番味道。",
+        ]
+    return random.choice(variants)
 
 def text_relevance(query: str, doc: str) -> float:
     """基于词/字符二元组的 Jaccard 相似度。0..1。"""

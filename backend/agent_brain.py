@@ -28,6 +28,54 @@ SHICHEN_LIST = (
     "午时", "未时", "申时", "酉时", "戌时", "亥时",
 )
 
+def _deduplicate_observations(
+    obs: list[mem.Memory],
+    sim_threshold: float = 0.55,
+) -> list[mem.Memory]:
+    """语义去重：将相似度高于阈值的观察归为一组，每组仅保留最重要的那一条。
+
+    这样可以避免把「同一件事说了三遍」塞给 LLM，既省 token 又提升反思质量。
+    """
+    if not obs:
+        return []
+    # 按重要性降序排列，确保每组保留的是最重要的
+    sorted_obs = sorted(obs, key=lambda m: m.importance, reverse=True)
+    groups: list[list[mem.Memory]] = []
+    for m in sorted_obs:
+        placed = False
+        for grp in groups:
+            # 检查与组内第一条（最重要）的相似度
+            if mem.text_relevance(m.text, grp[0].text) >= sim_threshold:
+                grp.append(m)
+                placed = True
+                break
+        if not placed:
+            groups.append([m])
+    # 每组只保留最重要的一条
+    return [grp[0] for grp in groups]
+
+
+def _select_with_recency(
+    obs: list[mem.Memory],
+    top_k: int = 12,
+    recency_half_life_s: float = 3600.0 * 4,
+) -> list[mem.Memory]:
+    """时效加权选择：综合重要性 × 时效衰减系数排序，取 top_k。
+
+    纯按重要性排序会让一周前的「重大事件」永远压过今天刚发生的「小事」，
+    而反思更应该关注最近发生的事。引入时效衰减让近期观察有适度优势。
+    """
+    now = time.time()
+    scored = []
+    for m in obs:
+        age_s = max(0.0, now - m.created_at)
+        recency_w = mem._decay_recency(age_s, half_life_s=recency_half_life_s)
+        score = m.importance * (0.6 + 0.4 * recency_w)  # 重要性占主导，时效作微调
+        scored.append((score, m))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [m for _, m in scored[:top_k]]
+
+
 async def reflect(
     *,
     npc_id: str,
@@ -37,12 +85,18 @@ async def reflect(
     world_day: int,
     world_shichen: str,
 ) -> list[mem.Memory]:
-    """让 LLM 读最近高分记忆，写出 3~5 条抽象洞察。"""
-    obs = mind.recent_observations(k=18)
+    """让 LLM 读最近高分记忆，写出 3~5 条抽象洞察。
+
+    2026-05-24 改进：引入语义去重（同一件事不重复喂给 LLM）与时效加权选择
+    （综合重要性×时效衰减），让反思更关注近期多样化的经历而非历史重复。
+    """
+    obs = mind.recent_observations(k=24)
     if not obs:
         return []
-    # 取里头重要度前 12 条
-    top = sorted(obs, key=lambda m: m.importance, reverse=True)[:12]
+    # 1) 语义去重：避免「同一件事说了三遍」挤占上下文
+    deduped = _deduplicate_observations(obs)
+    # 2) 时效加权：综合重要性 × 时效衰减取前 12 条
+    top = _select_with_recency(deduped, top_k=12)
     bullets = "\n".join(
         f"({i+1}) [第{m.created_day}日·{m.created_shichen}, 重要={m.importance:.0f}] {m.text}"
         for i, m in enumerate(top)
