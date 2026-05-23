@@ -482,11 +482,78 @@ def update_npc_states_from_habits(p: PlayerState) -> dict[str, str]:
     return changes
 
 
+def update_npc_state_dynamic(p: PlayerState, npc_id: str) -> str | None:
+    """基于玩家声望、好感、当前处境动态调整单个 NPC 的行为状态。
+
+    与 update_npc_states_from_habits（纯时间驱动）互补：
+    - 时间决定 NPC 的基础作息（idle/resting）
+    - 此函数叠加玩家因素（alert/hostile），让 NPC 对「你」的态度有记忆
+
+    在对话前调用，确保 NPC 的状态反映了其对玩家的真实态度。
+    返回新状态字符串，若无变更返回 None。
+    """
+    if not getattr(p, "npc_states", None):
+        p.npc_states = {}
+
+    meta = NPCS.get(npc_id, {})
+    if meta.get("always") or meta.get("hidden"):
+        return None
+
+    current = p.npc_states.get(npc_id, "idle")
+    fac = NPC_FACTION.get(npc_id)
+    rep_v = int(p.reputation.get(fac, 0)) if fac else 0
+    fav = int(p.favor.get(npc_id, 0))
+
+    is_trap_target = (
+        getattr(p, "move_locked", False)
+        and getattr(p, "move_lock_npc_id", None) == npc_id
+    )
+
+    # 判定优先级：hostile > alert > 恢复中性
+    if rep_v <= -25 or fav <= -30:
+        new_state = "hostile"
+    elif rep_v <= -8 or fav <= -8 or is_trap_target:
+        new_state = "alert"
+    else:
+        # 关系已恢复 → 回退到中立状态，由时间驱动接管
+        if current in ("hostile", "alert"):
+            new_state = "idle"
+        else:
+            return None
+
+    if new_state != current:
+        p.npc_states[npc_id] = new_state
+        return new_state
+    return None
+
+
+def update_all_npc_states_dynamic(p: PlayerState) -> dict[str, str]:
+    """对所有已存在的 NPC 状态进行动态评估。
+
+    在移动后调用，确保前端显示的 NPC 状态图标反映玩家声望。
+
+    Returns:
+        {npc_id: old→new} 变更字典。
+    """
+    changes: dict[str, str] = {}
+    for nid in NPCS:
+        meta = NPCS.get(nid, {})
+        if meta.get("always") or meta.get("hidden"):
+            continue
+        old = p.npc_states.get(nid, "idle") if hasattr(p, "npc_states") else "idle"
+        result = update_npc_state_dynamic(p, nid)
+        if result:
+            changes[nid] = f"{old}→{result}"
+    return changes
+
+
 def npc_state_for_dialogue(p: PlayerState, npc_id: str) -> str:
     """NPC 状态感知:将 NPC 当前状态注入对话提示。
 
     让 NPC 的回应与其作息状态一致--深夜休憩的 NPC 说话更短、更不耐烦。
-    状态决定语气、语速、耐心程度。"""
+    状态决定语气、语速、耐心程度。
+
+    2026-05-24 改进：alert/hostile 状态附加声望/好感原因，让 NPC 态度有据可循。"""
     from backend.data.npcs_data import NPC_STATE
     from backend.systems.time_weather import is_night
 
@@ -511,6 +578,24 @@ def npc_state_for_dialogue(p: PlayerState, npc_id: str) -> str:
     if not behavior:
         return ""  # idle 状态不需要特别提示
 
+    # ── 动态态度溯源：让 NPC 知道为什么提防/敌视这个玩家 ──
+    attitude_context = ""
+    if state in ("alert", "hostile"):
+        fac = NPC_FACTION.get(npc_id)
+        rep_v = int(p.reputation.get(fac, 0)) if fac else 0
+        fav = int(p.favor.get(npc_id, 0))
+        reasons: list[str] = []
+        if fac and rep_v <= -25:
+            reasons.append(f"此人在{FACTIONS.get(fac, fac)}里声名狼藉（{rep_v:+d}），早就不是一路人")
+        elif fac and rep_v <= -8:
+            reasons.append(f"此人在{FACTIONS.get(fac, fac)}名声不佳（{rep_v:+d}），你对他没好感")
+        if fav <= -30:
+            reasons.append(f"你与此人旧怨极深（好感{fav:+d}），见他就烦")
+        elif fav <= -8:
+            reasons.append(f"你与此人有些过节（好感{fav:+d}）")
+        if reasons:
+            attitude_context = "\n".join(f"· {r}" for r in reasons)
+
     state_meta = NPC_STATE.get(state, {})
     label = state_meta.get("label", state)
     icon = state_meta.get("icon", "")
@@ -518,8 +603,10 @@ def npc_state_for_dialogue(p: PlayerState, npc_id: str) -> str:
     lines = [
         f"【你现在状态】{icon} {label}",
         f"· {behavior}",
-        "· 不要复述此提示块--把状态写进语气、语速、回话长短里。",
     ]
+    if attitude_context:
+        lines.append(attitude_context)
+    lines.append("· 不要复述此提示块--把状态写进语气、语速、回话长短里。")
     return "\n".join(lines)
 
 

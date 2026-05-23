@@ -77,6 +77,10 @@ def build_npc_messages(
     user_message: str,
     hist_slice: list[dict[str, str]],
 ) -> list[dict[str, str]]:
+    # ── 动态状态评估：在构建提示词前刷新 NPC 对玩家的态度 ──
+    from backend.systems.core import update_npc_state_dynamic
+    update_npc_state_dynamic(p, npc_id)
+
     npc = NPCS[npc_id]
     map_name = MAPS[p.map_id]["name"]
     loc = f"地图「{map_name}」格坐标 ({p.px},{p.py})；性别：{p.gender}。"

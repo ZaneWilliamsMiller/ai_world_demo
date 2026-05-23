@@ -400,8 +400,10 @@ async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
             advance_clock(p, ticks)
             maybe_wander_npcs(p, ticks=ticks)
             # CMA式NPC状态感知:基于时辰与习惯自动更新NPC状态
-            from backend.systems.core import update_npc_states_from_habits
+            from backend.systems.core import update_npc_states_from_habits, update_all_npc_states_dynamic
             update_npc_states_from_habits(p)
+            # 叠加上下文状态:声望/好感驱动的动态态度（alert/hostile）
+            update_all_npc_states_dynamic(p)
             # MAS涌现:同格子NPC社交闲聊(Multi-Agent Social Gossip)
             from backend.systems.npc_gossip import maybe_npc_gossip
             maybe_npc_gossip(p, ticks=ticks)
