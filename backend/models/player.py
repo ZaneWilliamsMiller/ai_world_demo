@@ -1,0 +1,68 @@
+from __future__ import annotations
+
+import asyncio
+from dataclasses import dataclass, field
+from typing import Any
+
+from backend.data.factions import FACTIONS
+from backend.memory import AgentMind
+
+
+@dataclass
+class PlayerState:
+    player_id: str
+    display_name: str
+    gender: str = "未言"
+    permadeath: bool = False
+    dead: bool = False
+    death_reason: str | None = None
+    map_id: str = "world"
+    px: int = 10
+    py: int = 14
+    coins: int = 120
+    flags: dict[str, int] = field(
+        default_factory=lambda: {"order": 0, "truth": 0, "hope": 0, "chaos": 0}
+    )
+    history: dict[str, list[dict[str, str]]] = field(default_factory=dict)
+    favor: dict[str, int] = field(default_factory=dict)
+    rumors: list[str] = field(default_factory=list)
+    move_locked: bool = False
+    move_lock_npc_id: str | None = None
+    trap_reason: str | None = None
+    trap_attempts: int = 0
+    enslaved: bool = False
+    enslaved_reason: str | None = None
+    vigor: int = 80
+    vigor_max: int = 100
+    spirit: int = 80
+    spirit_max: int = 100
+    sleep_debt: int = 0
+    unconscious_ticks: int = 0
+    rescue_needed: bool = False
+    life_burn_ticks: int = 0
+    life_burn_max: int = 0
+    allow_steep_next_move: bool = False
+    ended: bool = False
+    ending_label: str | None = None
+    # 世界时钟与天气
+    world_day: int = 1
+    world_shichen: int = 4  # 默认从辰时开始（清晨）
+    world_tick: int = 0
+    weather: str = "薄阴"
+    # 库存、声望、事件流
+    inventory: dict[str, int] = field(default_factory=dict)
+    reputation: dict[str, int] = field(default_factory=lambda: {k: 0 for k in FACTIONS.keys()})
+    events: list[dict[str, Any]] = field(default_factory=list)
+    # 每个 NPC 在本玩家会话下的「心智」（记忆流 + 当日计划）
+    minds: dict[str, AgentMind] = field(default_factory=dict)
+    # 会话内 NPC 动态位置（允许有限游走）
+    npc_positions: dict[str, tuple[str, int, int]] = field(default_factory=dict)
+    # NPC 动态状态（基于时辰+习惯的自动切换：idle/resting/busy）
+    npc_states: dict[str, str] = field(default_factory=dict)
+    # NPC 随身货柜：npc_id → {物品名: 数量}（用于交易系统）
+    npc_inventories: dict[str, dict[str, int]] = field(default_factory=dict)
+    # NPC 货柜补货追踪：npc_id → 上次补货的世界日（避免同日重复补货）
+    npc_inventory_restock_day: dict[str, int] = field(default_factory=dict)
+    # 动态奇遇冷却时间戳
+    last_dynamic_encounter_tick: int = -100
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)

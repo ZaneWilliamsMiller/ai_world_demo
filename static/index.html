@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#1a1208" />
+    <title>活纸 · Living Paper</title>
+    <link rel="stylesheet" href="/static/game.css" />
+  </head>
+  <body class="game-ancient">
+    <div id="game" class="game">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-title" id="worldTitle">活纸</span>
+          <span class="brand-sub">AI-NPC 社会推演 · 时辰天气 · 钱物声望 · 风闻事件</span>
+        </div>
+        <div class="top-actions" id="topActions">
+          <div id="characterSheet" class="character-sheet">
+            <label class="field"
+              >名号
+              <input id="displayName" maxlength="24" placeholder="须先填名号" autocomplete="off" />
+            </label>
+            <fieldset class="gender-field">
+              <legend>性别</legend>
+              <label><input type="radio" name="gender" value="男" checked /> 男</label>
+              <label><input type="radio" name="gender" value="女" /> 女</label>
+              <label><input type="radio" name="gender" value="未言" /> 未言</label>
+            </fieldset>
+            <label class="field perm-field">
+              <input type="checkbox" id="permadeath" />
+              真实江湖（意外可死·<b>损毁本机存档</b>）
+            </label>
+          </div>
+          <button type="button" id="btnStart" class="btn primary">踏入江湖</button>
+          <button type="button" id="btnNew" class="btn ghost" title="清除存档并刷新">新开卷</button>
+          <button type="button" id="btnJournal" class="btn ghost" title="翻阅过往对谈与世事" disabled>史册</button>
+        </div>
+        <div class="top-meta">
+          <span id="modePill" class="pill mode-pill" title="按 M 键切换移动模式">点击</span>
+          <span id="clockPill" class="pill clock-pill" title="第几日·时辰·天气">江湖纪：—</span>
+          <span id="modelPill" class="pill">模型：…</span>
+          <span id="savePill" class="pill muted">存档：未载入</span>
+        </div>
+      </header>
+
+      <div class="playfield">
+        <aside class="sidebar left" id="panel-sidebar-left">
+          <details class="sidebar-group" open>
+            <summary class="panel-title">行迹</summary>
+            <div class="stat-block">
+              <div>地图 <b id="statMap">—</b></div>
+              <div>坐标 <b id="statPos">—</b></div>
+              <div>制钱 <b id="statCoins">—</b> 文 <span id="statCoinsDelta" class="delta-tip"></span></div>
+              <div>性别 <b id="statGender">—</b></div>
+              <div>真实江湖 <b id="statHard">关</b></div>
+              <div>本格人物好感 <b id="statFavor">—</b></div>
+              <div class="favor-track" title="好感大致倾向（-100 冷 … +100 热）">
+                <span id="favorFill" class="favor-fill"></span>
+              </div>
+            </div>
+          </details>
+
+          <details class="sidebar-group">
+            <summary class="panel-title">身心</summary>
+            <div class="stat-block">
+              <div>体力 <b id="statVigor">—</b><span class="muted" id="statVigorMax"></span></div>
+              <div class="resource-track" title="体力：奔走、力斗会减；歇脚、温食、安寝可补。归零会被擒为奴。">
+                <span id="vigorFill" class="resource-fill resource-vigor"></span>
+              </div>
+              <div id="lifeBurnWrap" class="is-hidden">
+                <div class="muted">生命燃烧</div>
+                <div class="resource-track" title="体力归零后倒计时，结束前不进食将饿死。">
+                  <span id="lifeBurnFill" class="resource-fill resource-burn"></span>
+                </div>
+              </div>
+              <div>心气 <b id="statSpirit">—</b><span class="muted" id="statSpiritMax"></span></div>
+              <div class="resource-track" title="心气：恐惧、屈辱会减；得手、温言、雅事可补。归零会神志失守。">
+                <span id="spiritFill" class="resource-fill resource-spirit"></span>
+              </div>
+            </div>
+          </details>
+
+          <details class="sidebar-group">
+            <summary class="panel-title">随身（信物·线索）</summary>
+            <ul id="invList" class="inv-list" aria-label="随身信物与线索"></ul>
+          </details>
+
+          <details class="sidebar-group">
+            <summary class="panel-title">声望</summary>
+            <ul id="repList" class="rep-list" aria-label="五势力声望"></ul>
+          </details>
+
+          <details class="sidebar-group">
+            <summary class="panel-title">坊间风闻</summary>
+            <ul id="rumorList" class="rumor-list" aria-label="风闻子处积攒的短讯"></ul>
+          </details>
+
+          <details class="sidebar-group">
+            <summary class="panel-title">江湖事件流</summary>
+            <ul id="eventList" class="event-list" aria-label="LLM 推动的世界事件"></ul>
+          </details>
+
+          <details class="sidebar-group">
+            <summary class="panel-title">图例</summary>
+            <p class="legend muted">
+              <strong>侠</strong>=你；<strong>人</strong>=可交谈 NPC（同格）；<strong>栈</strong>客栈／<strong>市</strong>市集／<strong>衙</strong>衙前／<strong>桥</strong>／<strong>门</strong>界门／<strong>径</strong>山道／<strong>岭</strong>山岭。
+              地貌：草地（淡绿）、林子（深绿）、泥地（褐黄，雨日加成）、悬崖（不可越过）、险水（可勉强涉，慢且险）。<br />
+              注意：<strong>有些"客栈"是黑店</strong>，<strong>林中有匪徒藏身</strong>——外形与寻常无异，须踏入方知。
+            </p>
+          </details>
+
+          <details class="sidebar-group">
+            <summary class="panel-title">档案</summary>
+            <div id="introScroll" class="intro-scroll">
+              <pre id="intro" class="intro-pre"></pre>
+            </div>
+          </details>
+        </aside>
+
+        <main class="stage">
+          <section class="map-panel" aria-label="地图">
+            <div class="map-head">
+              <span id="mapName" class="map-name">—</span>
+              <span id="sceneLine" class="scene-line-mini muted">点击地格移动。贴近 NPC 后可切换「本格人物」交谈。</span>
+            </div>
+            <div id="atmosphereText" class="atmosphere-text is-hidden" aria-label="氛围描写"></div>
+            <div class="map-edge-legend" aria-label="地形颜色标注">
+              <span class="edge-chip"><i class="edge-swatch tile-grass"></i>草地</span>
+              <span class="edge-chip"><i class="edge-swatch tile-forest"></i>林地</span>
+              <span class="edge-chip"><i class="edge-swatch tile-mud"></i>泥地</span>
+              <span class="edge-chip"><i class="edge-swatch tile-water"></i>水域</span>
+              <span class="edge-chip"><i class="edge-swatch tile-mountainpath"></i>山道</span>
+              <span class="edge-chip"><i class="edge-swatch tile-mountain"></i>山岭</span>
+              <span class="edge-chip"><i class="edge-swatch tile-cliff"></i>绝壁</span>
+              <span class="edge-chip"><i class="edge-swatch tile-river"></i>河道</span>
+              <span class="edge-chip"><i class="edge-swatch tile-chasm"></i>裂隙</span>
+              <span class="edge-chip"><i class="edge-swatch tile-ruins"></i>废墟</span>
+              <span class="edge-chip"><i class="edge-swatch tile-danger"></i>险地可通行但有重伤风险</span>
+            </div>
+            <div class="map-viewport">
+            <div id="mapHost" class="map-host-wrap">
+              <div class="map-placeholder muted">请先「踏入江湖」载入地图。</div>
+            </div>
+            </div>
+          </section>
+
+          <section class="hud-strip" aria-label="气质">
+            <div class="stat"><span>秩序</span><b id="fOrder">0</b></div>
+            <div class="stat"><span>求真</span><b id="fTruth">0</b></div>
+            <div class="stat"><span>希望</span><b id="fHope">0</b></div>
+            <div class="stat"><span>混乱</span><b id="fChaos">0</b></div>
+          </section>
+
+          <section class="dialogue" aria-label="对话">
+            <div class="dialogue-head">
+              <span class="dialogue-label">本格人物</span>
+              <div class="tabs" id="npcTabs"></div>
+            </div>
+            <div id="log" class="log" role="log"></div>
+
+            <div class="action-bar" id="actionBar" aria-label="快捷动作">
+              <div class="action-group">
+                <span class="action-hint">身法 / 处境</span>
+                <span class="action-route">→ 风闻子（纪事）</span>
+                <div class="action-row">
+                  <button type="button" class="action-chip" data-kind="world" data-act="explore" disabled>探路</button>
+                  <button type="button" class="action-chip" data-kind="world" data-act="observe" disabled>察局</button>
+                  <button type="button" class="action-chip" data-kind="world" data-act="stealth" disabled>潜踪</button>
+                  <button type="button" class="action-chip" data-kind="world" data-act="rest" disabled>歇脚</button>
+                  <button type="button" class="action-chip" data-kind="world" data-act="loot" disabled>摸货</button>
+                  <button type="button" class="action-chip" data-kind="world" data-act="leave" disabled>抽身</button>
+                  <button type="button" class="action-chip" data-kind="world" data-act="sprint" disabled>疾行</button>
+                </div>
+              </div>
+              <div class="action-group">
+                <span class="action-hint">人情 / 生意</span>
+                <span class="action-route">→ 当前人物</span>
+                <div class="action-row">
+                  <button type="button" class="action-chip" data-kind="social" data-act="probe" disabled>试探</button>
+                  <button type="button" class="action-chip" data-kind="social" data-act="deal" disabled>议价</button>
+                  <button type="button" class="action-chip" data-kind="social" data-act="bribe" disabled>行贿</button>
+                  <button type="button" class="action-chip" data-kind="social" data-act="pressure" disabled>施压</button>
+                  <button type="button" class="action-chip" data-kind="social" data-act="help" disabled>卖好</button>
+                  <button type="button" class="action-chip" data-kind="social" data-act="refuse" disabled>推却</button>
+                  <button type="button" class="action-chip" data-kind="social" data-act="goodbye" disabled>作别</button>
+                  <button type="button" class="action-chip" data-kind="social" data-act="woo" disabled>献殷勤</button>
+                </div>
+              </div>
+            </div>
+
+            <form id="talkForm" class="talk">
+              <div class="talk-main">
+                <label class="talk-stream-opt muted"
+                  ><input type="checkbox" id="useNpcStream" checked /> 流式出字（逐段显示，需模型支持 stream）</label
+                >
+                <textarea
+                  id="msg"
+                  rows="3"
+                  maxlength="2000"
+                  placeholder="打字细说……（Enter 发送，Shift+Enter 换行）"
+                  disabled
+                ></textarea>
+              </div>
+              <button type="submit" id="btnSend" class="btn primary" disabled>发送</button>
+            </form>
+          </section>
+        </main>
+
+        <aside class="sidebar right" id="panel-sidebar-right">
+          <div class="sb-right-head">
+            <div class="panel-title">收卷</div>
+            <button type="button" id="btnToggleRight" class="btn ghost sb-toggle" title="折叠/展开">◀</button>
+          </div>
+          <div class="sb-right-body" id="sbRightBody">
+          <p class="hint">结局仍由模型通读全文即兴写就。</p>
+          <label class="field block">倾向</label>
+          <textarea id="closingNote" rows="3" maxlength="600" placeholder="可选：希望留白、某人活命……" disabled></textarea>
+          <button type="button" id="btnFinale" class="btn danger full" disabled>写下结局</button>
+          <div id="ending" class="ending"></div>
+        </div>
+      </aside>
+      </div>
+    </div>
+
+    <!-- 史册抽屉：所有 NPC 的对话与事件回溯 -->
+    <div id="journalDrawer" class="drawer is-hidden" role="dialog" aria-modal="true" aria-label="史册">
+      <div class="drawer-mask" data-close></div>
+      <div class="drawer-panel">
+        <div class="drawer-head">
+          <span class="drawer-title">史册 · 江湖行纪</span>
+          <div class="drawer-tabs" id="journalTabs"></div>
+          <button type="button" class="btn ghost drawer-close" data-close aria-label="关闭史册">合上</button>
+        </div>
+        <div class="drawer-body" id="journalBody"></div>
+      </div>
+    </div>
+
+    <script src="/static/main.js" type="module"></script>
+  </body>
+</html>
