@@ -1,6 +1,8 @@
-// 视口渲染：以玩家为中心，只渲染周围 VIEW_SIZE×VIEW_SIZE 格，消除全量渲染重叠
-const VIEW_RADIUS = 10;
-const VIEW_SIZE = VIEW_RADIUS * 2 + 1; // 21
+// 视口渲染：以玩家为中心，根据容器实际尺寸动态计算列/行数
+// 自适应屏幕宽高比，矩形容器→矩形网格，填满不留白
+const TARGET_TILE = 32; // 目标格子尺寸（含 gap 2px）
+const MIN_TILES = 9;   // 单方向最少格数
+const MAX_TILES = 51;  // 单方向最多格数（性能上限）
 
 const BASE_TERRAIN_CLASSES = [
   "tile-wall",
@@ -73,29 +75,38 @@ export function renderMap(host, opts, onCellPick) {
   const mapH = rows.length;
   const mapW = rows[0].length;
 
-  // 计算视口原点（玩家居中，贴边时靠边）
+  // 1. 根据容器实际尺寸动态计算视口宽/高（非正方形，随屏幕比例自适应）
+  const rect = host.getBoundingClientRect();
+  const gap = 2;
+  const colsFit = Math.max(MIN_TILES, Math.floor((rect.width + gap) / (TARGET_TILE + gap)));
+  const rowsFit = Math.max(MIN_TILES, Math.floor((rect.height + gap) / (TARGET_TILE + gap)));
+  const viewW = Math.min(colsFit, mapW, MAX_TILES);
+  const viewH = Math.min(rowsFit, mapH, MAX_TILES);
+
+  // 2. 视口原点：玩家居中，贴边时 clamp
   const playerOnMap = player.map_id === mapId;
-  let vx, vy;
-  if (playerOnMap) {
-    vx = clamp(player.px - VIEW_RADIUS, 0, mapW - VIEW_SIZE);
-    vy = clamp(player.py - VIEW_RADIUS, 0, mapH - VIEW_SIZE);
-  } else {
-    vx = 0;
-    vy = 0;
-  }
-  const viewW = Math.min(VIEW_SIZE, mapW - vx);
-  const viewH = Math.min(VIEW_SIZE, mapH - vy);
+  const vx = clamp(
+    (playerOnMap ? player.px : Math.floor(mapW / 2)) - Math.floor(viewW / 2),
+    0, Math.max(0, mapW - viewW),
+  );
+  const vy = clamp(
+    (playerOnMap ? player.py : Math.floor(mapH / 2)) - Math.floor(viewH / 2),
+    0, Math.max(0, mapH - viewH),
+  );
   const viewKey = `${mapId}:${vx},${vy}:${viewW}x${viewH}`;
 
+  // 3. 缓存判断
   let cache = CACHE.get(host);
-  const layoutChanged = !cache || cache.viewKey !== viewKey;
+  const layoutChanged = !cache || cache.viewKey !== viewKey || cache.viewW !== viewW || cache.viewH !== viewH;
 
   if (layoutChanged) {
     cache = buildViewportGrid(host, viewKey, m, rows, vx, vy, viewW, viewH);
+    cache.viewW = viewW;
+    cache.viewH = viewH;
     CACHE.set(host, cache);
   }
 
-  // 事件代理（只需绑定一次）
+  // 4. 事件代理（只需绑定一次）
   if (!cache.delegated) {
     host.addEventListener("click", (ev) => {
       const c = CACHE.get(host);
@@ -111,10 +122,29 @@ export function renderMap(host, opts, onCellPick) {
   }
   cache.onCellPick = onCellPick;
 
-  // 设置网格尺寸
+  // 5. 容器 resize 时自动重建（rAF 轮询，比 ResizeObserver 兼容性更好）
+  if (!cache._resizeTick) {
+    cache._resizeTick = requestAnimationFrame(function tick() {
+      const r = host.getBoundingClientRect();
+      if (Math.abs(r.width - cache._resizeW) > 4 || Math.abs(r.height - cache._resizeH) > 4) {
+        cache.viewKey = null; // 强制重建
+        const cb = cache._resizeCb;
+        if (cb) cb();
+      }
+      cache._resizeTick = requestAnimationFrame(tick);
+    });
+  }
+  cache._resizeW = rect.width;
+  cache._resizeH = rect.height;
+  cache._resizeCb = () => {
+    const opts2 = { mapId, maps, player, npcCatalog, ambushMarkers, moveLocked, routeOverlay, injuryEvents };
+    renderMap(host, opts2, onCellPick);
+  };
+
+  // 6. 应用 CSS 变量和类
   host.classList.add("map-host-wrap", "map-host");
-  host.style.setProperty("--view-cols", viewW);
-  host.style.setProperty("--view-rows", viewH);
+  host.style.setProperty("--view-cols", String(viewW));
+  host.style.setProperty("--view-rows", String(viewH));
   host.classList.toggle("map-move-locked", !!moveLocked);
 
   // --- 动态状态 ---

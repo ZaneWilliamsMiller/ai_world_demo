@@ -808,16 +808,14 @@ body.game-ancient {
   grid-template-columns: repeat(var(--view-cols, 21), minmax(0, 1fr));
   grid-template-rows: repeat(var(--view-rows, 21), minmax(0, 1fr));
   width: 100%;
-  max-width: 560px;
-  aspect-ratio: var(--view-cols, 21) / var(--view-rows, 21);
-  margin: 0 auto;
-  align-self: center;
+  height: 100%;
 }
 
 .tile {
   position: relative;
-  width: clamp(26px, 3vw, 40px);
-  height: clamp(26px, 3vw, 40px);
+  aspect-ratio: 1;
+  min-width: 0;
+  min-height: 0;
   padding: 0;
   border-radius: 7px;
   border: 1px solid rgba(0, 0, 0, 0.32);
