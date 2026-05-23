@@ -1,4 +1,7 @@
-// 统一大地图渲染：以角色为中心画布，支持险地穿越（无拦截弹窗）
+// 视口渲染：以玩家为中心，只渲染周围 VIEW_SIZE×VIEW_SIZE 格，消除全量渲染重叠
+const VIEW_RADIUS = 10;
+const VIEW_SIZE = VIEW_RADIUS * 2 + 1; // 21
+
 const BASE_TERRAIN_CLASSES = [
   "tile-wall",
   "tile-cliff",
@@ -28,24 +31,10 @@ const DYNAMIC_TILE_CLASSES = [
 ];
 
 const LABEL_MAP = {
-  "#": "墙",
-  "^": "悬崖",
-  "~": "险水",
-  ",": "草地",
-  ".": "土路",
-  "F": "林子",
-  ";": "泥地",
-  "/": "山道",
-  "m": "山岭",
-  "T": "客栈",
-  "I": "客栈",
-  "M": "市集",
-  "Y": "衙前",
-  "B": "桥",
-  "=": "河道",
-  "!": "裂隙",
-  "@": "废墟",
-  "&": "密林",
+  "#": "墙", "^": "悬崖", "~": "险水", ",": "草地", ".": "土路",
+  "F": "林子", ";": "泥地", "/": "山道", "m": "山岭",
+  "T": "客栈", "I": "客栈", "M": "市集", "Y": "衙前", "B": "桥",
+  "=": "河道", "!": "裂隙", "@": "废墟", "&": "密林",
 };
 
 const ELEV = {
@@ -59,9 +48,10 @@ const DANGER_SET = new Set(["~", "!", "@", "^"]);
 const CACHE = new WeakMap();
 
 /**
- * 以玩家为中心渲染大地图视口。
- * 首次渲染构建整张 grid，后续增量更新动态样式。
- * 每次渲染后自动滚动使玩家居中。
+ * 以玩家为中心的视口渲染。
+ * - 首次或视口偏移时重建 grid（仅 VIEW_SIZE×VIEW_SIZE 格）
+ * - 后续动态更新样式
+ * - 玩家始终位于视口中央（地图边缘时贴边）
  */
 export function renderMap(host, opts, onCellPick) {
   const {
@@ -80,47 +70,54 @@ export function renderMap(host, opts, onCellPick) {
     return;
   }
   const rows = m.rows;
-  const h = rows.length;
-  const w = rows[0].length;
-  const layoutKey = `${mapId}:${w}x${h}`;
+  const mapH = rows.length;
+  const mapW = rows[0].length;
+
+  // 计算视口原点（玩家居中，贴边时靠边）
+  const playerOnMap = player.map_id === mapId;
+  let vx, vy;
+  if (playerOnMap) {
+    vx = clamp(player.px - VIEW_RADIUS, 0, mapW - VIEW_SIZE);
+    vy = clamp(player.py - VIEW_RADIUS, 0, mapH - VIEW_SIZE);
+  } else {
+    vx = 0;
+    vy = 0;
+  }
+  const viewW = Math.min(VIEW_SIZE, mapW - vx);
+  const viewH = Math.min(VIEW_SIZE, mapH - vy);
+  const viewKey = `${mapId}:${vx},${vy}:${viewW}x${viewH}`;
 
   let cache = CACHE.get(host);
-  const layoutChanged = !cache || cache.layoutKey !== layoutKey;
+  const layoutChanged = !cache || cache.viewKey !== viewKey;
+
   if (layoutChanged) {
-    const wasDelegated = !!(cache && cache.delegated);
-    cache = buildGrid(host, layoutKey, m, rows, w, h);
-    cache.delegated = wasDelegated;
+    cache = buildViewportGrid(host, viewKey, m, rows, vx, vy, viewW, viewH);
     CACHE.set(host, cache);
   }
 
-  // 事件代理
+  // 事件代理（只需绑定一次）
   if (!cache.delegated) {
     host.addEventListener("click", (ev) => {
       const c = CACHE.get(host);
       if (!c) return;
       const btn = ev.target.closest(".tile");
-      if (!btn) return;
-      if (!host.contains(btn)) return;
+      if (!btn || !host.contains(btn)) return;
       const fn = c.onCellPick;
       if (typeof fn !== "function") return;
-      const x = Number(btn.dataset.x);
-      const y = Number(btn.dataset.y);
-      fn(x, y, ev);
+      fn(Number(btn.dataset.x), Number(btn.dataset.y), ev);
       ev.stopPropagation();
     });
     cache.delegated = true;
   }
   cache.onCellPick = onCellPick;
 
-  if (layoutChanged) {
-    host.classList.add("map-host-wrap", "map-host");
-    host.style.gridTemplateColumns = `repeat(${w}, minmax(0, 1fr))`;
-    host.style.gridTemplateRows = `repeat(${h}, minmax(0, 1fr))`;
-  } else if (!host.classList.contains("map-host")) {
-    host.classList.add("map-host-wrap", "map-host");
-  }
+  // 设置网格尺寸
+  host.classList.add("map-host-wrap", "map-host");
+  host.style.setProperty("--view-cols", viewW);
+  host.style.setProperty("--view-rows", viewH);
   host.classList.toggle("map-move-locked", !!moveLocked);
 
+  // --- 动态状态 ---
   const dead = !!player.dead;
   const canStep = !dead && !moveLocked;
   const routeSet = new Set();
@@ -139,29 +136,17 @@ export function renderMap(host, opts, onCellPick) {
   for (const am of ambushMarkers) {
     if (am && am.map === mapId) ambushAt.set(`${am.x},${am.y}`, am.glyph);
   }
-
-  // 受伤闪烁：本帧受伤的格子
   const hurtKeys = new Set();
   if (injuryEvents && Array.isArray(injuryEvents) && injuryEvents.length > 0) {
-    // 受伤时高亮玩家当前格
     hurtKeys.add(`${player.px},${player.py}`);
   }
-
   const playerKey = player.map_id === mapId ? `${player.px},${player.py}` : "";
-  const prev = cache.prevDynamic || null;
-  const forceAll = !prev || prev.canStep !== canStep;
-  const changedKeys = forceAll
-    ? new Set(cache.tileByKey.keys())
-    : collectChangedKeys(
-        prev,
-        { playerKey, npcSet, routeSet, routeEndKey, ambushAt, hurtKeys, canStep },
-      );
 
-  for (const key of changedKeys) {
-    const btn = cache.tileByKey.get(key);
-    if (!btn) continue;
+  // 更新每个视口内格子
+  for (const btn of cache.tileByKey.values()) {
     const x = Number(btn.dataset.x);
     const y = Number(btn.dataset.y);
+    const key = `${x},${y}`;
     const ch = rows[y][x];
     const here = playerKey === key;
     const hasNpc = npcSet.has(key);
@@ -171,21 +156,17 @@ export function renderMap(host, opts, onCellPick) {
     if (here) btn.classList.add("tile-player");
     if (hasNpc) btn.classList.add("tile-npc");
     if (routeSet.has(key)) btn.classList.add("tile-route");
-    if (routeEndKey && routeEndKey === key) btn.classList.add("tile-route-end");
+    if (routeEndKey === key) btn.classList.add("tile-route-end");
     if (amb) btn.classList.add("tile-ambush");
-    // 险地标记（所有危险地形）
     if (DANGER_SET.has(ch)) btn.classList.add("tile-danger");
-    // 受伤闪烁
     if (hurtKeys.has(key)) btn.classList.add("tile-hurt");
 
-    // 统一地图：所有格子均可通行（险地靠 cost 和受伤概率平衡）
     btn.disabled = !canStep;
-
-    btn.title = `${m.name} (${x},${y}) · ${LABEL_MAP[ch] || "未知"}${DANGER_SET.has(ch) ? " ⚠险" : ""}`;
+    btn.title = `${m.name} (${x},${y}) \u00b7 ${LABEL_MAP[ch] || "\u672a\u77e5"}${DANGER_SET.has(ch) ? " \u26a0\u9669" : ""}`;
 
     const main = tileGlyph(ch, here, hasNpc);
     if (here && amb) {
-      btn.innerHTML = `<span class="tile-stack" title="侠·险"><span class="tile-major">侠</span><span class="tile-minor">${escapeHtml(amb)}</span></span>`;
+      btn.innerHTML = `<span class="tile-stack" title="\u4fa0\u00b7\u9669"><span class="tile-major">\u4fa0</span><span class="tile-minor">${escapeHtml(amb)}</span></span>`;
     } else if (amb && !here) {
       if (main) {
         btn.innerHTML = `<span class="tile-stack"><span class="tile-major">${escapeHtml(main)}</span><span class="tile-minor">${escapeHtml(amb)}</span></span>`;
@@ -206,50 +187,17 @@ export function renderMap(host, opts, onCellPick) {
     hurtKeys: new Set(hurtKeys),
     canStep,
   };
-
-  // 大地图滚动：以玩家为中心（使用 requestAnimationFrame 防闪烁）
-  if (playerKey && !layoutChanged) {
-    requestAnimationFrame(() => centerOnPlayer(host, player, w, h));
-  }
 }
 
-/** 滚动视口使玩家居中 */
-function centerOnPlayer(host, _player, _w, _h) {
-  const btn = host.querySelector(".tile-player");
-  if (!btn) return;
-  // 查找最近的可滚动祖先（通常是 .map-viewport）
-  let container = btn.parentElement;
-  while (container && container !== document.body) {
-    const style = window.getComputedStyle(container);
-    const overflowY = style.overflowY;
-    const overflowX = style.overflowX;
-    if (overflowY === "auto" || overflowY === "scroll" || overflowX === "auto" || overflowX === "scroll") {
-      break;
-    }
-    container = container.parentElement;
-  }
-  if (!container || container === document.body) return;
-  // 先确保地图 grid 已完成布局
-  requestAnimationFrame(() => {
-    const rect = btn.getBoundingClientRect();
-    const parentRect = container.getBoundingClientRect();
-    const scrollLeft = container.scrollLeft + rect.left - parentRect.left - parentRect.width / 2 + rect.width / 2;
-    const scrollTop = container.scrollTop + rect.top - parentRect.top - parentRect.height / 2 + rect.height / 2;
-    container.scrollTo({
-      left: Math.max(0, scrollLeft),
-      top: Math.max(0, scrollTop),
-      behavior: "smooth",
-    });
-  });
-}
-
-function buildGrid(host, layoutKey, mapInfo, rows, w, h) {
+function buildViewportGrid(host, viewKey, mapInfo, rows, vx, vy, viewW, viewH) {
   host.innerHTML = "";
   const frag = document.createDocumentFragment();
-  const tiles = [];
   const tileByKey = new Map();
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
+
+  for (let dy = 0; dy < viewH; dy++) {
+    for (let dx = 0; dx < viewW; dx++) {
+      const x = vx + dx;
+      const y = vy + dy;
       const ch = rows[y][x];
       const btn = document.createElement("button");
       btn.type = "button";
@@ -257,52 +205,32 @@ function buildGrid(host, layoutKey, mapInfo, rows, w, h) {
       btn.dataset.x = String(x);
       btn.dataset.y = String(y);
       applyTerrainClass(btn, ch);
-      btn.title = `${mapInfo.name} (${x},${y}) · ${LABEL_MAP[ch] || "未知"}${DANGER_SET.has(ch) ? " ⚠险" : ""}`;
+      btn.title = `${mapInfo.name} (${x},${y}) \u00b7 ${LABEL_MAP[ch] || "\u672a\u77e5"}${DANGER_SET.has(ch) ? " \u26a0\u9669" : ""}`;
       frag.appendChild(btn);
-      tiles.push(btn);
       tileByKey.set(`${x},${y}`, btn);
     }
   }
   host.appendChild(frag);
-  return { layoutKey, tiles, tileByKey, prevDynamic: null, onCellPick: null };
+  return { viewKey, tileByKey, prevDynamic: null, onCellPick: null, delegated: false };
 }
 
-function collectChangedKeys(prev, next) {
-  const out = new Set();
-  if (prev.playerKey) out.add(prev.playerKey);
-  if (next.playerKey) out.add(next.playerKey);
-  if (prev.routeEndKey) out.add(prev.routeEndKey);
-  if (next.routeEndKey) out.add(next.routeEndKey);
-  unionDiffInto(out, prev.npcSet, next.npcSet);
-  unionDiffInto(out, prev.routeSet, next.routeSet);
-  unionDiffInto(out, prev.ambushKeys, next.ambushAt ? new Set(next.ambushAt.keys()) : new Set());
-  unionDiffInto(out, prev.hurtKeys, next.hurtKeys || new Set());
-  return out;
-}
+// === 工具函数 ===
 
-function unionDiffInto(out, a, b) {
-  for (const k of a || []) if (!(b && b.has(k))) out.add(k);
-  for (const k of b || []) if (!(a && a.has(k))) out.add(k);
+function clamp(v, lo, hi) {
+  return v < lo ? lo : v > hi ? hi : v;
 }
 
 function applyTerrainClass(btn, ch) {
   for (const c of BASE_TERRAIN_CLASSES) btn.classList.remove(c);
-  if (ch === "#") btn.classList.add("tile-wall");
-  else if (ch === "^") btn.classList.add("tile-cliff");
-  else if (ch === "~") btn.classList.add("tile-water");
-  else if (ch === "," || ch === ".") btn.classList.add("tile-grass");
-  else if (ch === "F" || ch === "&") btn.classList.add("tile-forest");
-  else if (ch === ";") btn.classList.add("tile-mud");
-  else if (ch === "/") btn.classList.add("tile-mountainpath");
-  else if (ch === "m") btn.classList.add("tile-mountain");
-  else if (ch === "T" || ch === "I") btn.classList.add("tile-tavern");
-  else if (ch === "M") btn.classList.add("tile-market");
-  else if (ch === "Y") btn.classList.add("tile-yamen");
-  else if (ch === "B") btn.classList.add("tile-bridge");
-  else if (ch === "=") btn.classList.add("tile-river");
-  else if (ch === "!") btn.classList.add("tile-chasm");
-  else if (ch === "@") btn.classList.add("tile-ruins");
-  else btn.classList.add("tile-grass");
+  const map = {
+    "#": "tile-wall", "^": "tile-cliff", "~": "tile-water",
+    ",": "tile-grass", ".": "tile-grass", F: "tile-forest",
+    "&": "tile-forest", ";": "tile-mud", "/": "tile-mountainpath",
+    m: "tile-mountain", T: "tile-tavern", I: "tile-tavern",
+    M: "tile-market", Y: "tile-yamen", B: "tile-bridge",
+    "=": "tile-river", "!": "tile-chasm", "@": "tile-ruins",
+  };
+  btn.classList.add(map[ch] || "tile-grass");
 }
 
 function escapeHtml(s) {
@@ -311,11 +239,23 @@ function escapeHtml(s) {
   return d.innerHTML;
 }
 
+function tileGlyph(ch, playerHere, npcHere) {
+  if (playerHere) return "\u4fa0";
+  if (npcHere) return "\u4eba";
+  const g = {
+    "#": "", "^": "", "~": "", "=": "\u2248", "!": "\u88c2",
+    "@": "\u589f", "&": "", ",": "", ".": "", F: "", ";": "",
+    "/": "\u5f84", m: "\u5cad", T: "\u6808", I: "\u6808",
+    M: "\u5e02", Y: "\u8859", B: "\u6865",
+  };
+  return g[ch] || "";
+}
+
 const TERRAIN_CN = {
-  "#": "墙", "^": "悬崖", "~": "险水", ",": "草地", ".": "土路",
-  "F": "林子", ";": "泥地", "/": "山道", "m": "山岭",
-  "T": "客栈", "I": "客栈", "M": "市集", "Y": "衙前", "B": "桥",
-  "=": "河道", "!": "裂隙", "@": "废墟", "&": "密林",
+  "#": "\u5899", "^": "\u60ac\u5d16", "~": "\u9669\u6c34", ",": "\u8349\u5730", ".": "\u571f\u8def",
+  "F": "\u6797\u5b50", ";": "\u6ce5\u5730", "/": "\u5c71\u9053", "m": "\u5c71\u5cad",
+  "T": "\u5ba2\u6808", "I": "\u5ba2\u6808", "M": "\u5e02\u96c6", "Y": "\u8859\u524d", "B": "\u6865",
+  "=": "\u6cb3\u9053", "!": "\u88c2\u9699", "@": "\u5e9f\u589f", "&": "\u5bc6\u6797",
 };
 
 export function getLocationInfo(mapId, maps, tx, ty) {
@@ -328,30 +268,7 @@ export function getLocationInfo(mapId, maps, tx, ty) {
     mapId, mapName: m.name,
     x: tx, y: ty,
     glyph: ch,
-    terrain: TERRAIN_CN[ch] || "未知",
-    walkable: true,  // 统一地图：全部可通行
+    terrain: TERRAIN_CN[ch] || "\u672a\u77e5",
+    walkable: true,
   };
-}
-
-function tileGlyph(ch, playerHere, npcHere) {
-  if (playerHere) return "侠";
-  if (npcHere) return "人";
-  if (ch === "#") return "";
-  if (ch === "^") return "";
-  if (ch === "~") return "";
-  if (ch === "=") return "≈";
-  if (ch === "!") return "裂";
-  if (ch === "@") return "墟";
-  if (ch === "&") return "";
-  if (ch === ",") return "";
-  if (ch === ".") return "";
-  if (ch === "F") return "";
-  if (ch === ";") return "";
-  if (ch === "/") return "径";
-  if (ch === "m") return "岭";
-  if (ch === "T" || ch === "I") return "栈";
-  if (ch === "M") return "市";
-  if (ch === "Y") return "衙";
-  if (ch === "B") return "桥";
-  return "";
 }
