@@ -1,6 +1,6 @@
 # AI 文字世界 · 项目结构说明
 
-> 最后更新：2026-05-23 17:15
+> 最后更新：2026-05-24 01:43
 
 ## 顶层
 
@@ -10,6 +10,10 @@
 | `requirements.txt` | Python 依赖 |
 | `.env` / `.env.example` | 环境变量（LLM API Key 等） |
 | `_test_endpoints.py` | API 测试脚本 |
+| `gen_map.py` | 地图生成器（72×48 拼接脚本） |
+| `check_map.py` | 地图连通性校验 |
+| `test_api.py` | 快速 API 冒烟测试 |
+| `fix_npc.py` | NPC 数据修复脚本 |
 
 ---
 
@@ -34,7 +38,7 @@
 | 文件 | 作用 |
 |------|------|
 | `data/npcs_data.py` | NPC 角色卡：姓名、性格、背景、初始坐标、标签 |
-| `data/maps_data.py` | 地图数据：各地图的二维字符矩阵（`.` 路 `#` 墙 `^` 悬崖等） |
+| `data/maps_data.py` | 统一世界地图：单一 72×48 大地图，含河流/裂隙/废墟等危险地形 |
 | `data/factions.py` | 势力数据：门派、帮会、朝廷等的声望分级 |
 | `data/prompts.py` | 提示词模板：SOCIETY_BIBLE、MACHINE_TAIL_RULE 等 |
 | `data/atmosphere.py` | 场景氛围文字生成器（时间/天气驱动） |
@@ -52,7 +56,7 @@
 
 | 文件 | 作用 |
 |------|------|
-| `systems/pathfinding.py` | Dijkstra 寻路算法，支持权重、禁止格、悬崖坡度 |
+| `systems/pathfinding.py` | 寻路：Dijkstra 安全路径 + Bresenham 直线 + 危险地形通行/受伤判定 |
 | `systems/core.py` | 核心数值操作：好感度、体力/心气计算、世界状态块、拘束状态 |
 | `systems/economy.py` | 经济系统：铜钱变动、物品增减、物价表（25种物品/5类/6图溢价/天气波动）、行情查询、NPC货柜初始化/交易同步、NPC货柜自然补货（按周期回补） |
 | `systems/save_system.py` | 存档系统：JSON 文件持久化（每角色独立文件）、序列化/反序列化、存档列表、死亡处理（真实江湖删档/非真实江湖复活至补给点） |
@@ -98,8 +102,8 @@
 |------|------|
 | `tests/__init__.py` | Python 包标记 |
 | `tests/conftest.py` | pytest 配置（路径注入） |
-| `tests/_test_endpoints.py` | API 端点回归测试（28 tests）：角色创建/跨地图/传送门/寻路/经济 |
-| `tests/_test_pathfinding.py` | 寻路深度测试（8 tests）：全网可达性/传送门连通/cost-to-tick 折算 |
+| `tests/_test_endpoints.py` | API 端点回归测试：角色创建/移动/对话/经济 |
+| `tests/_test_pathfinding.py` | 寻路深度测试：全网可达性/cost-to-tick 折算 |
 
 ---
 
@@ -118,7 +122,7 @@
 | 文件 | 作用 |
 |------|------|
 | `api.js` | 后端 API 封装：pingModel、startGame、movePlayer、talkToNpc 等 |
-| `map.js` | 地图渲染：canvas 瓦片网格、路线叠加、NPC 标记、点击事件 |
+| `map.js` | 地图渲染：canvas 滚动视口（角色居中）、瓦片网格、路线叠加、NPC 标记 |
 | `scene.js` | 场景绘板：canvas 动态雾气/粒子效果 |
 | `game.css` | 全局样式：古代江湖主题色、瓦片皮肤、响应式布局 |
 
