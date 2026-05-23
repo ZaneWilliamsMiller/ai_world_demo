@@ -214,19 +214,32 @@ export function renderMap(host, opts, onCellPick) {
 }
 
 /** 滚动视口使玩家居中 */
-function centerOnPlayer(host, player, w, h) {
+function centerOnPlayer(host, _player, _w, _h) {
   const btn = host.querySelector(".tile-player");
   if (!btn) return;
-  const parent = host.parentElement;
-  if (!parent) return;
-  const rect = btn.getBoundingClientRect();
-  const parentRect = parent.getBoundingClientRect();
-  const scrollLeft = parent.scrollLeft + rect.left - parentRect.left - parentRect.width / 2 + rect.width / 2;
-  const scrollTop = parent.scrollTop + rect.top - parentRect.top - parentRect.height / 2 + rect.height / 2;
-  parent.scrollTo({
-    left: Math.max(0, scrollLeft),
-    top: Math.max(0, scrollTop),
-    behavior: "smooth",
+  // 查找最近的可滚动祖先（通常是 .map-viewport）
+  let container = btn.parentElement;
+  while (container && container !== document.body) {
+    const style = window.getComputedStyle(container);
+    const overflowY = style.overflowY;
+    const overflowX = style.overflowX;
+    if (overflowY === "auto" || overflowY === "scroll" || overflowX === "auto" || overflowX === "scroll") {
+      break;
+    }
+    container = container.parentElement;
+  }
+  if (!container || container === document.body) return;
+  // 先确保地图 grid 已完成布局
+  requestAnimationFrame(() => {
+    const rect = btn.getBoundingClientRect();
+    const parentRect = container.getBoundingClientRect();
+    const scrollLeft = container.scrollLeft + rect.left - parentRect.left - parentRect.width / 2 + rect.width / 2;
+    const scrollTop = container.scrollTop + rect.top - parentRect.top - parentRect.height / 2 + rect.height / 2;
+    container.scrollTo({
+      left: Math.max(0, scrollLeft),
+      top: Math.max(0, scrollTop),
+      behavior: "smooth",
+    });
   });
 }
 

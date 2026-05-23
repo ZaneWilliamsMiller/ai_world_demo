@@ -1,6 +1,6 @@
 import { store, LS_KEY } from "./store.js";
 import { pingModel, startGame, fetchState, movePlayer, submitFinale, inquireTile } from "./api.js";
-import { el, escapeHtml } from "./ui/utils.js";
+import { el, escapeHtml, showToast } from "./ui/utils.js";
 import { renderSidebar } from "./ui/sidebar.js";
 import { initDialogue, setInteractionBusy, appendLog } from "./ui/dialogue.js";
 import { initJournal } from "./ui/journal.js";
@@ -163,9 +163,9 @@ function updateFinaleUI(state) {
 function handleDeath(state) {
   const tip = state.player.death_reason || "路断人亡";
   const wipe = state.player.permadeath ? "\n\n「真实江湖」已启用:本机存档已清,江湖另起一行。" : "";
-  window.alert(`江湖无常:${tip}${wipe}`);
+  showToast(`江湖无常：${tip}${wipe}`, "error");
   if (state.player.permadeath) localStorage.removeItem(LS_KEY);
-  location.reload();
+  setTimeout(() => location.reload(), 2500);
 }
 
 // ──── WASD 手动移动 ────
@@ -541,7 +541,7 @@ el("btnStart").addEventListener("click", async () => {
   }
   const displayName = el("displayName").value.trim();
   if (!displayName) {
-    window.alert("请先填写名号,再点「踏入江湖」。");
+    showToast("请先填写名号，再点「踏入江湖」。", "error");
     return;
   }
   const gender = document.querySelector("input[name='gender']:checked")?.value || "未言";

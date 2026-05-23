@@ -761,7 +761,7 @@ body.game-ancient {
   position: relative;
   flex: 1;
   min-height: clamp(220px, 32vh, 480px);
-  overflow: auto;
+  overflow: visible;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: #0a0604;

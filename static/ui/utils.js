@@ -18,7 +18,7 @@ export function showToast(message, type = "info") {
   }
 
   const toast = document.createElement("div");
-  const bgColor = type === "error" ? "rgba(255, 80, 80, 0.9)" : "rgba(40, 40, 40, 0.9)";
+  const bgColor = type === "error" ? "rgba(180, 120, 50, 0.92)" : "rgba(40, 40, 40, 0.9)";
   toast.style.cssText = `background: ${bgColor}; color: white; padding: 10px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-size: 14px; animation: slideDown 0.3s ease forwards; max-width: 80vw; word-break: break-word; text-align: center;`;
   toast.textContent = message;
 
