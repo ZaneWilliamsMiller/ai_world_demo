@@ -154,9 +154,96 @@ async def reflect(
         mind.add(rmem)
         out.append(rmem)
 
+    # ── 情绪印迹回写：反思内容反馈到情绪系统 ──
+    _reflect_sentiment_impact(mind, insights)
+
     mind.importance_since_reflect = 0.0
     mind.last_reflect_at = time.time()
     return out
+
+
+# ── 反思情绪印迹常量 ──
+# 正向情绪词（反思出好事 → 效价+、心绪更平静）
+_REFLECT_POSITIVE = {
+    "宽慰", "释然", "庆幸", "感激", "欣喜", "有望", "转机", "得利", "可靠",
+    "放心", "信得过", "有缘", "仗义", "成事", "顺遂", "可交", "厚道", "稳妥",
+    "帮衬", "照应", "结纳", "援手", "化解", "平息", "和睦", "坦荡",
+}
+# 负向情绪词（反思出坏事 → 效价-、心绪扰动）
+_REFLECT_NEGATIVE = {
+    "失望", "愤怒", "危险", "背叛", "陷阱", "算计", "提防", "戒备", "凶险",
+    "无可挽回", "走投无路", "出卖", "辜负", "寒心", "阴险", "刁难", "逼迫",
+    "暗算", "勾结", "图谋", "杀意", "灾祸", "绝路", "蒙冤", "受辱", "被迫",
+}
+# 唤醒度增幅词（反思中感到紧张/警觉 → 唤醒度+）
+_REFLECT_AGITATION = {
+    "险", "危", "杀", "死", "叛", "寇", "伏", "劫", "仇", "急", "变", "惊",
+    "追", "逼", "截", "围", "灾", "祸", "噬", "冲",
+}
+# 唤醒度降幅词（反思后心平气和 → 唤醒度-）
+_REFLECT_CALMING = {
+    "安", "稳", "定", "常", "静", "平", "释", "淡", "宁", "妥", "顺",
+}
+
+
+def _reflect_sentiment_impact(mind: mem.AgentMind, insights: list[str]) -> None:
+    """反思情绪印迹回写：在反思生成的洞察上做简单情感分析，
+    将内心反思的结果反馈到情绪系统，让"想通了什么"真实影响"心情如何"。
+
+    每次反思最多产生 ±4 效价偏移与 ±3 唤醒度偏移（多洞察聚类后取平均）。
+    """
+    if not insights:
+        return
+    total_v = 0.0
+    total_a = 0.0
+    causes: list[str] = []
+
+    for text in insights:
+        t = text.lower()
+        # 正向 + 负向 情绪检测
+        pos_hits = sum(1 for kw in _REFLECT_POSITIVE if kw in t)
+        neg_hits = sum(1 for kw in _REFLECT_NEGATIVE if kw in t)
+        agi_hits = sum(1 for kw in _REFLECT_AGITATION if kw in t)
+        cal_hits = sum(1 for kw in _REFLECT_CALMING if kw in t)
+
+        # 效价：正向词推升、负向词推降（每词 ~1.2）
+        v_contribution = (pos_hits * 1.2) - (neg_hits * 1.5)
+        total_v += max(-4.0, min(4.0, v_contribution))
+
+        # 唤醒度：激荡词推升、沉静词推降（每词 ~1.0）
+        a_contribution = (agi_hits * 1.0) - (cal_hits * 0.8)
+        total_a += max(-2.5, min(2.5, a_contribution))
+
+        # 记录原因（截取最显著的 1 句）
+        if pos_hits >= 2 and "宽慰" not in causes:
+            causes.append("思及顺遂")
+        if neg_hits >= 2 and "心生戒备" not in causes:
+            causes.append("虑及险恶")
+        if agi_hits >= 2 and "心潮翻涌" not in causes:
+            causes.append("心潮翻涌")
+        if cal_hits >= 2 and "心绪渐平" not in causes:
+            causes.append("心绪渐平")
+
+    # 去重 + 截取前 2 条
+    causes = list(dict.fromkeys(causes))[:2]
+    if not causes:
+        # 无显著情感信号 → 轻量效价回归
+        drift = -0.8 if mind.affect_valence > 0 else 0.8 if mind.affect_valence < 0 else 0.0
+        mind.update_mood(valence_delta=drift, arousal_delta=-0.4, cause="反思后心绪稍平")
+        return
+
+    cause_str = "；".join(causes)
+    mind.update_mood(
+        valence_delta=round(total_v / len(insights), 2),
+        arousal_delta=round(total_a / len(insights), 2),
+        cause=cause_str,
+    )
+    log.info(
+        "reflect sentiment impact for mind: v=%+.2f a=%+.2f cause=%s",
+        round(total_v / len(insights), 2),
+        round(total_a / len(insights), 2),
+        cause_str,
+    )
 
 
 async def cross_reflect(
