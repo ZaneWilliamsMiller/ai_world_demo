@@ -76,6 +76,56 @@ def _select_with_recency(
     return [m for _, m in scored[:top_k]]
 
 
+def _plan_deviation_analysis(
+    mind: mem.AgentMind,
+    world_shichen: str,
+    top_observations: list[mem.Memory],
+) -> str:
+    """启发式计划-观察偏差分析：比较当日计划项与近期实际观察。
+
+    对每条计划项提取关键词，在近期观察中搜索匹配：
+    - 匹配 → 进展提示
+    - 不匹配 → 偏差提示
+    - 结果为简洁摘要，注入反思 prompt 让 LLM 有的放矢
+    """
+    import re
+    if not mind.plan_by_shichen and not mind.plan_summary:
+        return ""
+    # 收集所有计划条目
+    plan_items: list[tuple[str, str]] = []
+    if mind.plan_summary:
+        plan_items.append(("总览", mind.plan_summary))
+    for sh, plan in mind.plan_by_shichen.items():
+        plan_items.append((sh, plan))
+    # 将观察文本合并为搜索池
+    obs_pool = " ".join(m.text for m in top_observations)
+    matched: list[tuple[str, str]] = []
+    unmatched: list[tuple[str, str]] = []
+    for label, plan_text in plan_items:
+        tokens = [t for t in re.findall(r'[\u4e00-\u9fff\w]+', plan_text) if len(t) >= 2]
+        if not tokens:
+            continue
+        hits = sum(1 for t in tokens if t in obs_pool)
+        coverage = hits / len(tokens)
+        if coverage >= 0.3:
+            matched.append((label, plan_text))
+        else:
+            unmatched.append((label, plan_text))
+    if not matched and not unmatched:
+        return ""
+    lines = ["【计划-观察偏差分析（仅作反思参考，勿在输出中直述此表）】"]
+    if matched:
+        lines.append(f"✅ 有迹可循：共 {len(matched)} 项计划在观察中出现")
+        for label, text in matched[:3]:
+            lines.append(f"  · {label}：{text}")
+    if unmatched:
+        lines.append(f"⚠️ 未见踪影：共 {len(unmatched)} 项计划未在观察中找到对应")
+        for label, text in unmatched[:3]:
+            lines.append(f"  · {label}：{text}")
+        lines.append("  → 反思时可想想：搁置是因为意外、变卦还是另有隐情？")
+    return "\n".join(lines)
+
+
 async def reflect(
     *,
     npc_id: str,
@@ -89,6 +139,8 @@ async def reflect(
 
     2026-05-24 改进：引入语义去重（同一件事不重复喂给 LLM）与时效加权选择
     （综合重要性×时效衰减），让反思更关注近期多样化的经历而非历史重复。
+    2026-05-25 改进：引入结构化计划-观察偏差分析，让反思能具体比较
+    「今日打算做什么」与「实际发生了什么」，产生更有根据的洞察。
     """
     obs = mind.recent_observations(k=24)
     if not obs:
@@ -106,11 +158,14 @@ async def reflect(
     
     # ── 计划对照：让 NPC 比较「今日计划」与「实际所见」 ──
     plan_block = mem.format_plan_for_reflection(mind, world_shichen)
+    # ── 偏差分析：结构化对比计划项与观察覆盖情况 ──
+    deviation_block = _plan_deviation_analysis(mind, world_shichen, top)
     
     sys = (
         f"你是「{npc_name}」（{npc_blurb}）。\n"
         f"{mood_block}\n"
         f"{plan_block}\n"
+        f"{deviation_block}\n"
         "下方是你近期的所见所历。请站在**你自己的立场**上，从中提炼 3~5 条**抽象洞察**——"
         "比如对某人的判断、对某事的趋势、对自己处境的看法。\n"
         "如果今日有计划之事却未做成，也可以反思为何偏差、心里如何打算。\n"
