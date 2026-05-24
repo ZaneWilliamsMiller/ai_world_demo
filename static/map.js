@@ -194,7 +194,7 @@ export function renderMap(host, opts, onCellPick) {
     if (DANGER_SET.has(ch)) btn.classList.add("tile-danger");
     if (hurtKeys.has(key)) btn.classList.add("tile-hurt");
 
-    btn.disabled = !canStep || UNWALKABLE_SET.has(ch);
+    btn.disabled = !canStep;
     if (UNWALKABLE_SET.has(ch)) btn.classList.add("tile-unwalkable");
     btn.title = `${m.name} (${x},${y}) \u00b7 ${LABEL_MAP[ch] || "\u672a\u77e5"}${DANGER_SET.has(ch) ? " \u26a0\u9669" : ""}`;
 

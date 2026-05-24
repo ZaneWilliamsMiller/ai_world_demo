@@ -981,8 +981,11 @@ body.game-ancient {
 }
 .tile-unwalkable {
   opacity: 0.45;
-  cursor: not-allowed !important;
-  pointer-events: none;
+  cursor: not-allowed;
+}
+.tile-unwalkable.tile-npc {
+  opacity: 0.64;
+  cursor: pointer;
 }
 /* 受伤闪烁动画 */
 @keyframes tile-hurt-pulse {

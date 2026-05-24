@@ -313,17 +313,27 @@ function showTileMenu(tx, ty, ev) {
   hideTileMenu();
   const state = store.getState();
   const info = getLocationInfo(state.player.map_id, state.maps, tx, ty);
-  if (!info || !info.walkable) return;
+  if (!info) return;
+
+  // 检查该格是否有 NPC
+  const npcHere = (state.npcCatalog || []).find(
+    (n) => n.map === state.player.map_id && n.x === tx && n.y === ty,
+  );
 
   const menu = document.createElement("div");
   menu.id = TILE_MENU_ID;
   menu.className = "tile-menu";
-  menu.innerHTML = `
-    <div class="tile-menu-head">${info.mapName} (${tx},${ty}) · ${info.terrain}</div>
-    <button class="tile-menu-btn" data-act="pathfind">⏩ 自动寻路前往(${costHint(state, tx, ty)})</button>
-    <button class="tile-menu-btn" data-act="inquire">🔍 向风闻子打探此地</button>
-    <button class="tile-menu-btn tile-menu-cancel">✕ 取消</button>
-  `;
+  const walkTag = info.walkable ? "" : " ⛔不可通行";
+  let html = `<div class="tile-menu-head">${info.mapName} (${tx},${ty}) · ${info.terrain}${walkTag}</div>`;
+  if (info.walkable) {
+    html += `<button class="tile-menu-btn" data-act="pathfind">⏩ 自动寻路前往(${costHint(state, tx, ty)})</button>`;
+  }
+  if (npcHere) {
+    html += `<button class="tile-menu-btn" data-act="talk">💬 与${npcHere.name}交谈</button>`;
+  }
+  html += `<button class="tile-menu-btn" data-act="inquire">🔍 向风闻子打探此地</button>`;
+  html += `<button class="tile-menu-btn tile-menu-cancel">✕ 取消</button>`;
+  menu.innerHTML = html;
 
   menu.addEventListener("click", async (e) => {
     const btn = e.target.closest(".tile-menu-btn");
@@ -334,6 +344,8 @@ function showTileMenu(tx, ty, ev) {
       await doWalk(tx, ty);
     } else if (act === "inquire") {
       await doInquire(tx, ty);
+    } else if (act === "talk" && npcHere) {
+      await doNpcTalk(npcHere.id, npcHere.name);
     }
   });
 
@@ -364,6 +376,18 @@ function costHint(state, tx, ty) {
   if (dist <= 1) return "迈步";
   if (dist <= 3) return `约${dist}格`;
   return `约${dist}格`;
+}
+
+// ──── 与指定 NPC 交谈 ────
+async function doNpcTalk(npcId, npcName) {
+  const state = store.getState();
+  if (!state.playerId || state.ended || state.player.dead) return;
+  store.setState({ activeNpc: npcId });
+  buildTabs(state.npcsHere || []);
+  appendLog("你", `走向${npcName || npcId}……`);
+  // 聚焦输入框，让玩家可以立即输入
+  const msgEl = el("msg");
+  if (msgEl) msgEl.focus();
 }
 
 // ──── 向风闻子打探 ────
@@ -427,7 +451,18 @@ function redrawMap() {
       const dx = Math.abs(tx - currState.player.px);
       const dy = Math.abs(ty - currState.player.py);
       if (dx <= 1 && dy <= 1 && !(dx === 0 && dy === 0)) {
-        await doWalk(tx, ty);
+        const info = getLocationInfo(currState.player.map_id, currState.maps, tx, ty);
+        if (info && !info.walkable) {
+          // 相邻不可通行格:有NPC则交谈,否则不做任何操作
+          const npcHere = (currState.npcCatalog || []).find(
+            (n) => n.map === currState.player.map_id && n.x === tx && n.y === ty,
+          );
+          if (npcHere) {
+            await doNpcTalk(npcHere.id, npcHere.name);
+          }
+        } else {
+          await doWalk(tx, ty);
+        }
       } else if (dx !== 0 || dy !== 0) {
         // 非相邻格:弹出上下文菜单
         showTileMenu(tx, ty, ev);
