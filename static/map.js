@@ -4,24 +4,6 @@ const TARGET_TILE = 32; // 目标格子尺寸（含 gap 2px）
 const MIN_TILES = 9;   // 单方向最少格数
 const MAX_TILES = 51;  // 单方向最多格数（性能上限）
 
-const BASE_TERRAIN_CLASSES = [
-  "tile-wall",
-  "tile-cliff",
-  "tile-water",
-  "tile-grass",
-  "tile-forest",
-  "tile-mud",
-  "tile-mountainpath",
-  "tile-mountain",
-  "tile-tavern",
-  "tile-market",
-  "tile-yamen",
-  "tile-bridge",
-  "tile-river",
-  "tile-chasm",
-  "tile-ruins",
-];
-
 const DYNAMIC_TILE_CLASSES = [
   "tile-player",
   "tile-npc",
@@ -40,14 +22,16 @@ const LABEL_MAP = {
   "=": "河道", "!": "裂隙", "@": "废墟", "&": "密林",
 };
 
-const ELEV = {
-  "#": 99, "^": 9, m: 7, "/": 6, "!": 99, "@": 5,
-  F: 4, "&": 4, ";": 3,
-  ",": 2, ".": 2, T: 2, M: 2, Y: 2, B: 2, I: 2,
-  "~": 1, "=": 1,
-};
-
 const DANGER_SET = new Set(["~", "!", "@", "^"]);
+const UNWALKABLE_SET = new Set(["#", "^", "!"]);
+const TERRAIN_CLASS_MAP = {
+  "#": "tile-wall", "^": "tile-cliff", "~": "tile-water",
+  ",": "tile-grass", ".": "tile-grass", F: "tile-forest",
+  "&": "tile-forest", ";": "tile-mud", "/": "tile-mountainpath",
+  m: "tile-mountain", T: "tile-tavern", I: "tile-tavern",
+  M: "tile-market", Y: "tile-yamen", B: "tile-bridge",
+  "=": "tile-river", "!": "tile-chasm", "@": "tile-ruins",
+};
 const CACHE = new WeakMap();
 
 /**
@@ -151,8 +135,6 @@ export function renderMap(host, opts, onCellPick) {
   // --- 动态状态 ---
   const dead = !!player.dead;
   const canStep = !dead && !moveLocked;
-  // 不可通行地形集合（前端与 getLocationInfo 保持一致）
-  const UNWALKABLE_SET = new Set(["#", "^", "!"]);
   const routeSet = new Set();
   let routeEndKey = "";
   if (routeOverlay && routeOverlay.mapId === mapId && Array.isArray(routeOverlay.path)) {
@@ -200,15 +182,17 @@ export function renderMap(host, opts, onCellPick) {
 
     const main = tileGlyph(ch, here, hasNpc);
     if (here && amb) {
-      btn.innerHTML = `<span class="tile-stack" title="\u4fa0\u00b7\u9669"><span class="tile-major">\u4fa0</span><span class="tile-minor">${escapeHtml(amb)}</span></span>`;
+      const html = `<span class="tile-stack" title="\u4fa0\u00b7\u9669"><span class="tile-major">\u4fa0</span><span class="tile-minor">${escapeHtml(amb)}</span></span>`;
+      if (btn.innerHTML !== html) btn.innerHTML = html;
     } else if (amb && !here) {
       if (main) {
-        btn.innerHTML = `<span class="tile-stack"><span class="tile-major">${escapeHtml(main)}</span><span class="tile-minor">${escapeHtml(amb)}</span></span>`;
+        const html = `<span class="tile-stack"><span class="tile-major">${escapeHtml(main)}</span><span class="tile-minor">${escapeHtml(amb)}</span></span>`;
+        if (btn.innerHTML !== html) btn.innerHTML = html;
       } else {
-        btn.textContent = amb;
+        if (btn.textContent !== amb) btn.textContent = amb;
       }
     } else {
-      btn.textContent = main;
+      if (btn.textContent !== main) btn.textContent = main;
     }
   }
 
@@ -238,8 +222,10 @@ function buildViewportGrid(host, viewKey, mapInfo, rows, vx, vy, viewW, viewH) {
       btn.className = "tile";
       btn.dataset.x = String(x);
       btn.dataset.y = String(y);
-      applyTerrainClass(btn, ch);
+      btn.classList.add(TERRAIN_CLASS_MAP[ch] || "tile-grass");
       btn.title = `${mapInfo.name} (${x},${y}) \u00b7 ${LABEL_MAP[ch] || "\u672a\u77e5"}${DANGER_SET.has(ch) ? " \u26a0\u9669" : ""}`;
+      // 初始设置字形，避免后续动态循环全量 textContent 赋值
+      btn.textContent = tileGlyph(ch, false, false);
       frag.appendChild(btn);
       tileByKey.set(`${x},${y}`, btn);
     }
@@ -252,19 +238,6 @@ function buildViewportGrid(host, viewKey, mapInfo, rows, vx, vy, viewW, viewH) {
 
 function clamp(v, lo, hi) {
   return v < lo ? lo : v > hi ? hi : v;
-}
-
-function applyTerrainClass(btn, ch) {
-  for (const c of BASE_TERRAIN_CLASSES) btn.classList.remove(c);
-  const map = {
-    "#": "tile-wall", "^": "tile-cliff", "~": "tile-water",
-    ",": "tile-grass", ".": "tile-grass", F: "tile-forest",
-    "&": "tile-forest", ";": "tile-mud", "/": "tile-mountainpath",
-    m: "tile-mountain", T: "tile-tavern", I: "tile-tavern",
-    M: "tile-market", Y: "tile-yamen", B: "tile-bridge",
-    "=": "tile-river", "!": "tile-chasm", "@": "tile-ruins",
-  };
-  btn.classList.add(map[ch] || "tile-grass");
 }
 
 function escapeHtml(s) {
@@ -298,11 +271,7 @@ export function getLocationInfo(mapId, maps, tx, ty) {
   const row = m.rows[ty];
   if (tx < 0 || tx >= row.length) return null;
   const ch = row[tx];
-  // 不可通行地形：墙(#)、悬崖(^)、裂隙(!)
-  const UNWALKABLE = new Set(["#", "^", "!"]);
-  // 危险但可通行地形：险水(~)、废墟(@)——可走但概率受伤
-  const DANGER_SET = new Set(["~", "!", "@", "^"]);
-  const walkable = !UNWALKABLE.has(ch);
+  const walkable = !UNWALKABLE_SET.has(ch);
   return {
     mapId, mapName: m.name,
     x: tx, y: ty,

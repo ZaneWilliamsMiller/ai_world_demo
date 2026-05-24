@@ -41,12 +41,18 @@ function setUiPhase(next) {
   }
 }
 
-// 订阅 Store 更新 UI(移动动画期间节流 sidebar,避免每帧 7 块全量重绘)
+// 订阅 Store 更新 UI(移动动画期间节流 statStrip/sidebar,避免每帧重复 DOM 写入)
 let sidebarRaf = 0;
+let statStripRaf = 0;
 store.subscribe((state) => {
-  updateStatStrip(state);
   updateFinaleUI(state);
   if (moveAnimating) {
+    if (!statStripRaf) {
+      statStripRaf = requestAnimationFrame(() => {
+        statStripRaf = 0;
+        updateStatStrip(store.getState());
+      });
+    }
     if (!sidebarRaf) {
       sidebarRaf = requestAnimationFrame(() => {
         sidebarRaf = 0;
@@ -54,10 +60,11 @@ store.subscribe((state) => {
       });
     }
   } else {
-    if (sidebarRaf) {
-      cancelAnimationFrame(sidebarRaf);
-      sidebarRaf = 0;
-    }
+    cancelAnimationFrame(statStripRaf);
+    statStripRaf = 0;
+    updateStatStrip(state);
+    cancelAnimationFrame(sidebarRaf);
+    sidebarRaf = 0;
     renderSidebar(state);
   }
 });
@@ -183,11 +190,7 @@ function setupWASD() {
     // 不在对话输入框时响应键盘
     if (ev.target.tagName === "INPUT" || ev.target.tagName === "TEXTAREA" || ev.target.tagName === "SELECT") return;
 
-    const dir = DIR[ev.key.toLowerCase()];
-    if (!dir) return;
-    ev.preventDefault();
-
-    // 按 M 键切换移动模式
+    // 按 M 键切换移动模式（必须在方向键检查前处理，否则被DIR拦截）
     if (ev.key.toLowerCase() === "m" && !ev.ctrlKey && !ev.metaKey) {
       moveMode = moveMode === "wasd" ? "free" : "wasd";
       el("modePill").textContent = moveMode === "wasd" ? "WASD" : "点击";
@@ -195,6 +198,10 @@ function setupWASD() {
       appendLog("系统", moveMode === "wasd" ? "已切换为 WASD 逐格步行,按 M 切回点击寻路" : "已切回点击寻路模式", "bubble-meta");
       return;
     }
+
+    const dir = DIR[ev.key.toLowerCase()];
+    if (!dir) return;
+    ev.preventDefault();
 
     const state = store.getState();
     if (!state.playerId || state.ended || state.player.dead || state.player.move_locked) return;
