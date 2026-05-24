@@ -260,6 +260,10 @@ def respawn_at_supply_point(p: PlayerState) -> str:
     p.move_lock_npc_id = None
     p.trap_reason = None
     p.trap_attempts = 0
+    p.enslaved = False
+    p.enslaved_reason = None
+    p.ended = False
+    p.ending_label = None
     p.life_burn_ticks = 0
     p.life_burn_max = 0
     p.unconscious_ticks = 0
