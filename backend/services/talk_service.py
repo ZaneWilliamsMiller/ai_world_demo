@@ -385,6 +385,9 @@ def apply_npc_reply(
     # 10) 推进时辰：每次成功对话推进 1 时辰
     advance_clock(p, 1)
 
+    # ── NPC 情绪自然衰减：对话推时辰时同步所有 NPC 情绪向中性回归 ──
+    _decay_all_npc_moods(p)
+
     # 避免循环导入，在这里导入 _player_public 等
     from backend.api.routes import _player_public, _npcs_here
     
@@ -410,6 +413,18 @@ def apply_npc_reply(
         "trap_resolution": trap_resolution,
         "raw_debug": parsed.model_dump_json(),
     }, needs_reflect)
+
+def _decay_all_npc_moods(p: PlayerState) -> None:
+    """对话推进时辰时同步所有 NPC 的情绪向中性回归。
+
+    与 update_npc_states_from_habits（move 流程中调用）形成互补，
+    确保纯对话长链中 NPC 情绪不会一直保持极端。"""
+    from backend.systems.time_weather import shichen_name
+    sh_name = shichen_name(p.world_shichen)
+    for nid, mind in getattr(p, "minds", {}).items():
+        if mind is not None and hasattr(mind, "affect_valence"):
+            mind.mood_decay_tick(sh_name)
+
 
 def _record_cross_npc_awareness(
     p: PlayerState,

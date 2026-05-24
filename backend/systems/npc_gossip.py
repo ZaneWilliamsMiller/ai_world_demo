@@ -26,6 +26,7 @@ from backend.data.relationships import NPC_RELATIONSHIPS
 from backend.data.maps_data import MAPS
 from backend.game_state import get_or_init_mind
 from backend import memory as mem
+from backend.systems.time_weather import shichen_name
 
 log = logging.getLogger("npc_gossip")
 
@@ -226,19 +227,20 @@ def maybe_npc_gossip(p, *, ticks: int = 1) -> int:
                 obs_a, obs_b = _generate_gossip_text(npc_a, npc_b, mind_a, mind_b)
 
                 # 写入双方记忆流
+                sh_name = shichen_name(p.world_shichen)
                 mind_a.add(mem.make_memory(
                     kind="observation",
                     text=obs_a,
                     importance=GOSSIP_IMPORTANCE,
                     world_day=int(p.world_day),
-                    world_shichen=p.world_shichen if isinstance(p.world_shichen, str) else str(p.world_shichen),
+                    world_shichen=sh_name,
                 ))
                 mind_b.add(mem.make_memory(
                     kind="observation",
                     text=obs_b,
                     importance=GOSSIP_IMPORTANCE,
                     world_day=int(p.world_day),
-                    world_shichen=p.world_shichen if isinstance(p.world_shichen, str) else str(p.world_shichen),
+                    world_shichen=sh_name,
                 ))
 
                 _last_gossip[gk] = now
@@ -251,7 +253,7 @@ def maybe_npc_gossip(p, *, ticks: int = 1) -> int:
     return gossip_count
 
 
-def format_gossip_awareness_block(mind: mem.AgentMind, npc_id: str) -> str:
+def format_gossip_awareness_block(mind: mem.AgentMind, _npc_id: str) -> str:
     """从 NPC 记忆流中提取最近的闲聊观察，格式化为对话注入块。
 
     让 NPC 在对话中自然提及「刚跟 XXX 聊过」「XXX 那边听说……」。
