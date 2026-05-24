@@ -175,7 +175,8 @@ class Memory:
         }
 
 # ── NPC 情感状态(2025-2026 AI情感计算前沿落地)──
-MOOD_LABELS = ("欣悦", "平静", "疲惫", "烦躁", "忧悒", "警觉", "愤懑", "好奇", "感怀", "冷淡")
+# 注:MOOD_LABELS 仅为参考常量,实际 mood 标签由 _mood_from_valence_arousal() 动态计算
+MOOD_LABELS = ("欣悦", "平静", "疲惫", "烦躁", "忧悒", "警觉", "愤懑", "好奇", "感怀", "冷淡", "兴奋", "安然")
 
 # ── 情感锚点阈值(2026 AI情感计算前沿:关键时刻永久写入)──
 ANCHOR_VALENCE_THRESHOLD = 4.0    # 效价变化超过此值 → 产生锚点
@@ -679,6 +680,125 @@ def format_proactive_callbacks(mind: AgentMind, player_name: str) -> str:
     return "\n".join(callback_lines)
 
 
+def _resolve_deictic(user_message: str, hist_slice: list[dict[str, str]]) -> str:
+    """中文代词/指示词消解（2026 AI对话连贯性前沿落地）。
+
+    当玩家说「他后来怎样了」「那件事呢」「此人可否信任」时，
+    代词/指示词（他/她/它/这/那/此人/那个/这种）无法命中记忆检索。
+
+    本函数检测玩家消息中的指代词，从最近对话历史中提取最可能的
+    实体名/话题词替换指代词，让检索查询变成具体可检索的短语。
+
+    设计策略：
+    1. 检测中文人称代词（他/她/它/他们/她们）、指示代词（这/那/此/该）
+    2. 从最近2轮对话中提取出现过的具体人名/实体
+    3. 将指代词替换为最可能的具体实体，生成富查询
+
+    Returns:
+        消解后的增强查询字符串。若无需消解则返回空字符串。
+    """
+    if not hist_slice or len(hist_slice) < 1:
+        return ""
+
+    msg = user_message.strip()
+    if not msg:
+        return ""
+
+    # ── 中文指代词检测 ──
+    PERSON_PRONOUNS = {"他", "她", "它", "他们", "她们", "它们", "其"}
+    DEICTIC_NOUNS = {"这人", "那人", "此人", "彼", "这位", "那位", "该人"}
+    DEICTIC_PREFIX = {"这", "那", "此", "该"}
+    DEICTIC_THINGS = {"这事", "那事", "那件事", "这件事", "此", "这个", "那个", "这种", "那种"}
+
+    has_person_pronoun = any(p in msg for p in PERSON_PRONOUNS)
+    has_deictic_noun = any(d in msg for d in DEICTIC_NOUNS)
+    has_deictic_thing = any(d in msg for d in DEICTIC_THINGS)
+
+    # 扩展：检测「这/那/此 + 实体名」模式（如「那帖子」「这笔买卖」「此路引」）
+    # 这些应和代词/指示词一样触发消解——之前因常量定义顺序导致此检测为死代码
+    ALL_ENTITIES = ALL_ENTITY_KEYWORDS
+    has_deictic_entity = False
+    for ent in ALL_ENTITIES:
+        for prefix in ("这", "那", "此"):
+            if f"{prefix}{ent}" in msg:
+                has_deictic_entity = True
+                break
+        if has_deictic_entity:
+            break
+
+    if not (has_person_pronoun or has_deictic_noun or has_deictic_thing or has_deictic_entity):
+        return ""
+
+    # ── 从最近2轮对话中提取所有命中的实体（使用模块级共享常量）──
+    recent = hist_slice[-2:]
+    found_persons: list[str] = []
+    found_places: list[str] = []
+    found_things: list[str] = []
+    seen: set[str] = set()
+
+    for turn in recent:
+        # NPC回复中的人名往往是当前讨论焦点
+        assistant_text = (turn.get("assistant", "") or "").lower()
+        user_text = (turn.get("user", "") or "").lower()
+        combined = assistant_text + " " + user_text
+
+        for pn in PERSON_NAMES:
+            if pn.lower() in combined and pn not in seen:
+                found_persons.append(pn)
+                seen.add(pn)
+        for pl in PLACE_NAMES:
+            if pl.lower() in combined and pl not in seen:
+                found_places.append(pl)
+                seen.add(pl)
+        for tk in THING_KEYWORDS:
+            if tk.lower() in combined and tk not in seen:
+                found_things.append(tk)
+                seen.add(tk)
+
+    # 构建消解词：按指代类型选择最可能的实体
+    resolved_terms: list[str] = []
+
+    if has_person_pronoun or has_deictic_noun or has_deictic_entity:
+        # 代词指人/指实体 → 取最近出现的人名或事物（优先NPC回复中的，因为那更可能是话题焦点）
+        for turn in reversed(recent):
+            assistant_text = (turn.get("assistant", "") or "").lower()
+            for pn in PERSON_NAMES:
+                if pn.lower() in assistant_text:
+                    if pn not in resolved_terms:
+                        resolved_terms.append(pn)
+                    break
+            if resolved_terms:
+                break
+        # 如果NPC回复没有，从玩家消息中找
+        if not resolved_terms:
+            for pn in reversed(found_persons[:2]):
+                resolved_terms.append(pn)
+
+    if has_deictic_thing or has_deictic_entity:
+        # 指示事物/实体 → 取最近出现的事物关键词
+        for turn in reversed(recent):
+            assistant_text = (turn.get("assistant", "") or "").lower()
+            for tk in THING_KEYWORDS:
+                if tk.lower() in assistant_text:
+                    if tk not in resolved_terms:
+                        resolved_terms.append(tk)
+                    break
+            if any(t in THING_KEYWORDS for t in resolved_terms):
+                break
+        if not any(t in THING_KEYWORDS for t in resolved_terms):
+            for tk in reversed(found_things[:2]):
+                if tk not in resolved_terms:
+                    resolved_terms.append(tk)
+
+    # 如果什么都没消解出来（白名单无命中），回退到原查询
+    if not resolved_terms:
+        return ""
+
+    # 生成消解短语：原消息 + 具体实体
+    resolved_phrase = " ".join(resolved_terms[:3])
+    return f"{user_message} {resolved_phrase}"
+
+
 def build_retrieval_query(user_message: str, hist_slice: list[dict[str, str]]) -> str:
     """上下文感知的记忆检索查询构建（2026 AI对话连贯性前沿落地）。
 
@@ -689,37 +809,25 @@ def build_retrieval_query(user_message: str, hist_slice: list[dict[str, str]]) -
     与当前消息拼接成更丰富的检索查询，大幅提升记忆召回精度。
 
     设计策略：
-    1. 从最近3轮对话中提取关键名词（人名、地名、物品名）
-    2. 检出玩家最近的提问未完结话题
-    3. 将话题链拼入 user_message 形成复合检索词
+    1. 中文代词/指示词消解：「他」→「掌柜」,「那件事」→「路引 那件事」
+    2. 从最近3轮对话中提取关键名词（人名、地名、物品名）
+    3. 检出玩家最近的提问未完结话题
+    4. 将话题链拼入 user_message 形成复合检索词
     """
+    # ── 第0步：中文代词/指示词消解（2026-05-24 新增）──
+    pronoun_resolved = _resolve_deictic(user_message, hist_slice)
+
     if len(hist_slice) < 2:
-        return user_message
+        return pronoun_resolved or user_message
 
     recent = hist_slice[-4:]  # 取最近4轮
     topic_words: list[str] = []
 
-    # 关键词白名单：游戏世界中常见的可检索实体词
-    ENTITY_KEYWORDS = (
-        # 人物
-        "掌柜", "牙人", "皂隶", "镖头", "黑店", "匪首", "船家", "阿泠",
-        "里正", "驿卒", "知客", "帮掌", "书生", "卡吏", "风闻",
-        # 地点
-        "同福", "牙行", "镖局", "县衙", "渡头", "画舫", "野径",
-        "芦花", "佛寺", "书院", "厘卡", "漕口", "驿舍", "碾坊",
-        # 物品/概念
-        "路引", "信物", "帖子", "信函", "银", "钱", "药", "毒",
-        "镖", "船", "马", "刀", "剑", "赎身", "缉文", "帮规",
-        # 事件
-        "杀", "仇", "逃", "救", "帮", "买卖", "赊欠", "火并",
-        "走私", "偷渡", "贿赂", "典当", "盘店", "搭股",
-    )
-
-    # 1) 从对话历史中抽取实体关键词
+    # 1) 从对话历史中抽取实体关键词（使用模块级共享常量）
     seen_words: set[str] = set()
     for turn in recent:
         combined = (turn.get("user", "") + " " + turn.get("assistant", "")).lower()
-        for kw in ENTITY_KEYWORDS:
+        for kw in ALL_ENTITY_KEYWORDS:
             if kw in combined and kw not in seen_words:
                 topic_words.append(kw)
                 seen_words.add(kw)
@@ -732,11 +840,18 @@ def build_retrieval_query(user_message: str, hist_slice: list[dict[str, str]]) -
                 # 取问句核心词（问号附近的词）
                 q_idx = max(0, user_msg.index(q_marker) - 20)
                 snippet = user_msg[q_idx:q_idx + 30]
-                for kw in ENTITY_KEYWORDS:
+                for kw in ALL_ENTITY_KEYWORDS:
                     if kw in snippet and kw not in seen_words:
                         topic_words.append(kw)
                         seen_words.add(kw)
                 break
+
+    # ── 优先使用代词消解结果（更精准），话题链作为补充 ──
+    if pronoun_resolved:
+        if topic_words:
+            topic_chain = " ".join(topic_words[:4])
+            return f"{pronoun_resolved} {topic_chain}"
+        return pronoun_resolved
 
     if not topic_words:
         return user_message
@@ -812,6 +927,33 @@ def affective_memory_importance(base_importance: float, mind: AgentMind) -> floa
     bonus = arousal_bonus + valence_bonus
     return min(10.0, base_importance + bonus)
 
+
+# ─── 共享实体关键词（中文代词/指示词消解 & 检索查询构建共用）───
+# 保持各处一致，避免独立维护导致白名单不一致
+
+PERSON_NAMES = (
+    "掌柜", "牙人", "皂隶", "镖头", "黑店", "匪首", "船家", "阿泠",
+    "里正", "驿卒", "知客", "帮掌", "书生", "卡吏", "风闻", "江",
+)
+
+PLACE_NAMES = (
+    "同福", "牙行", "镖局", "县衙", "渡头", "画舫", "野径",
+    "芦花", "佛寺", "书院", "厘卡", "漕口", "驿舍", "碾坊",
+)
+
+THING_KEYWORDS = (
+    "路引", "信物", "帖子", "信函", "银子", "制钱", "药", "毒",
+    "镖", "船", "马", "刀", "剑", "赎身", "缉文", "帮规",
+    "鲜鱼", "干粮", "野果",
+)
+
+EVENT_KEYWORDS = (
+    "杀", "仇", "逃", "救", "帮", "买卖", "赊欠", "火并",
+    "走私", "偷渡", "贿赂", "典当", "盘店", "搭股",
+)
+
+# 用于 build_retrieval_query 话题链抽取的全量白名单
+ALL_ENTITY_KEYWORDS = PERSON_NAMES + PLACE_NAMES + THING_KEYWORDS + EVENT_KEYWORDS
 
 # ─── CMA·认知记忆凝结(2026前沿:LinkedIn CMA范式落地)───
 OBS_CONDENSE_THRESHOLD = 60       # 当 observation 条数超过此阈值时触发凝结
