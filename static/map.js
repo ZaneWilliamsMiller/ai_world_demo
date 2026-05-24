@@ -200,15 +200,17 @@ export function renderMap(host, opts, onCellPick) {
 
     const main = tileGlyph(ch, here, hasNpc);
     if (here && amb) {
-      btn.innerHTML = `<span class="tile-stack" title="\u4fa0\u00b7\u9669"><span class="tile-major">\u4fa0</span><span class="tile-minor">${escapeHtml(amb)}</span></span>`;
+      const html = `<span class="tile-stack" title="\u4fa0\u00b7\u9669"><span class="tile-major">\u4fa0</span><span class="tile-minor">${escapeHtml(amb)}</span></span>`;
+      if (btn.innerHTML !== html) btn.innerHTML = html;
     } else if (amb && !here) {
       if (main) {
-        btn.innerHTML = `<span class="tile-stack"><span class="tile-major">${escapeHtml(main)}</span><span class="tile-minor">${escapeHtml(amb)}</span></span>`;
+        const html = `<span class="tile-stack"><span class="tile-major">${escapeHtml(main)}</span><span class="tile-minor">${escapeHtml(amb)}</span></span>`;
+        if (btn.innerHTML !== html) btn.innerHTML = html;
       } else {
-        btn.textContent = amb;
+        if (btn.textContent !== amb) btn.textContent = amb;
       }
     } else {
-      btn.textContent = main;
+      if (btn.textContent !== main) btn.textContent = main;
     }
   }
 
@@ -240,6 +242,8 @@ function buildViewportGrid(host, viewKey, mapInfo, rows, vx, vy, viewW, viewH) {
       btn.dataset.y = String(y);
       applyTerrainClass(btn, ch);
       btn.title = `${mapInfo.name} (${x},${y}) \u00b7 ${LABEL_MAP[ch] || "\u672a\u77e5"}${DANGER_SET.has(ch) ? " \u26a0\u9669" : ""}`;
+      // 初始设置字形，避免后续动态循环全量 textContent 赋值
+      btn.textContent = tileGlyph(ch, false, false);
       frag.appendChild(btn);
       tileByKey.set(`${x},${y}`, btn);
     }

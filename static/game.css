@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   --bg0: #05070c;
   --bg1: #0c111a;
   --panel: rgba(14, 20, 32, 0.92);
@@ -1009,9 +1009,6 @@ body.game-ancient {
   background: #f0d090;
   transition: background 0.12s ease, outline-color 0.12s ease, box-shadow 0.12s ease;
   z-index: 1;
-}
-.tile {
-  transition: box-shadow 0.12s ease, background 0.12s ease;
 }
 .tile-npc:not(.tile-player) {
   box-shadow: inset 0 0 0 2px rgba(120, 220, 200, 0.35);

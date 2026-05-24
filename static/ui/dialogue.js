@@ -247,12 +247,11 @@ function applyTalkResult(data) {
     favor: { ...store.getState().favor, ...data.favor },
     rumors: data.rumors || store.getState().rumors,
     events: data.events || store.getState().events,
+    atmosphere: data.atmosphere ?? store.getState().atmosphere ?? "",
   });
   store.updatePlayer(data.player);
   
   if (data.npcs_here) {
-    // Let main.js handle tabs rebuild via subscription or callback
-    // For now, just update store
     store.setState({ npcsHere: data.npcs_here });
   }
   

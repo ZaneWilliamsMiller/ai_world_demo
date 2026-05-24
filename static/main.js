@@ -183,11 +183,7 @@ function setupWASD() {
     // 不在对话输入框时响应键盘
     if (ev.target.tagName === "INPUT" || ev.target.tagName === "TEXTAREA" || ev.target.tagName === "SELECT") return;
 
-    const dir = DIR[ev.key.toLowerCase()];
-    if (!dir) return;
-    ev.preventDefault();
-
-    // 按 M 键切换移动模式
+    // 按 M 键切换移动模式（必须在方向键检查前处理，否则被DIR拦截）
     if (ev.key.toLowerCase() === "m" && !ev.ctrlKey && !ev.metaKey) {
       moveMode = moveMode === "wasd" ? "free" : "wasd";
       el("modePill").textContent = moveMode === "wasd" ? "WASD" : "点击";
@@ -195,6 +191,10 @@ function setupWASD() {
       appendLog("系统", moveMode === "wasd" ? "已切换为 WASD 逐格步行,按 M 切回点击寻路" : "已切回点击寻路模式", "bubble-meta");
       return;
     }
+
+    const dir = DIR[ev.key.toLowerCase()];
+    if (!dir) return;
+    ev.preventDefault();
 
     const state = store.getState();
     if (!state.playerId || state.ended || state.player.dead || state.player.move_locked) return;
