@@ -16,7 +16,7 @@
 
 - 后端：`FastAPI` + `httpx` 异步 HTTP
 - 前端：原生 `HTML/CSS/JavaScript` 静态页面（Canvas 地图 + 层级 UI）
-- LLM：OpenAI 兼容 API（默认智谱 GLM 系列）
+- LLM：OpenAI 兼容 API（DeepSeek、Qwen、本地 Ollama 等均可）
 - 数据组织：内存会话态（玩家独立实例）+ 规则驱动的世界状态更新
 
 ## 快速开始
@@ -32,17 +32,17 @@ python3 -m uvicorn backend.app:app --host 127.0.0.1 --port 8765
 
 ## 环境配置
 
-克隆后复制 `.env.example` 为 `.env`，填入智谱 GLM API Key：
+克隆后复制 `.env.example` 为 `.env`，填入 LLM API Key：
 
 ```bash
 cp .env.example .env
 # 编辑 .env，设置：
-# LLM_BASE_URL=https://open.bigmodel.cn/api/paas/v4
-# LLM_API_KEY=你的智谱API密钥
-# LLM_MODEL=glm-4-flash
+# LLM_BASE_URL=https://api.deepseek.com/v1
+# LLM_API_KEY=你的 API 密钥
+# LLM_MODEL=deepseek-chat
 ```
 
-> 💡 `glm-4-flash` 免费额度充足，适合 Demo 演示；也可替换为其他 OpenAI 兼容模型。
+> 💡 推荐使用 DeepSeek V3 或兼容 OpenAI 的任意模型。
 
 ## 目录结构
 
@@ -56,6 +56,10 @@ cp .env.example .env
 | `backend/models/` | 领域数据模型 |
 | `backend/session/` | 会话态存储与管理 |
 | `backend/llm_client.py` | 模型调用封装 |
+| `tools/` | 辅助工具（地图生成、校验等） |
+| `tests/` | 自动化测试 |
+| `docs/` | 文档与迭代记录 |
+| `saves/` | 角色存档（运行时生成） |
 | `static/index.html` | 前端页面入口 |
 | `static/main.js` | 前端初始化与主流程 |
 | `static/map.js` | 地图渲染与交互 |

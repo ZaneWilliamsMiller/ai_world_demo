@@ -12,12 +12,12 @@ from .models.llm_schema import NpcResponseSchema
 log = logging.getLogger("llm_client")
 
 # ═══════════════════════════════════════════════════════════════
-#  Prompt Cache (GLM-4 / OpenAI 兼容)
+#  Prompt Cache (OpenAI 兼容)
 # ═══════════════════════════════════════════════════════════════
 # 原理：
 #   - 将大段静态 system prompt 标记 cache_control={type:"ephemeral"}，
 #     缓存命中时 API 跳过该块的推理计费，延迟降低 30~60%。
-#   - GLM-4 在缓存窗口内（约 5 min）自动复用相同前缀 content。
+#   - 多数兼容 API 在缓存窗口内（约 5 min）自动复用相同前缀 content。
 #   - 对于不支持 cache_control 的端点，标记会被静默忽略（不报错）。
 #   - 关键优化：talk_service.build_npc_messages 将 SOCIETY_BIBLE +
 #     角色卡等静态块放入 system 可缓存层；动态 context 放在
@@ -100,7 +100,7 @@ async def stream_chat_completion(
     temperature: float = 0.7,
     max_tokens: int = 1024,
 ) -> AsyncIterator[str]:
-    """OpenAI 兼容流式：逐段产出 delta content（智谱 / vLLM 等常见）。"""
+    """OpenAI 兼容流式：逐段产出 delta content（DeepSeek / vLLM 等常见）。"""
     url = f"{settings.llm_base_url.rstrip('/')}/chat/completions"
     headers = {"Authorization": f"Bearer {settings.llm_api_key}"}
     body: dict[str, Any] = {

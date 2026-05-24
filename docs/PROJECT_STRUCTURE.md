@@ -1,6 +1,6 @@
 # AI 文字世界 · 项目结构说明
 
-> 最后更新：2026-05-24 12:02
+> 最后更新：2026-05-24 16:10
 
 ## 顶层
 
@@ -9,11 +9,12 @@
 | `README.md` | 项目说明 |
 | `requirements.txt` | Python 依赖 |
 | `.env` / `.env.example` | 环境变量（LLM API Key 等） |
-| `_test_endpoints.py` | API 测试脚本 |
-| `gen_map.py` | 地图生成器（72×48 拼接脚本） |
-| `check_map.py` | 地图连通性校验 |
-| `test_api.py` | 快速 API 冒烟测试 |
-| `fix_npc.py` | NPC 数据修复脚本 |
+| `tools/` | 辅助工具脚本 |
+| `tests/` | 自动化测试 |
+| `docs/` | 文档与迭代记录 |
+| `saves/` | 角色存档（运行时生成） |
+| `static/` | 前端静态文件 |
+| `resume/` | 简历与项目经验 |
 
 ---
 
@@ -96,6 +97,16 @@
 
 ---
 
+## tools/ — 辅助工具
+
+| 路径 | 作用 |
+|------|------|
+| `tools/gen_map.py` | 地图生成器（72×48 拼接脚本） |
+| `tools/check_map.py` | 地图连通性校验 |
+| `tools/smoke_api.py` | API 冒烟测试（需服务已启动） |
+
+---
+
 ## tests/ — 自动化测试
 
 | 路径 | 作用 |
@@ -161,4 +172,4 @@
 3. **存档**：playerId 存 localStorage，后端自动将角色存档写入 `saves/<player_id>.json`（每次移动/对话后自动保存）
 4. **多角色**：`GET /api/saves` 列出全部角色 → `POST /api/load` 切换角色
 5. **真实江湖**：死亡后存档自动删除，不可再入；非真实江湖：重伤后复活至最近补给点（50%体力）
-4. **迭代记录**：每次迭代完成后在 `docs/iterations/` 下写入 `.md` 文件
+6. **迭代记录**：每次迭代完成后在 `docs/iterations/` 下写入 `.md` 文件
