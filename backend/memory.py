@@ -450,6 +450,50 @@ def estimate_importance_heuristic(text: str) -> float:
             base += w
     return max(1.0, min(10.0, base))
 
+# ── 心境一致性记忆检索（2026 情感计算前沿·情绪一致性偏差）──
+# 当 NPC 情绪较强时（|valence| >= 3），检索记忆时会偏向与当前情绪
+# 一致的旧忆——愤怒时更易记起旧怨，欣悦时更常想起好事。
+# 这是对人类「心境一致性记忆」（mood-congruent memory）的落地。
+_MOOD_BIAS_THRESHOLD = 3.0          # 效价绝对值超过此阈值才启用偏差
+_MOOD_BIAS_WEIGHT = 0.18            # 心境偏差在检索总分中的最大权重
+
+# 正向情感词（回忆起来让人欣悦）
+_POSITIVE_MEMORY_WORDS = {
+    "宽慰", "释然", "庆幸", "感激", "欣喜", "有望", "转机", "得利", "可靠",
+    "放心", "信得过", "有缘", "仗义", "成事", "顺遂", "可交", "厚道", "稳妥",
+    "帮衬", "照应", "结纳", "援手", "化解", "平息", "和睦", "坦荡", "进账",
+    "收入", "赚钱", "获利", "赏", "赠", "酬", "谢礼", "结交", "相识",
+    "欢喜", "笑声", "宴", "欢", "畅", "幸", "福", "佑",
+}
+# 负向情感词（回忆起来令人烦忧）
+_NEGATIVE_MEMORY_WORDS = {
+    "失望", "愤怒", "危险", "背叛", "陷阱", "算计", "提防", "戒备", "凶险",
+    "无可挽回", "走投无路", "出卖", "辜负", "寒心", "阴险", "刁难", "逼迫",
+    "暗算", "勾结", "图谋", "杀意", "灾祸", "绝路", "蒙冤", "受辱", "被迫",
+    "亏", "赔", "失", "罚", "扣", "夺", "劫", "偷", "骗", "讹",
+    "痛", "伤", "残", "亡", "恨", "仇", "怨", "苦", "泣",
+}
+
+
+def _sentiment_hint(text: str) -> float:
+    """启发式情感倾向估计：扫描记忆文本中的情感词，
+    返回 -1.0（全负面）~ +1.0（全正面）的倾向值。
+
+    用于心境一致性记忆检索——帮助 NPC 在愤怒时偏重记起负面往事，
+    在欣悦时更容易浮现美好回忆。"""
+    t = (text or "").lower()
+    pos = sum(1 for kw in _POSITIVE_MEMORY_WORDS if kw in t)
+    neg = sum(1 for kw in _NEGATIVE_MEMORY_WORDS if kw in t)
+    total = pos + neg
+    if total == 0:
+        return 0.0  # 中性
+    # 归一化到 -1..1
+    ratio = (pos - neg) / total
+    # 温和缩放：少量词命中时信号弱
+    confidence = min(1.0, total / 4.0)  # 4个以上命中才算全信
+    return ratio * confidence
+
+
 def retrieve(
     mind: AgentMind,
     query: str,
@@ -457,7 +501,12 @@ def retrieve(
     k: int = 6,
     half_life_s: float = 3600.0 * 6,
 ) -> list[Memory]:
-    """按斯坦福式分数检索:recency × importance × relevance(线性加权)。"""
+    """按斯坦福式分数检索:recency × importance × relevance(线性加权)。
+
+    2026-05-25 改进：融入心境一致性偏差（mood-congruent memory）。
+    当 NPC 情绪较强时（|affect_valence| >= 3），与当前心境一致的
+    记忆会得到微幅加成——愤怒者更易记起旧怨，欣悦者更常想起好事。
+    这使 NPC 的回忆更符合人类的心理真实。"""
     if not mind.items:
         return []
     now = time.time()
@@ -469,6 +518,9 @@ def retrieve(
         rels.append(rel)
         if rel > rel_max:
             rel_max = rel
+    # ── 心境一致性偏差：情绪较强时启用 ──
+    mood_valence = float(getattr(mind, 'affect_valence', 0.0) or 0.0)
+    apply_mood_bias = abs(mood_valence) >= _MOOD_BIAS_THRESHOLD
     for m, rel in zip(mind.items, rels):
         # 归一化:importance/10;recency 衰减;relevance/rel_max(避免一边倒)
         rec = _decay_recency(now - m.last_accessed, half_life_s)
@@ -478,6 +530,12 @@ def retrieve(
         bonus = 0.05 if m.kind in ("reflection", "cross_reflection", "seed", "insight") else 0.0
         if m.is_anchor or m.kind == "anchor":
             bonus += 0.35   # 锚点记忆几乎总是被检索到
+        # ── 心境一致性偏差：情绪极性一致的记忆更容易浮起 ──
+        if apply_mood_bias:
+            sent = _sentiment_hint(m.text)  # -1..1
+            # 心境一致：sent 符号与 mood_valence 符号相同 ⇒ 正值 ⇒ 加成
+            mood_congruence = sent * (mood_valence / 10.0)
+            bonus += mood_congruence * _MOOD_BIAS_WEIGHT
         score = (W_RECENCY * rec) + (W_IMPORTANCE * imp) + (W_RELEVANCE * rel_norm) + bonus
         scored.append((score, m))
     scored.sort(key=lambda kv: kv[0], reverse=True)
