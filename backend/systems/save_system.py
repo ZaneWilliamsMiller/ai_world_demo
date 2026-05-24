@@ -66,6 +66,7 @@ def _mind_to_dict(mind: Any) -> dict[str, Any]:
         "affect_cause": str(getattr(mind, "affect_cause", "")),
         "affect_updated_at": float(getattr(mind, "affect_updated_at", 0)),
         "last_insight_at": float(getattr(mind, "last_insight_at", 0)),
+        "linked_memory_ids": list(getattr(mind, "linked_memory_ids", set())),
     }
 
 
@@ -101,15 +102,22 @@ def _deserialize_player(data: dict[str, Any]) -> PlayerState:
         mind.affect_cause = str(md.get("affect_cause", ""))
         mind.affect_updated_at = float(md.get("affect_updated_at", 0))
         mind.last_insight_at = float(md.get("last_insight_at", 0))
+        mind.linked_memory_ids = set(md.get("linked_memory_ids", []))
+        import uuid
+        import time as _time
+        now_ts = _time.time()
         for item_raw in md.get("items", []):
             mem = Memory(
+                id=str(item_raw.get("id") or uuid.uuid4().hex[:10]),
                 kind=str(item_raw.get("kind", "observation")),
                 text=str(item_raw.get("text", "")),
-                importance=float(item_raw.get("importance", 0)),
-                anchor=bool(item_raw.get("is_anchor", False)),
+                importance=float(item_raw.get("importance", 1.0)),
+                created_day=int(item_raw.get("created_day", 0)),
+                created_shichen=str(item_raw.get("created_shichen", "")),
+                created_at=float(item_raw.get("created_at", now_ts)),
+                last_accessed=float(item_raw.get("last_accessed", now_ts)),
+                is_anchor=bool(item_raw.get("is_anchor", False)),
             )
-            mem.created_day = int(item_raw.get("created_day", 0))
-            mem.created_shichen = str(item_raw.get("created_shichen", ""))
             mem.refs = list(item_raw.get("refs", []))
             mind.items.append(mem)
         p.minds[nid] = mind

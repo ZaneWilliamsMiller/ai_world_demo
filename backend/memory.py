@@ -168,6 +168,8 @@ class Memory:
             "importance": float(self.importance),
             "created_day": int(self.created_day),
             "created_shichen": self.created_shichen,
+            "created_at": self.created_at,
+            "last_accessed": self.last_accessed,
             "refs": list(self.refs),
             "is_anchor": self.is_anchor,
         }
