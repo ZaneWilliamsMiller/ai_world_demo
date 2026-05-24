@@ -180,6 +180,12 @@ def suggest_item_price(item_name: str, player: Any = None, weather: str | None =
             parts.append(f"此品类遇{weather}更见紧俏")
         weather_tip = "；".join(parts) if parts else ""
 
+    # 构建市场行情提示（含地点与倍数）
+    map_id_hint = ""
+    if player and hasattr(player, 'map_id'):
+        map_id_hint = str(getattr(player, 'map_id', ''))
+    market_hint = f"{map_hint}，{item_name}当地约{local}文（基准{base}文）"
+
     return {
         "item": item_name,
         "base": base,
@@ -191,11 +197,7 @@ def suggest_item_price(item_name: str, player: Any = None, weather: str | None =
             "weather_global": round(weather_global, 2),
             "weather_cat": round(weather_cat, 2),
         },
-        "market_hint": (
-            f"此地{map_id}价约{local}文"
-            if map_id and map_id in MAP_PRICE_MOD else
-            f"市口价约{base}文"
-        ),
+        "market_hint": market_hint,
         "weather_hint": weather_tip,
     }
 
@@ -215,11 +217,29 @@ NPC_INVENTORY_SEEDS: dict[str, dict[str, int]] = {
 
 
 def init_npc_inventories(p: PlayerState) -> None:
-    """为新玩家初始化所有商贩 NPC 的起始货柜。"""
-    if p.npc_inventories:  # 已初始化,跳过
-        return
+    """初始化商贩 NPC 货柜。
+
+    新玩家：全量初始化所有商贩货柜。
+    老存档加载：增量补齐新增商贩（不覆盖已有货柜，避免丢失交易状态）。
+    同时也初始化缺失的补货追踪。"""
+    # 获取或创建 npc_inventories（兼容老存档字段丢失的情况）
+    if not hasattr(p, 'npc_inventories') or p.npc_inventories is None:
+        p.npc_inventories = {}
+    # 获取或创建 restock_day 追踪
+    if not hasattr(p, 'npc_inventory_restock_day') or p.npc_inventory_restock_day is None:
+        p.npc_inventory_restock_day = {}
+    current_day = int(getattr(p, 'world_day', 1) or 0)
+
     for npc_id, seeds in NPC_INVENTORY_SEEDS.items():
+        # 已有货柜的 NPC：跳过（保留玩家交易产生的状态）
+        if npc_id in p.npc_inventories:
+            # 但补货追踪可能缺失（老存档兼容）
+            if npc_id not in p.npc_inventory_restock_day:
+                p.npc_inventory_restock_day[npc_id] = current_day
+            continue
+        # 新 NPC（或老存档中未注册的）：完整初始化
         p.npc_inventories[npc_id] = dict(seeds)
+        p.npc_inventory_restock_day[npc_id] = current_day
 
 
 def format_npc_inventory(p: PlayerState, npc_id: str) -> str:
