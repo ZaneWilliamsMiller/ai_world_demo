@@ -44,6 +44,7 @@ class Store {
       events: [],
       lastInjuryEvents: [],
       lastRouteOverlay: null,
+      atmosphere: "",
       flags: { order: 0, truth: 0, hope: 0, chaos: 0 },
       worldTitle: "",
       intro: "",
