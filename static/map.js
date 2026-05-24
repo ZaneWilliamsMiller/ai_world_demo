@@ -30,6 +30,7 @@ const DYNAMIC_TILE_CLASSES = [
   "tile-danger",
   "tile-hurt",
   "tile-ambush",
+  "tile-unwalkable",
 ];
 
 const LABEL_MAP = {
@@ -112,7 +113,7 @@ export function renderMap(host, opts, onCellPick) {
       const c = CACHE.get(host);
       if (!c) return;
       const btn = ev.target.closest(".tile");
-      if (!btn || !host.contains(btn)) return;
+      if (!btn || !host.contains(btn) || btn.disabled) return;
       const fn = c.onCellPick;
       if (typeof fn !== "function") return;
       fn(Number(btn.dataset.x), Number(btn.dataset.y), ev);
@@ -150,6 +151,8 @@ export function renderMap(host, opts, onCellPick) {
   // --- 动态状态 ---
   const dead = !!player.dead;
   const canStep = !dead && !moveLocked;
+  // 不可通行地形集合（前端与 getLocationInfo 保持一致）
+  const UNWALKABLE_SET = new Set(["#", "^", "!"]);
   const routeSet = new Set();
   let routeEndKey = "";
   if (routeOverlay && routeOverlay.mapId === mapId && Array.isArray(routeOverlay.path)) {
@@ -191,7 +194,8 @@ export function renderMap(host, opts, onCellPick) {
     if (DANGER_SET.has(ch)) btn.classList.add("tile-danger");
     if (hurtKeys.has(key)) btn.classList.add("tile-hurt");
 
-    btn.disabled = !canStep;
+    btn.disabled = !canStep || UNWALKABLE_SET.has(ch);
+    if (UNWALKABLE_SET.has(ch)) btn.classList.add("tile-unwalkable");
     btn.title = `${m.name} (${x},${y}) \u00b7 ${LABEL_MAP[ch] || "\u672a\u77e5"}${DANGER_SET.has(ch) ? " \u26a0\u9669" : ""}`;
 
     const main = tileGlyph(ch, here, hasNpc);
@@ -294,11 +298,17 @@ export function getLocationInfo(mapId, maps, tx, ty) {
   const row = m.rows[ty];
   if (tx < 0 || tx >= row.length) return null;
   const ch = row[tx];
+  // 不可通行地形：墙(#)、悬崖(^)、裂隙(!)
+  const UNWALKABLE = new Set(["#", "^", "!"]);
+  // 危险但可通行地形：险水(~)、废墟(@)——可走但概率受伤
+  const DANGER_SET = new Set(["~", "!", "@", "^"]);
+  const walkable = !UNWALKABLE.has(ch);
   return {
     mapId, mapName: m.name,
     x: tx, y: ty,
     glyph: ch,
     terrain: TERRAIN_CN[ch] || "\u672a\u77e5",
-    walkable: true,
+    walkable,
+    dangerous: DANGER_SET.has(ch),
   };
 }

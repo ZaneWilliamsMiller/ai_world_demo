@@ -979,6 +979,11 @@ body.game-ancient {
               0 0 4px rgba(255, 80, 40, 0.25) !important;
   border-color: rgba(255, 100, 60, 0.4) !important;
 }
+.tile-unwalkable {
+  opacity: 0.45;
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
 /* 受伤闪烁动画 */
 @keyframes tile-hurt-pulse {
   0%, 100% { box-shadow: inset 0 0 6px rgba(255,60,60,0.55), 0 0 4px rgba(255,60,40,0.25); }
