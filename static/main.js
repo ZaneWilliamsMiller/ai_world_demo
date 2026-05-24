@@ -41,12 +41,18 @@ function setUiPhase(next) {
   }
 }
 
-// 订阅 Store 更新 UI(移动动画期间节流 sidebar,避免每帧 7 块全量重绘)
+// 订阅 Store 更新 UI(移动动画期间节流 statStrip/sidebar,避免每帧重复 DOM 写入)
 let sidebarRaf = 0;
+let statStripRaf = 0;
 store.subscribe((state) => {
-  updateStatStrip(state);
   updateFinaleUI(state);
   if (moveAnimating) {
+    if (!statStripRaf) {
+      statStripRaf = requestAnimationFrame(() => {
+        statStripRaf = 0;
+        updateStatStrip(store.getState());
+      });
+    }
     if (!sidebarRaf) {
       sidebarRaf = requestAnimationFrame(() => {
         sidebarRaf = 0;
@@ -54,10 +60,11 @@ store.subscribe((state) => {
       });
     }
   } else {
-    if (sidebarRaf) {
-      cancelAnimationFrame(sidebarRaf);
-      sidebarRaf = 0;
-    }
+    cancelAnimationFrame(statStripRaf);
+    statStripRaf = 0;
+    updateStatStrip(state);
+    cancelAnimationFrame(sidebarRaf);
+    sidebarRaf = 0;
     renderSidebar(state);
   }
 });
