@@ -1021,11 +1021,10 @@ def condense_old_observations(mind: AgentMind, world_day: int, world_shichen: st
         sample = texts[0][:80] + ("..." if len(texts[0]) > 80 else "")
         summaries.append(f"{grp}约{n}事。如:{sample}")
 
-    # 标记被凝结的观察（不删除，但前缀标识）
-    for m in to_condense:
-        m.text = f"[已凝] {m.text}"
-        # 被凝结的旧记忆降低重要性
-        m.importance = max(1.0, m.importance * 0.3)
+    # 标记被凝结的观察：从记忆流中移除（不再参与检索）
+    # condensation 类记忆作为摘要锚点保留关键信息
+    to_condense_ids = {m.id for m in to_condense}
+    mind.items = [m for m in mind.items if m.id not in to_condense_ids]
 
     # 写入一条 condensation 记忆作为摘要锚点
     summary_text = f"记忆凝结：回想往昔，" + ";".join(summaries)[:400]
