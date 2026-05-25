@@ -44,6 +44,42 @@ ITEM_PRICE_CATALOG: dict[str, dict[str, object]] = {
     "铁护腕":  {"base": 30,  "note": "挡暗器用的", "cat": "兵"},
 }
 
+
+# ════════════════════════════════════════════════════════════════════
+#  物品消耗效果表 — 进食/用药的身心效用（🎮 游戏性扩展）
+# ════════════════════════════════════════════════════════════════════
+#  设计原则：
+#    · 食物类（食）：主攻体力恢复，轻度心气恢复
+#    · 药物类（药）：针对性效用（止血/解毒/安神），不进战斗但影响状态
+#    · 杂物类（物）：大部分不可消耗，火折是例外（照明用，消耗品）
+#    · 兵器/信物：不在此表（不可消耗，装备/持有类）
+#
+#  字段说明：
+#    vigor:  体力变化（+恢复/-消耗）
+#    spirit: 心气变化
+#    sleep_debt: 睡眠债变化（负值=减少=好转）
+#    note:   消耗后的叙事描述
+#    max_per_day: 每日最多生效次数（防滥用，0=不限制）
+#    requires_tile: 需要特定地形才能使用（如"睡"需要客栈/寺廊）
+#
+ITEM_USE_EFFECTS: dict[str, dict[str, object]] = {
+    # ── 食物：饱腹回体 ──
+    "干粮":     {"vigor": +18, "spirit": +6,  "sleep_debt": 0,  "note": "你嚼了几口干粮，粗粝但管饱，气力略回。", "max_per_day": 3},
+    "鲜鱼":     {"vigor": +22, "spirit": +8,  "sleep_debt": 0,  "note": "你就着江水刮了几片生鱼，冷鲜却回力极快。", "max_per_day": 2},
+    "野果":     {"vigor": +10, "spirit": +4,  "sleep_debt": 0,  "note": "你嚼了几口野果，甜涩交织，勉强充饥。", "max_per_day": 5},
+    "粗酒":     {"vigor": -5,  "spirit": +14, "sleep_debt": -3, "note": "你灌了一碗浊酒，身子更乏了，心口却烧起一股热气。", "max_per_day": 2},
+    "熟牛肉":   {"vigor": +32, "spirit": +10, "sleep_debt": 0,  "note": "你大口嚼了熟牛肉，油香满颊，浑身都是力气。", "max_per_day": 2},
+    "茶饼":     {"vigor": +6,  "spirit": +10, "sleep_debt": -2, "note": "你嚼了半块茶饼，微苦回甘，夜读般的清醒漫上来。", "max_per_day": 4},
+    # ── 药物：对症下药 ──
+    "金创药":   {"vigor": +28, "spirit": 0,   "sleep_debt": 0,  "note": "你敷上金创药，伤口一阵刺痛后清凉下来，血算止住了。", "max_per_day": 2},
+    "解毒丸":   {"vigor": +8,  "spirit": +12, "sleep_debt": 0,  "note": "你吞下一粒解毒丸，喉间苦得发麻，但胸腹间那股滞涩感散了。", "max_per_day": 2},
+    "安神散":   {"vigor": -4,  "spirit": +22, "sleep_debt": -6, "note": "你冲服了安神散，眼皮渐渐发沉，心口那团乱麻慢慢松开。", "max_per_day": 2},
+    # ── 蒙汗药：不可自用（对 NPC 使用，此处占位） ──
+    # "蒙汗药": 不可用，跳过
+    # ── 杂物：火折可消耗（照明） ──
+    "火折":     {"vigor": 0,   "spirit": 0,   "sleep_debt": 0,  "note": "你点亮了火折，一圈昏黄的光推开黑暗——能看清周围几步了。", "max_per_day": 3},
+}
+
 # 统一地图地区系数：根据格子位置判断所属商圈
 # 返回 (溢价倍率, 说明)
 def zone_price_mod(player_or_px: Any, py: int | None = None) -> tuple[float, str]:
@@ -308,16 +344,24 @@ def apply_npc_trade(
         inv[name] = inv.get(name, 0) + 1
 
 
-def format_economy_context(p: PlayerState) -> str:
+def format_economy_context(p: PlayerState, vendor_npc_id: str | None = None) -> str:
     """生成经济上下文：当前地图行情 + 天气浮动 + 玩家随身物品估价辅助。
 
-    注入 NPC system prompt，让 LLM 在交易时有据可依，不会无中生有。"""
+    注入 NPC system prompt，让 LLM 在交易时有据可依，不会无中生有。
+
+    分层注入策略（2026-05-26 优化）：
+    - vendor_npc_id 非 None（商贩 NPC）→ 完整价格目录（含逐品本地价）
+    - vendor_npc_id 为 None（非商贩 NPC）→ 仅行情摘要（地点+天气波动，不含逐品目录）
+    此举为每轮非商贩对话节省 ~200-300 tokens，商贩对话不受影响。"""
     map_name = MAPS.get(p.map_id, {}).get("name", p.map_id)
     map_mult, map_hint = zone_price_mod(p)
 
     weather = p.weather
     weather_global, weather_hint = WEATHER_PRICE_MOD.get(weather, (1.0, ""))
     weather_cat_data = WEATHER_CAT_MOD.get(weather, {})
+
+    # 判断是否为商贩 NPC（有货柜种子的 NPC 才需要完整价格目录）
+    is_vendor = vendor_npc_id is not None and vendor_npc_id in NPC_INVENTORY_SEEDS
 
     lines = [
         f"【行情】{map_name}：{map_hint}（地图倍率约 ×{map_mult:.1f}）。",
@@ -336,25 +380,7 @@ def format_economy_context(p: PlayerState) -> str:
             weather_lines.append("品类浮动：" + "、".join(cat_parts))
         lines.append("\n".join(weather_lines))
 
-    lines.append(
-        "以下是常见物品的本地参考价（单位：文/制钱），已含天气浮动。"
-        "NPC 以此为基础讨价还价，但可因关系/急迫/稀缺做 ±50% 浮动；不可离谱（如干粮卖 200 文就不合理）。"
-    )
-
-    # 列出常见品类价格（含天气修正）
-    by_cat: dict[str, list[str]] = {}
-    for name, entry in ITEM_PRICE_CATALOG.items():
-        cat = str(entry.get("cat", ""))
-        w_cat = weather_cat_data.get(cat, 1.0)
-        local_price = int(round(int(entry["base"]) * map_mult * weather_global * w_cat))
-        by_cat.setdefault(cat, []).append(f"{name}({local_price}文)")
-
-    cat_names = {"食": "食水", "文": "文书", "药": "药物", "物": "杂物", "兵": "兵器"}
-    for cat, items in sorted(by_cat.items()):
-        label = cat_names.get(cat, cat)
-        lines.append(f"· {label}：{'、'.join(items[:6])}")
-
-    # 玩家当前物品的参照
+    # 玩家随身物品参照（所有 NPC 都需要，方便打听行情）
     if p.inventory:
         inv_vals: list[str] = []
         for name, count in sorted(p.inventory.items()):
@@ -368,6 +394,32 @@ def format_economy_context(p: PlayerState) -> str:
         if inv_vals:
             lines.append(f"· 此人随身（估价）：{'、'.join(inv_vals[:6])}")
     lines.append(f"· 此人钱袋：{p.coins}文。")
+
+    if is_vendor:
+        # ── 商贩 NPC：完整价格目录 ──
+        lines.append(
+            "以下是常见物品的本地参考价（单位：文/制钱），已含天气浮动。"
+            "你以此为基础讨价还价，但可因关系/急迫/稀缺做 ±50% 浮动；不可离谱（如干粮卖 200 文就不合理）。"
+        )
+        # 列出常见品类价格（含天气修正）
+        by_cat: dict[str, list[str]] = {}
+        for name, entry in ITEM_PRICE_CATALOG.items():
+            cat = str(entry.get("cat", ""))
+            w_cat = weather_cat_data.get(cat, 1.0)
+            local_price = int(round(int(entry["base"]) * map_mult * weather_global * w_cat))
+            by_cat.setdefault(cat, []).append(f"{name}({local_price}文)")
+
+        cat_names = {"食": "食水", "文": "文书", "药": "药物", "物": "杂物", "兵": "兵器"}
+        for cat, items in sorted(by_cat.items()):
+            label = cat_names.get(cat, cat)
+            lines.append(f"· {label}：{'、'.join(items[:6])}")
+    else:
+        # ── 非商贩 NPC：仅行情摘要，不罗列逐品价格 ──
+        lines.append(
+            "【行情提示】若有人向你打听行市物价，你可用常识作答——"
+            "此地的物价因" + ("天气「" + weather + "」影响，" if weather_global != 1.0 else "") +
+            "远近便利程度而异。不必背报价，话到即可。"
+        )
 
     return "\n".join(lines)
 
@@ -456,3 +508,116 @@ def restock_npc_inventories(p: PlayerState) -> list[str]:
             logs.append(log_msg)
 
     return logs
+
+
+# ════════════════════════════════════════════════════════════════════
+#  物品消耗 API — 玩家从背包中使用物品（🎮 游戏性）
+# ════════════════════════════════════════════════════════════════════
+
+def use_player_item(p: "PlayerState", item_name: str) -> dict[str, object]:
+    """玩家消耗一个背包物品，应用其身心效用并返回叙事描述。
+
+    返回格式：
+    {
+        "success": True/False,
+        "note": "叙事描述或失败原因",
+        "delta": {"vigor": int, "spirit": int, "sleep_debt": int},
+        "item_consumed": str,  # 消耗的物品名（成功时）
+    }
+
+    边界处理：
+    - 物品不在 ITEM_USE_EFFECTS 中 → 告知不可消耗
+    - 物品不在背包中 → 告知没有此物
+    - 超每日上限 → 告知今日已用足
+    - 生命燃烧中自动解除（进食效果）
+    """
+    name = (item_name or "").strip().strip("「」『」\"'")[:12]
+    if not name:
+        return {"success": False, "note": "空无一物。", "delta": {"vigor": 0, "spirit": 0, "sleep_debt": 0}}
+
+    # 检查是否在消耗表中
+    effect = ITEM_USE_EFFECTS.get(name)
+    if not effect:
+        # 某些物品不能直接消耗（文书、兵器、信物等）
+        cat_info = ITEM_PRICE_CATALOG.get(name)
+        if cat_info:
+            cat = str(cat_info.get("cat", ""))
+            cat_names = {"文": "文书信物", "兵": "兵器护具", "物": "日用杂物"}
+            cat_label = cat_names.get(cat, "物品")
+            return {
+                "success": False,
+                "note": f"{name}是{cat_label}，不能直接消耗。你若要用它，可寻相关NPC出示或交易。",
+                "delta": {"vigor": 0, "spirit": 0, "sleep_debt": 0},
+            }
+        return {
+            "success": False,
+            "note": f"你端详着{name}，不知怎生用法——不妨问问认得此物的人。",
+            "delta": {"vigor": 0, "spirit": 0, "sleep_debt": 0},
+        }
+
+    # 检查背包中是否有此物
+    inv_count = int(p.inventory.get(name, 0))
+    if inv_count <= 0:
+        return {
+            "success": False,
+            "note": f"你翻遍了随身包裹，没找到{name}——怕是已经用完了。",
+            "delta": {"vigor": 0, "spirit": 0, "sleep_debt": 0},
+        }
+
+    # 日上限检查
+    max_per_day = int(effect.get("max_per_day", 0))
+    if max_per_day > 0:
+        if not hasattr(p, "item_use_tracker") or p.item_use_tracker is None:
+            p.item_use_tracker = {}
+        current_day = int(getattr(p, "world_day", 1) or 1)
+        # 翻日清理旧记录
+        if p.item_use_tracker.get("_day") != current_day:
+            p.item_use_tracker = {"_day": current_day}
+        used_today = int(p.item_use_tracker.get(name, 0))
+        if used_today >= max_per_day:
+            return {
+                "success": False,
+                "note": f"你再续{name}已不见效——今日用够了，再续也是糟蹋。换个时辰再说。",
+                "delta": {"vigor": 0, "spirit": 0, "sleep_debt": 0},
+            }
+
+    # 应用效用
+    vigor_delta = int(effect.get("vigor", 0))
+    spirit_delta = int(effect.get("spirit", 0))
+    sleep_debt_delta = int(effect.get("sleep_debt", 0))
+
+    from backend.systems.core import apply_vigor_delta, apply_spirit_delta
+    actual_vigor = apply_vigor_delta(p, vigor_delta)
+    actual_spirit = apply_spirit_delta(p, spirit_delta)
+
+    # 睡眠债变化
+    if sleep_debt_delta < 0:
+        p.sleep_debt = max(0, int(getattr(p, "sleep_debt", 0)) + sleep_debt_delta)
+
+    # 从背包扣除
+    p.inventory[name] = inv_count - 1
+    if p.inventory[name] <= 0:
+        del p.inventory[name]
+
+    # 更新日用量追踪
+    if max_per_day > 0:
+        p.item_use_tracker[name] = used_today + 1
+
+    # 进食后解除生命燃烧
+    if int(getattr(p, "life_burn_ticks", 0)) > 0 and actual_vigor > 0:
+        p.life_burn_ticks = 0
+        p.life_burn_max = 0
+        p.trap_reason = None
+        p.move_locked = False
+        p.move_lock_npc_id = None
+
+    return {
+        "success": True,
+        "note": str(effect.get("note", f"你用掉了{name}。")),
+        "delta": {
+            "vigor": actual_vigor,
+            "spirit": actual_spirit,
+            "sleep_debt": sleep_debt_delta,
+        },
+        "item_consumed": name,
+    }

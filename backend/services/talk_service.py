@@ -163,8 +163,8 @@ def build_npc_messages(
         dyn_parts.append(gossip_block)
 
     dyn_parts.append(world_status_block(p))
-    # ── 物价行情：让 NPC 讨价还价有据可依 ──
-    econ_ctx = format_economy_context(p)
+    # ── 物价行情：商贩 NPC 获得完整目录，非商贩仅行情摘要 ──
+    econ_ctx = format_economy_context(p, vendor_npc_id=npc_id)
     if econ_ctx:
         dyn_parts.append(econ_ctx)
     # ── NPC 货柜：让商贩型 NPC 知道自己有啥可卖 ──

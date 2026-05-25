@@ -251,6 +251,50 @@ async def remove_save(body: DeleteSaveBody) -> dict[str, Any]:
     return {"ok": ok}
 
 
+# ═══════════════════════════════════════════════════════
+#  物品使用 API（🎮 游戏性）
+# ═══════════════════════════════════════════════════════
+
+class UseItemBody(BaseModel):
+    player_id: str
+    item: str = Field(..., min_length=1, max_length=20, description="物品名，如干粮/金创药/安神散")
+
+
+@router.post("/api/item/use")
+async def use_item(body: UseItemBody) -> dict[str, Any]:
+    """消耗背包中的一个物品，应用身心效果。
+
+    可消耗的物品：干粮/鲜鱼/野果/粗酒/熟牛肉/茶饼（食）、
+    金创药/解毒丸/安神散（药）、火折（物）。
+
+    文书、兵器、信物等不可直接消耗——需通过NPC交互使用。
+
+    返回 "success": true/false + 叙事描述 + 效用变化。
+    """
+    p = room.players.get(body.player_id)
+    if not p:
+        raise HTTPException(404, f"未知 player_id: {body.player_id}")
+    if getattr(p, "dead", False):
+        raise HTTPException(400, "角色已故，物无所用。")
+
+    from backend.systems.economy import use_player_item
+
+    result = use_player_item(p, body.item)
+
+    # 若成功消耗，写入事件流供后续NPC对话引用
+    if result.get("success"):
+        from backend.systems.reputation import push_event
+        item_name = str(result.get("item_consumed", body.item))
+        note = str(result.get("note", ""))
+        if note:
+            push_event(p, f"{p.display_name}用掉了{note}", scope="self", actor=p.display_name)
+
+    return {
+        **result,
+        "player": _player_public(p),
+    }
+
+
 @router.post("/api/hello")
 async def hello(body: HelloBody) -> dict[str, Any]:
     p = room.get_or_create(body.player_id, body.display_name, body.gender, body.permadeath)

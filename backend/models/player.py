@@ -65,4 +65,6 @@ class PlayerState:
     npc_inventory_restock_day: dict[str, int] = field(default_factory=dict)
     # 动态奇遇冷却时间戳
     last_dynamic_encounter_tick: int = -100
+    # 物品每日用量追踪：{"_day": world_day, "干粮": 2, "金创药": 1}
+    item_use_tracker: dict[str, int] = field(default_factory=dict)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
