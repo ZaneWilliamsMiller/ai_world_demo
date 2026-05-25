@@ -500,13 +500,19 @@ def retrieve(
     *,
     k: int = 6,
     half_life_s: float = 3600.0 * 6,
+    player_name: str | None = None,
 ) -> list[Memory]:
     """按斯坦福式分数检索:recency × importance × relevance(线性加权)。
 
     2026-05-25 改进：融入心境一致性偏差（mood-congruent memory）。
     当 NPC 情绪较强时（|affect_valence| >= 3），与当前心境一致的
     记忆会得到微幅加成——愤怒者更易记起旧怨，欣悦者更常想起好事。
-    这使 NPC 的回忆更符合人类的心理真实。"""
+    这使 NPC 的回忆更符合人类的心理真实。
+
+    2026-05-25 改进：熟人引航（acquaintance priming）。
+    当提供 player_name 时，记忆文本中含玩家姓名的条项获得微幅加成，
+    让 NPC 更自然地回忆起与此人的直接互动，而非泛泛记忆。
+    加成幅度 0.06，约为反思/种子记忆加成 1.2 倍，温和但能引导优先序。"""
     if not mind.items:
         return []
     now = time.time()
@@ -530,6 +536,9 @@ def retrieve(
         bonus = 0.05 if m.kind in ("reflection", "cross_reflection", "seed", "insight") else 0.0
         if m.is_anchor or m.kind == "anchor":
             bonus += 0.35   # 锚点记忆几乎总是被检索到
+        # ── 熟人引航：与当前玩家直接相关的记忆轻微加成 ──
+        if player_name and player_name in m.text:
+            bonus += 0.06  # 温和加成，引导优先检索与当前玩家的互动记忆
         # ── 心境一致性偏差：情绪极性一致的记忆更容易浮起 ──
         if apply_mood_bias:
             sent = _sentiment_hint(m.text)  # -1..1

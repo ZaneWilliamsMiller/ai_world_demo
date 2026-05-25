@@ -123,7 +123,7 @@ def build_npc_messages(
     # 上下文感知的记忆检索：将对话历史中的话题词拼接为富查询，
     # 解决「那件事」「接着说」等指代词无法命中记忆的问题
     retrieval_query = mem.build_retrieval_query(user_message, hist_slice)
-    retrieved = mem.retrieve(mind, retrieval_query, k=8)
+    retrieved = mem.retrieve(mind, retrieval_query, k=8, player_name=p.display_name)
     mem_block = mem.format_memories_for_prompt(retrieved)
     if mem_block:
         dyn_parts.append(mem_block)
