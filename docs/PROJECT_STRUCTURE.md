@@ -1,6 +1,6 @@
-# AI 文字世界 · 项目结构说明
+﻿# 青石江湖 · 项目结构说明
 
-> 最后更新：2026-05-25 06:00
+> 最后更新：2026-05-25
 
 ## 顶层
 
@@ -9,11 +9,13 @@
 | `README.md` | 项目说明 |
 | `requirements.txt` | Python 依赖 |
 | `.env` / `.env.example` | 环境变量（LLM API Key 等） |
+| `.gitignore` | Git 忽略规则 |
 | `tools/` | 辅助工具脚本 |
 | `tests/` | 自动化测试 |
 | `docs/` | 文档与迭代记录 |
 | `saves/` | 角色存档（运行时生成） |
 | `static/` | 前端静态文件 |
+| `backend/` | Python 后端 |
 | `resume/` | 简历与项目经验 |
 
 ---
@@ -26,133 +28,110 @@
 |------|------|
 | `app.py` | FastAPI 应用入口，挂载静态文件、注册路由 |
 | `config.py` | 配置读取（`.env` → `Settings`） |
-| `llm_client.py` | LLM 调用封装（chat_completion、缓存、重试） |
+| `llm_client.py` | LLM 调用封装：chat_completion、缓存、重试 |
 
 ### API 路由
 
 | 文件 | 作用 |
 |------|------|
-| `api/routes.py` | 所有 HTTP 端点：`/hello` `/move` `/npc/talk` `/agent/mind` `/finale` 等 |
+| `api/routes.py` | 所有 HTTP 端点（15 个，详见 README） |
 
-### 数据定义
-
-| 文件 | 作用 |
-|------|------|
-| `data/npcs_data.py` | NPC 角色卡：姓名、性格、背景、初始坐标、标签 |
-| `data/maps_data.py` | 统一世界地图：单一 72×48 大地图，含河流/裂隙/废墟等危险地形 |
-| `data/factions.py` | 势力数据：门派、帮会、朝廷等的声望分级 |
-| `data/prompts.py` | 提示词模板：SOCIETY_BIBLE、MACHINE_TAIL_RULE 等 |
-| `data/atmosphere.py` | 场景氛围文字生成器（时间/天气驱动） |
-| `data/relationships.py` | NPC 间预设关系（师徒、仇敌等） |
-
-### 模型
+### NPC 认知
 
 | 文件 | 作用 |
 |------|------|
-| `models/player.py` | PlayerState 数据类：属性、坐标、背包、声望、历史、NPC货柜、货柜补货追踪 |
-| `models/npc.py` | NPC 角色卡格式化函数 |
-| `models/llm_schema.py` | LLM JSON 响应 Schema（NpcResponseSchema 等） |
+| `agent_brain.py` | NPC 认知闭环核心：观察提取 → 反思生成 → 计划生成 → 记忆检索 |
+| `memory.py` | NPC 记忆存储（观察、反思、计划） |
 
-### 系统（核心玩法逻辑）
-
-| 文件 | 作用 |
-|------|------|
-| `systems/pathfinding.py` | 寻路：Dijkstra 安全路径 + Bresenham 直线 + 危险地形通行/受伤判定 |
-| `systems/core.py` | 核心数值操作：好感度、体力/心气计算、世界状态块、拘束状态 |
-| `systems/economy.py` | 经济系统：铜钱变动、物品增减、物价表（25种物品/5类/6图溢价/天气波动）、行情查询、NPC货柜初始化/交易同步、NPC货柜自然补货（按周期回补） |
-| `systems/save_system.py` | 存档系统：JSON 文件持久化（每角色独立文件）、序列化/反序列化、存档列表、死亡处理（真实江湖删档/非真实江湖复活至补给点） |
-| `systems/encounter.py` | 动态奇遇系统：触发判定、LLM 生成、效果应用 |
-| `systems/npc_gossip.py` | MAS 涌现：同格 NPC 社交闲聊、八卦传播 |
-| `systems/reputation.py` | 声望系统：事件推送、声望数值计算 |
-| `systems/time_weather.py` | 时间系统：时辰推进、昼夜判定、天气变化、世界日跨日触发NPC货柜补货 |
-
-### 服务
+### 游戏状态
 
 | 文件 | 作用 |
 |------|------|
-| `services/talk_service.py` | 对话引擎：构建 NPC 消息、解析 LLM 回复、应用效果 |
-| `services/agent_service.py` | Agent 自治：NPC 计划、反思（夜间门禁：子时-寅时跳过，极端唤醒度除外）、状态更新；后台任务异常日志 |
+| `game_state.py` | 游戏全局状态管理 |
 
-### 会话存储
-
-| 文件 | 作用 |
-|------|------|
-| `session/store.py` | 玩家房间管理（内存缓存），get_or_create 优先从 JSON 文件加载已有存档 |
-
-### 其他
+### 数据定义 `data/`
 
 | 文件 | 作用 |
 |------|------|
-| `agent_brain.py` | NPC 心智：反思（计划对照+情绪驱动+情绪印迹回写）、交叉反思、每日规划 |
-| `memory.py` | 记忆系统：AgentMind（计划、记忆、情感锚点、上下文感知检索（含心境一致性偏差）、CMA凝结（真正移除旧观察+摘要锚点）、A-Mem记忆演化、情绪反馈反思加速） |
-| `game_state.py` | 游戏状态初始化与心智获取 |
+| `npcs_data.py` | NPC 角色卡：姓名/性格/背景/初始坐标/NPC_SEEDS/NPC_FACTION/STORY_ORDER |
+| `maps_data.py` | 统一世界地图：单一 72×48「大地图」（青石江湖·万里图），含地形字符含义 |
+| `factions.py` | 势力数据：衙门/镖局/漕帮/书院/绿林 |
+| `prompts.py` | 提示词模板：SOCIETY_BIBLE、MACHINE_TAIL_RULE、AUTONOMY_RULE 等 |
+| `atmosphere.py` | 场景氛围文字生成器（时间/天气驱动） |
+| `relationships.py` | NPC 间预设关系（师徒、仇敌等） |
+
+### 领域模型 `models/`
+
+| 文件 | 作用 |
+|------|------|
+| `player.py` | PlayerState 数据类：属性/坐标/背包/声望/历史/NPC货柜/货柜补货追踪 |
+| `npc.py` | NPC 角色卡格式化函数 |
+| `llm_schema.py` | LLM JSON 响应 Schema（NpcResponseSchema 等） |
+
+### 业务编排 `services/`
+
+| 文件 | 作用 |
+|------|------|
+| `talk_service.py` | 对话服务：Prompt Cache 静态/动态分层构建、消息构建、回复应用 |
+| `agent_service.py` | NPC 智能体：自动反思（含夜间保护）/ 计划生成 / 记忆凝结 |
+
+### 会话管理 `session/`
+
+| 文件 | 作用 |
+|------|------|
+| `session/store.py` | 内存会话管理（room 字典） |
+
+### 核心系统 `systems/`
+
+| 文件 | 作用 |
+|------|------|
+| `pathfinding.py` | 寻路：Dijkstra 安全路径 + Bresenham 直线 + 危险地形通行/受伤判定 |
+| `time_weather.py` | 时辰天气：12 时辰制推进/日夜判定/天气轮换/氛围文字 |
+| `core.py` | 核心逻辑：NPC 初始化/游走/移动触发际遇/精力精神/属性判定 |
+| `economy.py` | 经济系统：NPC 货柜/补货/玩家背包 |
+| `encounter.py` | 际遇系统：危险地形触发随机事件 + NPC 拦路遭遇 |
+| `npc_gossip.py` | NPC 八卦：NPC 间非玩家驱动的信息传播 |
+| `reputation.py` | 声望系统：势力好感/事件推送 |
+| `save_system.py` | 存档系统：序列化/反序列化/读档/删档/复活点重生（respawn_at_supply_point） |
 
 ---
 
-## saves/ — 角色存档（运行时生成）
+## static/ — 前端静态文件
 
-| 路径 | 作用 |
+| 文件 | 作用 |
 |------|------|
-| `saves/<player_id>.json` | 每个角色一个独立 JSON 存档，包含完整 PlayerState（坐标/背包/声望/记忆流等） |
+| `index.html` | 页面入口 |
+| `main.js` | 前端初始化与主流程 |
+| `map.js` | Canvas 地图渲染与交互 |
+| `scene.js` | 场景/氛围文字渲染 |
+| `store.js` | 前端状态管理 |
+| `api.js` | 后端 API 调用封装 |
+| `game.css` | 全局样式 |
+| `ui/dialogue.js` | 对话面板 |
+| `ui/journal.js` | 江湖史册面板 |
+| `ui/sidebar.js` | 侧栏控制 |
+| `ui/utils.js` | UI 工具函数 |
+| `assets/` | SVG 装饰资源 |
 
 ---
 
 ## tools/ — 辅助工具
 
-| 路径 | 作用 |
+| 文件 | 作用 |
 |------|------|
-| `tools/gen_map.py` | 地图生成器（72×48 拼接脚本） |
-| `tools/check_map.py` | 地图连通性校验 |
-| `tools/smoke_api.py` | API 冒烟测试（需服务已启动） |
+| `gen_map.py` | 地图生成工具 |
+| `check_map.py` | 地图校验工具 |
+| `smoke_api.py` | API 烟雾测试 |
 
 ---
 
 ## tests/ — 自动化测试
 
-| 路径 | 作用 |
-|------|------|
-| `tests/__init__.py` | Python 包标记 |
-| `tests/conftest.py` | pytest 配置（路径注入） |
-| `tests/_test_endpoints.py` | API 端点回归测试：角色创建/移动/对话/经济 |
-| `tests/_test_pathfinding.py` | 寻路深度测试：全网可达性/cost-to-tick 折算 |
-
----
-
-## static/ — 前端（纯 JS/CSS/HTML，无框架）
-
-### 入口
-
 | 文件 | 作用 |
 |------|------|
-| `index.html` | 主页面 HTML 结构：顶部栏、左侧栏（地图+场景）、右侧栏（NPC 对话） |
-| `main.js` | 主控逻辑：游戏初始化、移动处理、WASD、格子菜单、状态同步 |
-| `store.js` | 全局状态管理（发布/订阅模式），localStorage 持久化 playerId |
-
-### 模块
-
-| 文件 | 作用 |
-|------|------|
-| `api.js` | 后端 API 封装：pingModel、startGame、movePlayer、talkToNpc 等 |
-| `map.js` | 地图渲染：视口居中、瓦片网格、路线叠加、NPC 标记、地形通行校验（walkable/dangerous） |
-| `scene.js` | 场景绘板：canvas 动态雾气/粒子效果 |
-| `game.css` | 全局样式：古代江湖主题色、瓦片皮肤、响应式布局 |
-
-### UI 组件
-
-| 文件 | 作用 |
-|------|------|
-| `ui/dialogue.js` | 对话面板：NPC 选项卡、消息气泡、流式渲染、快捷动作 |
-| `ui/sidebar.js` | 左侧栏：地图面板、氛围文、属性条、快捷操作 |
-| `ui/journal.js` | 史册抽屉：对话回溯、状态变化、事件记录 |
-| `ui/utils.js` | 通用工具：DOM 查询、HTML 转义 |
-
-### 静态资源
-
-| 路径 | 作用 |
-|------|------|
-| `assets/corner-cloud.svg` | 角落装饰云纹 |
-| `assets/seal-mark.svg` | 印章标记 |
-| `assets/wave-divider.svg` | 波纹分隔线 |
+| `conftest.py` | pytest fixtures |
+| `_test_endpoints.py` | 端到端 API 测试 |
+| `_test_pathfinding.py` | 寻路单元测试 |
 
 ---
 
@@ -160,16 +139,5 @@
 
 | 路径 | 作用 |
 |------|------|
-| `docs/PROJECT_STRUCTURE.md` | 本文件：项目结构说明 |
-| `docs/iterations/` | 迭代记录文件夹，包含会话任务产物与迭代笔记 |
-
----
-
-## 工作流
-
-1. **启动**：`python -m uvicorn backend.app:app` → 访问 `http://127.0.0.1:8765`
-2. **游玩**：输入姓名/性别 → 开始游戏 → 点击/键盘移动 → 与 NPC 对话
-3. **存档**：playerId 存 localStorage，后端自动将角色存档写入 `saves/<player_id>.json`（每次移动/对话后自动保存）
-4. **多角色**：`GET /api/saves` 列出全部角色 → `POST /api/load` 切换角色
-5. **真实江湖**：死亡后存档自动删除，不可再入；非真实江湖：重伤后复活至最近补给点（50%体力）
-6. **迭代记录**：每次迭代完成后在 `docs/iterations/` 下写入 `.md` 文件
+| `PROJECT_STRUCTURE.md` | 本文件 |
+| `iterations/` | 每日 CI 迭代产物归档（格式：YYYY-MM-DD_HHMM.md 或 task-artifact-*.md） |
