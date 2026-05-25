@@ -96,6 +96,12 @@ def build_npc_messages(
     static_parts: list[str] = [SOCIETY_BIBLE]
     if ch:
         static_parts.append(ch)
+        # ★ 显式提醒：说话风格是最高优先级的行为指令
+        if "★【说话风格" in ch:
+            static_parts.append(
+                "【风格铁律】你写作的每一句台词、每一处神态动作描写，都必须严格符合上方「★【说话风格】」的设定。"
+                "不允许出现与角色声口不符的用语、句式或语气。这是不可妥协的角色一致性要求。"
+            )
     static_parts.append(npc["system"])
     static_parts.append(MACHINE_TAIL_RULE)
 
