@@ -411,7 +411,6 @@ def apply_npc_reply(
             "spirit": spirit_applied,
         },
         "trap_resolution": trap_resolution,
-        "raw_debug": parsed.model_dump_json(),
     }, needs_reflect)
 
 def _decay_all_npc_moods(p: PlayerState) -> None:
@@ -572,6 +571,35 @@ def _evolve_npc_mood(
 
     if valence_d == 0.0 and arousal_d == 0.0:
         return  # 无显著变化，保留原状
+
+    # ── 情绪惯性（Mood Inertia）：当前心情状态影响情绪变化速率 ──
+    #   正性耐受：心情好时对正面刺激反应变弱（习以为常）、对负面刺激较不敏感
+    #   负性放大：心情差时对负面刺激更敏感（雪上加霜）、对正面刺激较难接受
+    current_valence = float(getattr(mind, "affect_valence", 0) or 0)
+    current_arousal = float(getattr(mind, "affect_arousal", 5) or 5)
+    if current_valence > 2.0:
+        # 心情好：正面变化打折（习以为常），负面变化轻微缓冲
+        if valence_d > 0:
+            valence_d *= 0.7
+        else:
+            valence_d *= 0.85
+    elif current_valence < -2.0:
+        # 心情差：负面变化放大（雪上加霜），正面变化更难接受
+        if valence_d < 0:
+            valence_d *= 1.3
+        else:
+            valence_d *= 0.6
+    # 唤醒度惯量：高唤醒时可以更快回落（归于平静），低唤醒时可更难被唤醒
+    if current_arousal > 7.0:
+        if arousal_d > 0:
+            arousal_d *= 0.6  # 已在高点，再升更难
+        else:
+            arousal_d *= 1.2  # 从高点回落更容易
+    elif current_arousal < 3.0:
+        if arousal_d < 0:
+            arousal_d *= 0.5  # 已低迷，再降更难（地板效应）
+        else:
+            arousal_d *= 1.15  # 从低点上升相对容易
 
     cause_str = "；".join(causes[:3]) if causes else ""
     is_anchor = mind.update_mood(valence_delta=valence_d, arousal_delta=arousal_d, cause=cause_str)
