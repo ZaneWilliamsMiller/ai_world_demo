@@ -462,9 +462,11 @@ def update_npc_states_from_habits(p: PlayerState) -> dict[str, str]:
             # 跨午夜区间 wrap around
             in_active = (sh >= a0_mod or sh <= a1_mod)
 
-        # 强制深夜休憩:子时丑时寅时全员 resting
+        # 强制深夜休憩:子时丑时寅时非夜行NPC resting
+        # 夜行 NPC（nocturnal=True）不受此限制，它们在夜间反而更活跃
         if sh in (0, 1, 2):  # 子、丑、寅
-            in_active = False
+            if not habits.get("nocturnal", False):
+                in_active = False
 
         old_state = p.npc_states.get(nid, "idle")
         new_state = "idle" if in_active else "resting"
