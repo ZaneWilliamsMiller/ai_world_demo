@@ -78,7 +78,8 @@ func _ready() -> void:
 		print("[Game] _login_overlay=%s _game_ui=%s" % ["null" if _login_overlay == null else "ok", "null" if _game_ui == null else "ok"])
 		_login_overlay.visible = false
 		_game_ui.visible = true
-		_refresh()
+		# Force layout recalculation — visible change doesn't trigger resize cascade
+		call_deferred("_logged_in_deferred")
 	)
 	GameManager.logged_out.connect(func():
 		_login_overlay.visible = true
@@ -88,6 +89,14 @@ func _ready() -> void:
 	GameManager.map_pos_changed.connect(_update_map_player)
 	GameManager.chat_message.connect(_on_npc_reply)
 	GameManager.system_message.connect(_on_sys_msg)
+
+
+func _logged_in_deferred() -> void:
+	# Deferred after visibility change — wait for full layout cascade
+	await get_tree().process_frame
+	await get_tree().process_frame
+	print("[Game] _logged_in_deferred — sizes: game_ui=%s, self=%s" % [str(_game_ui.size), str(size)])
+	_refresh()
 
 
 # ═══════════════════════════════════════════════════════
@@ -416,17 +425,22 @@ func _build_map() -> void:
 	if _map_rows.is_empty():
 		print("[Game] _build_map() — rows EMPTY, returning early!")
 		return
-	print("[Game] _build_map() — building %d x %d tiles, tile_size=%d" % [_map_rows.size(), _map_cols, TILE_SIZE])
-	# Force a frame so layout updates, then check sizes
-	await get_tree().process_frame
-	print("[Game] _build_map() — AFTER frame: map_container size=%s, scroll size=%s" % [str(_map_container.size), str(_map_scroll.size)])
-
 	_map_cols = _map_rows[0].length()
 	var total_w := _map_cols * TILE_SIZE
 	var total_h := _map_rows.size() * TILE_SIZE
-	_map_container.set_position(Vector2.ZERO)
-	# PanelContainer: use custom_minimum_size (Godot 4 API)
+	print("[Game] _build_map() — building %d x %d tiles, total=(%d,%d), tile_size=%d" % [_map_rows.size(), _map_cols, total_w, total_h, TILE_SIZE])
+
+	# Set minimum size FIRST so containers can resolve layout
 	_map_container.custom_minimum_size = Vector2(total_w, total_h)
+	# Also set scroll container min size to something reasonable
+	_map_scroll.custom_minimum_size = Vector2(200, 200)
+
+	# Force layout pass: wait for resize cascade
+	await get_tree().process_frame
+	await get_tree().process_frame
+	print("[Game] _build_map() — AFTER frames: map_container=%s, scroll=%s, scroll_parent=%s" % [
+		str(_map_container.size), str(_map_scroll.size),
+		str(_map_scroll.get_parent().size if _map_scroll.get_parent() else "NO_PARENT")])
 
 	for y in _map_rows.size():
 		var row: String = _map_rows[y]
@@ -440,6 +454,8 @@ func _build_map() -> void:
 			tile.gui_input.connect(_on_tile_click.bind(x, y))
 			_map_container.add_child(tile)
 			_map_cells.append({"node":tile, "x":x, "y":y, "ch":ch})
+
+	print("[Game] _build_map() — created %d tiles" % _map_cells.size())
 
 
 func _update_map_player() -> void:
