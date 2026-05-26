@@ -38,11 +38,11 @@ func request(path: String, method: String = "GET", body: Dictionary = {}) -> Dic
 		return {"error": "request_failed", "code": err}
 
 	# Await the real completion signal — no spin-wait race condition
-	var result_arr := await http.request_completed
+	var result_arr: Array = await http.request_completed
 	http.queue_free()
 
-	var response_code: int = result_arr[1]
-	var body_bytes: PackedByteArray = result_arr[3]
+	var response_code: int = int(result_arr[1])
+	var body_bytes: PackedByteArray = result_arr[3] as PackedByteArray
 	print("[API] request_completed status=%d body_len=%d" % [response_code, body_bytes.size()])
 
 	if result_arr[0] != HTTPRequest.RESULT_SUCCESS:
