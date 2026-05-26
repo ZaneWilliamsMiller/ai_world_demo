@@ -101,12 +101,7 @@ func _build_login() -> void:
 	overlay_bg.set_anchors_preset(PRESET_FULL_RECT)
 	_login_overlay.add_child(overlay_bg)
 
-	# CenterContainer for true centering
-	var center := CenterContainer.new()
-	center.set_anchors_preset(PRESET_FULL_RECT)
-	_login_overlay.add_child(center)
-
-	var box := _mk_panel(Vector2(380, 450), PRESET_CENTER, center)
+	var box := _mk_panel(Vector2(380, 450), PRESET_CENTER, _login_overlay)
 	var vb := VBoxContainer.new()
 	vb.set_anchors_preset(PRESET_FULL_RECT)
 	vb.add_theme_constant_override("separation", 12)
@@ -132,6 +127,7 @@ func _build_login() -> void:
 
 	var start_btn := _btn("踏入江湖", ACCENT)
 	start_btn.pressed.connect(func():
+		print("[Game] 踏入江湖 clicked")
 		var nm: String = name_input.get_child(1).text.strip_edges()
 		if nm == "": nm = "江湖客"
 		var g: String = "未言"
@@ -149,11 +145,7 @@ func _build_login() -> void:
 func _show_load_dialog() -> void:
 	var saves: Array = await GameManager.list_saves()
 	var popup := _overlay()
-	# CenterContainer for true centering
-	var center := CenterContainer.new()
-	center.set_anchors_preset(PRESET_FULL_RECT)
-	popup.add_child(center)
-	var box := _mk_panel(Vector2(320, 300), PRESET_CENTER, center)
+	var box := _mk_panel(Vector2(320, 300), PRESET_CENTER, popup)
 	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 6)
 	vb.set_anchors_preset(PRESET_FULL_RECT); box.add_child(vb)
 
@@ -540,6 +532,10 @@ func _mk_panel(size: Vector2, preset: int, parent: Control) -> Panel:
 	var p := Panel.new()
 	p.custom_minimum_size = size
 	p.set_anchors_preset(preset)
+	# Ensure the panel is visible and receives input
+	if preset == PRESET_CENTER:
+		p.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		p.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_add_panel_style(p)
 	parent.add_child(p)
 	return p
