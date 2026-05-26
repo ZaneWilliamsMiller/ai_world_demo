@@ -102,17 +102,11 @@ func _build_login() -> void:
 	overlay_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_login_overlay.add_child(overlay_bg)
 
-	# Panel as direct child — center it next frame when size is known
+	# Full-screen centered panel — use entire overlay as the panel
 	var box := Panel.new()
-	box.custom_minimum_size = Vector2(380, 450)
-	box.size = Vector2(380, 450)
+	box.set_anchors_preset(PRESET_FULL_RECT)
 	_add_panel_style(box)
 	_login_overlay.add_child(box)
-	# Defer centering until after first layout pass
-	_login_overlay.resized.connect(func():
-		var ps: Vector2 = _login_overlay.size
-		box.position = (ps - Vector2(380, 450)) / 2.0
-	)
 	var vb := VBoxContainer.new()
 	vb.set_anchors_preset(PRESET_FULL_RECT)
 	vb.add_theme_constant_override("separation", 12)
@@ -148,7 +142,9 @@ func _build_login() -> void:
 		var g: String = "未言"
 		var sel: int = gender_sel.get_selected_id()
 		if sel >= 0 and sel <= 2: g = ["男","女","未言"][sel]
+		print("[Game] calling GameManager.hello(%s, %s, %s)" % [nm, g, pd_cb.button_pressed])
 		GameManager.hello(nm, g, pd_cb.button_pressed)
+		print("[Game] hello() returned (async — UI switch via logged_in signal)")
 	)
 	vb.add_child(start_btn)
 

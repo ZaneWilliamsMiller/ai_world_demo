@@ -47,6 +47,7 @@ signal logged_out()
 
 func hello(p_name: String, p_gender: String, p_permadeath: bool) -> void:
 	"""Start a new game."""
+	print("[GM] hello() called: name=%s gender=%s permadeath=%s" % [p_name, p_gender, p_permadeath])
 	player_id = "godot_%d" % (Time.get_unix_time_from_system())
 	display_name = p_name
 
@@ -56,7 +57,9 @@ func hello(p_name: String, p_gender: String, p_permadeath: bool) -> void:
 		"gender": p_gender,
 		"permadeath": p_permadeath,
 	}
+	print("[GM] sending /api/hello request...")
 	var res: Dictionary = await ApiClient.request("/api/hello", "POST", body)
+	print("[GM] /api/hello response: %s" % JSON.stringify(res))
 
 	if res.has("error"):
 		system_message.emit("连接后端失败: %s" % res.get("error", "?"))
