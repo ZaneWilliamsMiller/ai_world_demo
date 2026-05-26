@@ -369,15 +369,8 @@ func _mini_panel(parent: VBoxContainer) -> Panel:
 	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 4)
 	vb.set_anchors_preset(PRESET_FULL_RECT)
 	vb.set_position(Vector2(8,6))
-	vb.set_size(Vector2(254, 40))
 	p.add_child(vb)
-	var _in_resize := false
-	vb.resized.connect(func():
-		if _in_resize: return
-		_in_resize = true
-		p.set_size(Vector2(270, vb.size.y + 12))
-		_in_resize = false
-	)
+	p.set_size(Vector2(270, 52))
 	return p
 
 
