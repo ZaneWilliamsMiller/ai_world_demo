@@ -285,11 +285,14 @@ func _build_game_ui() -> void:
 	_map_scroll.add_theme_stylebox_override("panel", scroll_style)
 	left.add_child(_map_scroll)
 
-	# Use PanelContainer so ScrollContainer can detect content size reliably
-	_map_container = PanelContainer.new()
-	var map_style := StyleBoxFlat.new()
-	map_style.bg_color = Color.BLUE
-	_map_container.add_theme_stylebox_override("panel", map_style)
+	# Use plain Control as map container — PanelContainer adds unwanted padding
+	_map_container = Control.new()
+	# Give it a visible background so we can confirm it renders
+	var map_bg := ColorRect.new()
+	map_bg.name = "MapBackground"
+	map_bg.color = Color(0.08, 0.08, 0.12)  # dark blue-gray
+	map_bg.set_anchors_preset(PRESET_FULL_RECT)
+	_map_container.add_child(map_bg)
 	_map_scroll.add_child(_map_container)
 
 	# Center: Dialogue
@@ -430,8 +433,8 @@ func _build_map() -> void:
 	var total_h := _map_rows.size() * TILE_SIZE
 	print("[Game] _build_map() — building %d x %d tiles, total=(%d,%d), tile_size=%d" % [_map_rows.size(), _map_cols, total_w, total_h, TILE_SIZE])
 
-	# Set minimum size FIRST so containers can resolve layout
-	_map_container.custom_minimum_size = Vector2(total_w, total_h)
+	# Set size on Control directly (custom_minimum_size doesn't work on plain Control)
+	_map_container.set_size(Vector2(total_w, total_h))
 	# Also set scroll container min size to something reasonable
 	_map_scroll.custom_minimum_size = Vector2(200, 200)
 
