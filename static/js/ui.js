@@ -13,6 +13,7 @@ window.App = window.App || {};
   App.updateUI = function(data) {
     var p = data.player || {};
     App.currentMapId = p.map_id;
+    App.npcCatalog  = data.npc_catalog || App.npcCatalog || [];
 
     updateTopbar(p);
     App.renderMap(p);

@@ -83,6 +83,7 @@ func _ready() -> void:
 		_game_ui.visible = false
 	)
 	GameManager.state_updated.connect(_refresh)
+	GameManager.map_pos_changed.connect(_update_map_player)
 	GameManager.chat_message.connect(_on_npc_reply)
 	GameManager.system_message.connect(_on_sys_msg)
 
@@ -384,17 +385,37 @@ func _build_map() -> void:
 
 func _update_map_player() -> void:
 	var px := GameManager.player_px; var py := GameManager.player_py
+
+	# NPC 坐标索引
+	var npc_at := {}
+	for n in GameManager.npc_catalog:
+		if n.get("map", "") == _current_map_id:
+			npc_at[Vector2i(n.get("x", -1), n.get("y", -1))] = n
+
 	for e in _map_cells:
 		var tile: ColorRect = e["node"]
-		if e["x"] == px and e["y"] == py:
+		var ex: int = e["x"]; var ey: int = e["y"]
+		if ex == px and ey == py:
 			tile.color = ACCENT
+		elif npc_at.has(Vector2i(ex, ey)):
+			tile.color = ACCENT2
 		else:
 			tile.color = TILE_COLORS.get(e["ch"], Color(0.2,0.2,0.2))
 
 
 func _on_tile_click(ev: InputEvent, x: int, y: int) -> void:
-	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-		GameManager.move_player(x, y)
+	if ev is InputEventMouseButton and ev.pressed:
+		if ev.button_index == MOUSE_BUTTON_LEFT:
+			# 点击 NPC 格则选中该 NPC 对话
+			for n in GameManager.npc_catalog:
+				if n.get("map", "") == _current_map_id and n.get("x", -1) == x and n.get("y", -1) == y:
+					# 选中对话框中的 NPC
+					for idx in _npc_select.item_count:
+						if _npc_select.get_item_text(idx) == n.get("name", ""):
+							_npc_select.select(idx)
+							_msg_input.grab_focus()
+							return
+			GameManager.move_player(x, y)
 
 
 # ═══════════════════════════════════════════════════════

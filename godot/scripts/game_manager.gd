@@ -29,10 +29,13 @@ var player_weather: String = "薄阴"
 var maps_data: Dictionary = {}         # map_id → {name, rows, portals}
 var npcs_here: Array = []              # [{id, name}]
 var npc_labels: Dictionary = {}        # npc_id → name (full catalog)
+var npc_catalog: Array = []            # [{id, name, map, x, y}]
+var npc_states: Dictionary = {}        # npc_id → state
 var intro_text: String = ""
 
 # ── UI Signals ──
 signal state_updated()
+signal map_pos_changed()
 signal chat_message(speaker: String, message: String, npc_name: String)
 signal system_message(text: String)
 signal logged_in()
@@ -83,6 +86,8 @@ func _apply_hello_response(data: Dictionary) -> void:
 	maps_data = data.get("maps", {})
 	npcs_here = data.get("npcs_here", [])
 	npc_labels = data.get("npc_labels", {})
+	npc_catalog = data.get("npc_catalog", [])
+	npc_states = data.get("npc_states", {})
 	intro_text = data.get("intro", "")
 	_apply_player(data.get("player", {}))
 
@@ -125,6 +130,13 @@ func move_player(tx: int, ty: int) -> void:
 	if path_data.is_empty():
 		system_message.emit("此路不通")
 		return
+
+	# ── 步行动画：逐格更新视觉位置 ──
+	for step in path_data:
+		player_px = step[0]
+		player_py = step[1]
+		map_pos_changed.emit()
+		await get_tree().create_timer(0.08).timeout
 
 	# Update player position from response
 	var p: Dictionary = res.get("player", {})
