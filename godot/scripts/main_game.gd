@@ -102,18 +102,14 @@ func _build_login() -> void:
 	overlay_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE  # let clicks pass through to panel
 	_login_overlay.add_child(overlay_bg)
 
-	# Manual centering — avoid PRESET_CENTER issues in non-Container parents
-	var box := Panel.new()
-	box.custom_minimum_size = Vector2(380, 450)
-	box.size = Vector2(380, 450)
-	# Center using anchors: full rect + offset to center
-	box.set_anchors_preset(PRESET_FULL_RECT)
-	box.offset_left = (box.get_parent_area_size().x - 380) / 2.0
-	box.offset_right = box.offset_left + 380
-	box.offset_top = (box.get_parent_area_size().y - 450) / 2.0
-	box.offset_bottom = box.offset_top + 450
-	_add_panel_style(box)
-	_login_overlay.add_child(box)
+	# Use VBoxContainer as centering layer — it handles SIZE_SHRINK_CENTER reliably
+	var center_vb := VBoxContainer.new()
+	center_vb.set_anchors_preset(PRESET_FULL_RECT)
+	center_vb.alignment = BoxContainer.ALIGNMENT_CENTER
+	center_vb.add_theme_constant_override("separation", 0)
+	_login_overlay.add_child(center_vb)
+
+	var box := _mk_panel(Vector2(380, 450), PRESET_CENTER, center_vb)
 	var vb := VBoxContainer.new()
 	vb.set_anchors_preset(PRESET_FULL_RECT)
 	vb.add_theme_constant_override("separation", 12)
@@ -157,7 +153,13 @@ func _build_login() -> void:
 func _show_load_dialog() -> void:
 	var saves: Array = await GameManager.list_saves()
 	var popup := _overlay()
-	var box := _mk_panel(Vector2(320, 300), PRESET_CENTER, popup)
+	# Use VBoxContainer as centering layer
+	var center_vb := VBoxContainer.new()
+	center_vb.set_anchors_preset(PRESET_FULL_RECT)
+	center_vb.alignment = BoxContainer.ALIGNMENT_CENTER
+	center_vb.add_theme_constant_override("separation", 0)
+	popup.add_child(center_vb)
+	var box := _mk_panel(Vector2(320, 300), PRESET_CENTER, center_vb)
 	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 6)
 	vb.set_anchors_preset(PRESET_FULL_RECT); box.add_child(vb)
 
