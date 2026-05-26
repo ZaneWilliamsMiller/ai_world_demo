@@ -99,9 +99,21 @@ func _build_login() -> void:
 	var overlay_bg := ColorRect.new()
 	overlay_bg.color = Color(0,0,0,0.85)
 	overlay_bg.set_anchors_preset(PRESET_FULL_RECT)
+	overlay_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE  # let clicks pass through to panel
 	_login_overlay.add_child(overlay_bg)
 
-	var box := _mk_panel(Vector2(380, 450), PRESET_CENTER, _login_overlay)
+	# Manual centering — avoid PRESET_CENTER issues in non-Container parents
+	var box := Panel.new()
+	box.custom_minimum_size = Vector2(380, 450)
+	box.size = Vector2(380, 450)
+	# Center using anchors: full rect + offset to center
+	box.set_anchors_preset(PRESET_FULL_RECT)
+	box.offset_left = (box.get_parent_area_size().x - 380) / 2.0
+	box.offset_right = box.offset_left + 380
+	box.offset_top = (box.get_parent_area_size().y - 450) / 2.0
+	box.offset_bottom = box.offset_top + 450
+	_add_panel_style(box)
+	_login_overlay.add_child(box)
 	var vb := VBoxContainer.new()
 	vb.set_anchors_preset(PRESET_FULL_RECT)
 	vb.add_theme_constant_override("separation", 12)
