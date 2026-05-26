@@ -279,7 +279,7 @@ func _build_game_ui() -> void:
 	map_title.custom_minimum_size = Vector2(0, 28)
 	var mt_sb := StyleBoxFlat.new()
 	mt_sb.bg_color = BG_PANEL
-	mt_sb.border_width_bottom = 1; mt_sb.border_color = BORDER
+	mt_sb.border_width_bottom = 1.0; mt_sb.border_color = BORDER
 	mt_sb.content_margin_left = 12; mt_sb.content_margin_right = 12
 	mt_sb.content_margin_top = 4; mt_sb.content_margin_bottom = 4
 	map_title.add_theme_stylebox_override("panel", mt_sb)
@@ -392,7 +392,7 @@ func _build_game_ui() -> void:
 	dlg_card.size_flags_vertical = SIZE_SHRINK_END
 	var dc_sb := StyleBoxFlat.new(); dc_sb.bg_color = BG_PANEL
 	dc_sb.set_corner_radius_all(6)
-	dc_sb.border_width_all = 1; dc_sb.border_color = BORDER
+	dc_sb.border_width_all = 1.0; dc_sb.border_color = BORDER
 	dc_sb.content_margin_left = 10; dc_sb.content_margin_right = 10
 	dc_sb.content_margin_top = 8; dc_sb.content_margin_bottom = 8
 	dlg_card.add_theme_stylebox_override("panel", dc_sb)
@@ -626,7 +626,7 @@ func _add_panel_style(p: Panel) -> void:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = BG_PANEL
 	sb.set_corner_radius_all(6)
-	sb.border_width_all = 1; sb.border_color = BORDER
+	sb.border_width_all = 1.0; sb.border_color = BORDER
 	sb.content_margin_left = 12; sb.content_margin_right = 12
 	sb.content_margin_top = 8; sb.content_margin_bottom = 8
 	p.add_theme_stylebox_override("panel", sb)
@@ -639,7 +639,7 @@ func _make_card(title_text: String) -> Panel:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = BG_CARD
 	sb.set_corner_radius_all(6)
-	sb.border_width_all = 1; sb.border_color = BORDER_SUBTLE
+	sb.border_width_all = 1.0; sb.border_color = BORDER_SUBTLE
 	sb.content_margin_left = 10; sb.content_margin_right = 10
 	sb.content_margin_top = 6; sb.content_margin_bottom = 6
 	p.add_theme_stylebox_override("panel", sb)
