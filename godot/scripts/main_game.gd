@@ -7,17 +7,19 @@ extends Control
 # ═══════════════════════════════════════════════════════
 #  Color Theme
 # ═══════════════════════════════════════════════════════
-const BG_DARK  := Color(0.08, 0.08, 0.16)
-const BG_PANEL := Color(0.10, 0.12, 0.22)
-const BG_CARD  := Color(0.12, 0.16, 0.28)
-const BORDER   := Color(0.18, 0.22, 0.35)
-const TEXT     := Color(0.88, 0.88, 0.88)
-const DIM      := Color(0.53, 0.53, 0.67)
-const ACCENT   := Color(0.31, 0.76, 0.97)
-const ACCENT2  := Color(1.0, 0.44, 0.26)
-const GREEN    := Color(0.40, 0.73, 0.42)
-const GOLD     := Color(1.0, 0.84, 0.00)
-const RED      := Color(0.94, 0.33, 0.31)
+const BG_DARK  := Color(0.06, 0.06, 0.12)
+const BG_PANEL := Color(0.09, 0.11, 0.20)
+const BG_CARD  := Color(0.11, 0.14, 0.24)
+const BG_CARD_HOVER := Color(0.14, 0.18, 0.30)
+const BORDER   := Color(0.20, 0.24, 0.38)
+const BORDER_SUBTLE := Color(0.15, 0.18, 0.28)
+const TEXT     := Color(0.90, 0.90, 0.92)
+const DIM      := Color(0.50, 0.52, 0.64)
+const ACCENT   := Color(0.35, 0.78, 0.98)
+const ACCENT2  := Color(1.0, 0.45, 0.28)
+const GREEN    := Color(0.38, 0.78, 0.42)
+const GOLD     := Color(1.0, 0.82, 0.08)
+const RED      := Color(0.92, 0.32, 0.30)
 
 # ═══════════════════════════════════════════════════════
 #  Map Tile Colors
@@ -300,92 +302,100 @@ func _build_game_ui() -> void:
 	_map_container.add_child(map_bg)
 	_map_scroll.add_child(_map_container)
 
-	# ═══ RIGHT: Side Panel (status + NPC list + dialogue) ═══
+	# ═══ RIGHT: Side Panel (card-based sections) ═══
 	var side_panel := VBoxContainer.new()
-	side_panel.custom_minimum_size = Vector2(360, 0)
+	side_panel.custom_minimum_size = Vector2(340, 0)
+	side_panel.add_theme_constant_override("separation", 6)
 	side_panel.size_flags_vertical = SIZE_EXPAND_FILL
 	hsplit.add_child(side_panel)
 
-	# --- Status Section ---
-	var stat_panel := Panel.new(); _add_panel_style(stat_panel)
-	side_panel.add_child(stat_panel)
-	var stat_vb := VBoxContainer.new()
-	stat_vb.add_theme_constant_override("separation", 4)
-	stat_vb.set_anchors_preset(PRESET_FULL_RECT)
-	stat_panel.add_child(stat_vb)
+	# ─── Card 1: Player Status ───
+	var stat_card := _make_card("⚔ 角色状态")
+	side_panel.add_child(stat_card)
+	var stat_vb := _card_content(stat_card)
+	stat_vb.add_theme_constant_override("separation", 6)
 
-	# Vigor bar
+	# Vigor bar row
 	_vigor_bar = ProgressBar.new(); _vigor_bar.show_percentage = false
 	_vigor_bar.custom_minimum_size = Vector2(0, 8); _vigor_bar.size_flags_horizontal = SIZE_EXPAND
 	var vg_sb := StyleBoxFlat.new(); vg_sb.bg_color = GREEN
-	vg_sb.corner_radius_top_left = 4; vg_sb.corner_radius_top_right = 4
-	vg_sb.corner_radius_bottom_left = 4; vg_sb.corner_radius_bottom_right = 4
+	vg_sb.set_corner_radius_all(3)
 	_vigor_bar.add_theme_stylebox_override("fill", vg_sb)
 	var vigor_row := HBoxContainer.new(); stat_vb.add_child(vigor_row)
-	vigor_row.add_child(_lbl("💪 体力", 12, DIM)); vigor_row.add_child(Control.new())
-	_vigor_label = _lbl("--/--", 12, TEXT); vigor_row.add_child(_vigor_label)
+	vigor_row.add_child(_lbl("💪 体力", 11, DIM)); vigor_row.add_child(Control.new())
+	_vigor_label = _lbl("--/--", 11, TEXT); vigor_row.add_child(_vigor_label)
 	stat_vb.add_child(_vigor_bar)
 
-	# Spirit bar
+	# Spirit bar row
 	_spirit_bar = ProgressBar.new(); _spirit_bar.show_percentage = false
 	_spirit_bar.custom_minimum_size = Vector2(0, 8); _spirit_bar.size_flags_horizontal = SIZE_EXPAND
 	var sp_sb := StyleBoxFlat.new(); sp_sb.bg_color = ACCENT
-	sp_sb.corner_radius_top_left = 4; sp_sb.corner_radius_top_right = 4
-	sp_sb.corner_radius_bottom_left = 4; sp_sb.corner_radius_bottom_right = 4
+	sp_sb.set_corner_radius_all(3)
 	_spirit_bar.add_theme_stylebox_override("fill", sp_sb)
 	var spirit_row := HBoxContainer.new(); stat_vb.add_child(spirit_row)
-	spirit_row.add_child(_lbl("🧘 心气", 12, DIM)); spirit_row.add_child(Control.new())
-	_spirit_label = _lbl("--/--", 12, TEXT); spirit_row.add_child(_spirit_label)
+	spirit_row.add_child(_lbl("🧘 心气", 11, DIM)); spirit_row.add_child(Control.new())
+	_spirit_label = _lbl("--/--", 11, TEXT); spirit_row.add_child(_spirit_label)
 	stat_vb.add_child(_spirit_bar)
 
-	# Info labels
-	_coins_label = _lbl("💰 制钱: 0 文", 13, TEXT); stat_vb.add_child(_coins_label)
-	_time_label = _lbl("🧭 时辰: --", 13, TEXT); stat_vb.add_child(_time_label)
-	_weather_label = _lbl("🌤 天气: --", 13, TEXT); stat_vb.add_child(_weather_label)
-	# Note: _map_name_label is reused in map title bar above
+	# Info grid (2 columns)
+	var info_grid := GridContainer.new()
+	info_grid.columns = 2
+	info_grid.add_theme_constant_override("h_separation", 12)
+	info_grid.add_theme_constant_override("v_separation", 4)
+	stat_vb.add_child(info_grid)
+	_coins_label = _lbl("💰 0文", 11, TEXT); info_grid.add_child(_coins_label)
+	_time_label = _lbl("🧭 --", 11, TEXT); info_grid.add_child(_time_label)
+	_weather_label = _lbl("🌤 --", 11, TEXT); info_grid.add_child(_weather_label)
+	_map_name_label = _lbl("📍 --", 11, DIM); info_grid.add_child(_map_name_label)
 
-	# --- Inventory (compact, in status panel) ---
-	stat_vb.add_child(_lbl("🎒 行囊", 12, DIM))
+	# ─── Card 2: Inventory ───
+	var inv_card := _make_card("🎒 行囊")
+	side_panel.add_child(inv_card)
+	var inv_vb := _card_content(inv_card)
 	_inventory_flow = HFlowContainer.new()
-	_inventory_flow.add_theme_constant_override("h_separation", 4)
-	_inventory_flow.add_theme_constant_override("v_separation", 2)
-	stat_vb.add_child(_inventory_flow)
+	_inventory_flow.add_theme_constant_override("h_separation", 6)
+	_inventory_flow.add_theme_constant_override("v_separation", 3)
+	inv_vb.add_child(_inventory_flow)
 
-	# --- Favor (compact, in status panel) ---
-	stat_vb.add_child(_lbl("❤ 好感", 12, DIM))
-	_favor_vbox = VBoxContainer.new()
-	_favor_vbox.add_theme_constant_override("separation", 2)
-	stat_vb.add_child(_favor_vbox)
+	# ─── Card 3: Favor ───
+	var fav_card := _make_card("❤ 好感度")
+	side_panel.add_child(fav_card)
+	_favor_vbox = _card_content(fav_card)
+	_favor_vbox.add_theme_constant_override("separation", 3)
 
-	# --- NPC Section (scrollable, flexible height) ---
-	var npc_header := Panel.new()
-	var nh_sb := StyleBoxFlat.new(); nh_sb.bg_color = BG_PANEL
-	nh_sb.border_width_bottom = 1; nh_sb.border_color = BORDER
-	nh_sb.content_margin_left = 12; nh_sb.content_margin_right = 12
-	nh_sb.content_margin_top = 6; nh_sb.content_margin_bottom = 4
-	npc_header.add_theme_stylebox_override("panel", nh_sb)
-	side_panel.add_child(npc_header)
-	npc_header.add_child(_lbl("👥 人物", 11, DIM, HORIZONTAL_ALIGNMENT_LEFT))
+	# ─── Card 4: NPC List (flexible height) ───
+	var npc_card := _make_card("👥 身边人物")
+	npc_card.size_flags_vertical = SIZE_EXPAND_FILL
+	side_panel.add_child(npc_card)
+	var npc_inner := VBoxContainer.new()
+	npc_inner.set_anchors_preset(PRESET_FULL_RECT)
+	npc_card.add_child(npc_inner)
 
 	var npc_scroll := ScrollContainer.new()
 	npc_scroll.size_flags_vertical = SIZE_EXPAND_FILL
 	npc_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	side_panel.add_child(npc_scroll)
+	npc_inner.add_child(npc_scroll)
 	_npc_list_container = VBoxContainer.new()
-	_npc_list_container.add_theme_constant_override("separation", 0)
+	_npc_list_container.add_theme_constant_override("separation", 2)
 	_npc_list_container.size_flags_horizontal = SIZE_EXPAND
 	npc_scroll.add_child(_npc_list_container)
 
-	# --- Dialogue Section (bottom, fixed ~260px) ---
-	var dlg_panel := Panel.new(); _add_panel_style(dlg_panel)
-	dlg_panel.custom_minimum_size = Vector2(0, 260)
-	dlg_panel.size_flags_vertical = SIZE_SHRINK_END
-	side_panel.add_child(dlg_panel)
+	# ─── Card 5: Dialogue (bottom, fixed ~240px) ───
+	var dlg_card := Panel.new()
+	dlg_card.custom_minimum_size = Vector2(0, 240)
+	dlg_card.size_flags_vertical = SIZE_SHRINK_END
+	var dc_sb := StyleBoxFlat.new(); dc_sb.bg_color = BG_PANEL
+	dc_sb.set_corner_radius_all(6)
+	dc_sb.border_width_all = 1; dc_sb.border_color = BORDER
+	dc_sb.content_margin_left = 10; dc_sb.content_margin_right = 10
+	dc_sb.content_margin_top = 8; dc_sb.content_margin_bottom = 8
+	dlg_card.add_theme_stylebox_override("panel", dc_sb)
+	side_panel.add_child(dlg_card)
 
 	var dlg_vb := VBoxContainer.new()
 	dlg_vb.add_theme_constant_override("separation", 6)
 	dlg_vb.set_anchors_preset(PRESET_FULL_RECT)
-	dlg_panel.add_child(dlg_vb)
+	dlg_card.add_child(dlg_vb)
 
 	# Chat scroll area
 	_chat_scroll = ScrollContainer.new()
@@ -399,23 +409,23 @@ func _build_game_ui() -> void:
 	_dialogue_label.selection_enabled = true
 	_dialogue_label.size_flags_horizontal = SIZE_EXPAND
 	_dialogue_label.scroll_active = false
-	_dialogue_label.add_theme_font_size_override("normal_font_size", 14)
+	_dialogue_label.add_theme_font_size_override("normal_font_size", 13)
 	_dialogue_label.add_theme_color_override("default_color", TEXT)
 	_chat_scroll.add_child(_dialogue_label)
 
 	# Input bar
 	var input_bar := HBoxContainer.new()
-	input_bar.custom_minimum_size = Vector2(0, 38)
-	input_bar.add_theme_constant_override("separation", 8)
+	input_bar.custom_minimum_size = Vector2(0, 36)
+	input_bar.add_theme_constant_override("separation", 6)
 	dlg_vb.add_child(input_bar)
 
-	_npc_select = OptionButton.new(); _npc_select.add_theme_font_size_override("font_size", 13)
+	_npc_select = OptionButton.new(); _npc_select.add_theme_font_size_override("font_size", 12)
 	input_bar.add_child(_npc_select)
 
 	_msg_input = LineEdit.new()
 	_msg_input.placeholder_text = "对 TA 说些什么..."
 	_msg_input.size_flags_horizontal = SIZE_EXPAND
-	_msg_input.add_theme_font_size_override("font_size", 14)
+	_msg_input.add_theme_font_size_override("font_size", 13)
 	_msg_input.text_submitted.connect(func(_t): _on_send())
 	input_bar.add_child(_msg_input)
 
@@ -423,7 +433,7 @@ func _build_game_ui() -> void:
 	_send_btn.pressed.connect(_on_send)
 	input_bar.add_child(_send_btn)
 
-	print("[Game] UI built — 2-column layout like Web")
+	print("[Game] UI built — card-based sidebar layout")
 
 
 # ═══════════════════════════════════════════════════════
@@ -577,11 +587,11 @@ func _refresh() -> void:
 	_vigor_label.text = "%d/%d" % [gm.player_vigor, gm.player_vigor_max]
 	_spirit_bar.max_value = gm.player_spirit_max; _spirit_bar.value = gm.player_spirit
 	_spirit_label.text = "%d/%d" % [gm.player_spirit, gm.player_spirit_max]
-	_coins_label.text = "💰 制钱: %d 文" % gm.player_coins
-	_time_label.text = "🧭 时辰: 第%d日 · %s" % [gm.player_world_day, gm.player_world_shichen]
-	_weather_label.text = "🌤 天气: %s" % gm.player_weather
+	_coins_label.text = "💰 %d文" % gm.player_coins
+	_time_label.text = "🧭 第%d日·%s" % [gm.player_world_day, gm.player_world_shichen]
+	_weather_label.text = "🌤 %s" % gm.player_weather
 	var mname = gm.maps_data.get(gm.player_map_id,{}).get("name", gm.player_map_id)
-	_map_name_label.text = "%s (%d,%d)" % [mname, gm.player_px, gm.player_py]
+	_map_name_label.text = "📍 %s(%d,%d)" % [mname, gm.player_px, gm.player_py]
 
 	# Inventory
 	for c in _inventory_flow.get_children(): c.queue_free()
@@ -607,10 +617,42 @@ func _refresh() -> void:
 func _add_panel_style(p: Panel) -> void:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = BG_PANEL
-	sb.border_width_bottom = 1; sb.border_color = BORDER
+	sb.set_corner_radius_all(6)
+	sb.border_width_all = 1; sb.border_color = BORDER
 	sb.content_margin_left = 12; sb.content_margin_right = 12
 	sb.content_margin_top = 8; sb.content_margin_bottom = 8
 	p.add_theme_stylebox_override("panel", sb)
+
+
+func _make_card(title_text: String) -> Panel:
+	"""Create a styled card Panel with a header label and return it.
+	   Caller should use _card_content() to get the inner VBoxContainer."""
+	var p := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = BG_CARD
+	sb.set_corner_radius_all(6)
+	sb.border_width_all = 1; sb.border_color = BORDER_SUBTLE
+	sb.content_margin_left = 10; sb.content_margin_right = 10
+	sb.content_margin_top = 6; sb.content_margin_bottom = 6
+	p.add_theme_stylebox_override("panel", sb)
+
+	# Header row inside the panel
+	var header_hb := HBoxContainer.new()
+	header_hb.set_anchors_preset(PRESET_FULL_RECT)
+	p.add_child(header_hb)
+	header_hb.add_child(_lbl(title_text, 11, ACCENT, HORIZONTAL_ALIGNMENT_LEFT))
+	return p
+
+
+func _card_content(card: Panel) -> VBoxContainer:
+	"""Get or create the content VBoxContainer inside a card Panel."""
+	# The first child is the header HBoxContainer; add a VBox after it
+	var vb := VBoxContainer.new()
+	vb.set_anchors_and_offsets_preset(PRESET_FULL_RECT, PRESET_MODE_MINSIZE, 0)
+	# Offset below the header (~20px for header text)
+	vb.offset_top = 20
+	card.add_child(vb)
+	return vb
 
 
 func _lbl(text: String, size: int, color: Color, align := HORIZONTAL_ALIGNMENT_LEFT) -> Label:
@@ -646,12 +688,12 @@ func _btn(text: String, bg: Color) -> Button:
 func _npc_entry(name: String, _id: String) -> Panel:
 	"""Create a single NPC list entry for the sidebar."""
 	var p := Panel.new()
-	p.custom_minimum_size = Vector2(0, 32)
+	p.custom_minimum_size = Vector2(0, 30)
 	var esb := StyleBoxFlat.new()
-	esb.bg_color = BG_CARD
-	esb.border_width_bottom = 1; esb.border_color = Color(0.2, 0.25, 0.38, 0.5)
-	esb.content_margin_left = 10; esb.content_margin_right = 10
-	esb.content_margin_top = 6; esb.content_margin_bottom = 4
+	esb.bg_color = Color(0,0,0,0)  # transparent
+	esb.set_corner_radius_all(4)
+	esb.content_margin_left = 6; esb.content_margin_right = 6
+	esb.content_margin_top = 4; esb.content_margin_bottom = 4
 	p.add_theme_stylebox_override("panel", esb)
 
 	var hb := HBoxContainer.new()
@@ -660,9 +702,10 @@ func _npc_entry(name: String, _id: String) -> Panel:
 
 	# NPC dot indicator
 	var dot := ColorRect.new()
-	dot.custom_minimum_size = Vector2(8, 8)
+	dot.custom_minimum_size = Vector2(7, 7)
+	dot.position.y = 5  # center vertically in 30px height
 	dot.color = ACCENT2
 	hb.add_child(dot)
 
-	hb.add_child(_lbl(name, 13, TEXT))
+	hb.add_child(_lbl(name, 12, TEXT))
 	return p
