@@ -1,0 +1,67 @@
+{
+  "timestamp": "2026-05-27T05:30:01.413992",
+  "summary": {
+    "total": 8,
+    "passed": 8,
+    "failed": 0,
+    "total_ms": 21459.8
+  },
+  "results": [
+    {
+      "name": "后端健康检查",
+      "passed": true,
+      "detail": "status=200 model=DeepSeek-V4-Pro",
+      "duration_ms": 109.6,
+      "timestamp": "2026-05-27T05:29:40.105261"
+    },
+    {
+      "name": "Web 静态页面",
+      "passed": true,
+      "detail": "status=200 len=4971",
+      "duration_ms": 18.5,
+      "timestamp": "2026-05-27T05:29:40.107185"
+    },
+    {
+      "name": "LLM 模型列表",
+      "passed": true,
+      "detail": "models=91, target=DeepSeek-V4-Pro found=True",
+      "duration_ms": 56.4,
+      "timestamp": "2026-05-27T05:29:40.135934"
+    },
+    {
+      "name": "LLM 直连 (DeepSeek-V4-Pro)",
+      "passed": true,
+      "detail": "response_len=42",
+      "duration_ms": 5647.5,
+      "timestamp": "2026-05-27T05:29:45.783828"
+    },
+    {
+      "name": "角色创建 (/api/hello)",
+      "passed": true,
+      "detail": "map=world pos=(10,14) npcs=1 maps=1",
+      "duration_ms": 14.1,
+      "timestamp": "2026-05-27T05:29:45.798328"
+    },
+    {
+      "name": "NPC 对话 (LLM 链路)",
+      "passed": true,
+      "detail": "npc=jiang reply_len=215 fallback=N/A",
+      "duration_ms": 15542.8,
+      "timestamp": "2026-05-27T05:30:01.341651"
+    },
+    {
+      "name": "角色移动 (/api/move)",
+      "passed": true,
+      "detail": "from=(10,14) path_len=2",
+      "duration_ms": 18.9,
+      "timestamp": "2026-05-27T05:30:01.361081"
+    },
+    {
+      "name": "存档/读档",
+      "passed": true,
+      "detail": "save=True list=True load=True",
+      "duration_ms": 52.0,
+      "timestamp": "2026-05-27T05:30:01.413452"
+    }
+  ]
+}

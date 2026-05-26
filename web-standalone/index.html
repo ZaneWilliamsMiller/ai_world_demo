@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>活纸 · 江湖行纪</title>
+  <link rel="stylesheet" href="css/game.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ========== 登录界面 ========== -->
+  <div class="overlay" id="loginOverlay">
+    <div class="login-box">
+      <h2>🏮 江湖行纪</h2>
+
+      <!-- 新建角色 -->
+      <div id="loginForm">
+        <label>江湖名号</label>
+        <input type="text" id="inpName" placeholder="输入你的名号..." maxlength="24">
+        <label>性别</label>
+        <select id="inpGender">
+          <option value="男">男</option>
+          <option value="女">女</option>
+          <option value="未言">不透露</option>
+        </select>
+        <label>
+          <input type="checkbox" id="inpPermadeath"> 真实江湖（永久死亡）
+        </label>
+        <button onclick="App.startNewGame()">踏入江湖</button>
+      </div>
+
+      <!-- 加载存档 -->
+      <div id="loadForm" style="display:none;">
+        <label>选择存档</label>
+        <div class="saves-list" id="savesList"></div>
+        <button onclick="App.loadGame()">继续江湖</button>
+        <button onclick="App.showLoginForm()"
+                style="background:transparent;color:var(--text-dim);margin-top:4px;">
+          返回新建
+        </button>
+      </div>
+
+      <div style="text-align:center;margin-top:12px;">
+        <button onclick="App.showLoadForm()"
+                style="background:transparent;color:var(--accent);">
+          载入旧档 →
+        </button>
+        <span style="margin:0 8px;color:var(--border);">|</span>
+        <button onclick="App.toggleConfigPanel()"
+                style="background:transparent;color:var(--standalone);">
+          ⚙ 配置
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 游戏主界面 ========== -->
+
+  <!-- 顶栏 -->
+  <div class="topbar" id="topbar" style="display:none;">
+    <h1>🏮 活纸 · 江湖行纪</h1>
+    <span class="subtitle" id="topbarInfo"></span>
+    <span class="spacer"></span>
+    <span id="apiModeIndicator" class="api-mode-badge backend">服务器模式</span>
+    <select id="apiModeQuickToggle" class="mode-select" title="切换 API 模式">
+      <option value="backend">服务器</option>
+      <option value="standalone">独立</option>
+    </select>
+    <button onclick="App.toggleConfigPanel()">⚙</button>
+    <button onclick="App.doSaveFlow()">💾 存档</button>
+    <button onclick="App.doLogout()">🚪 退出</button>
+  </div>
+
+  <div class="main" id="mainUI" style="display:none;">
+
+    <!-- ========== 左栏：大地图 ========== -->
+    <div class="map-panel">
+      <div class="panel-title" id="mapTitle">🗺️ 地图</div>
+      <div class="map-container" id="mapContainer"></div>
+      <div class="map-legend">
+        <span style="color:#4fc3f7;">■</span> 你
+        <span style="color:#ff7043;">■</span> NPC
+        <span style="color:#ffd700;">↗</span> 界门
+      </div>
+    </div>
+
+    <!-- ========== 右栏：状态 + NPC + 对话 ========== -->
+    <div class="side-panel">
+
+      <!-- 状态区（紧凑） -->
+      <div class="stat-section">
+        <h3>🧭 时辰 · 气象</h3>
+        <div class="stat-grid">
+          <div class="stat-item"><span class="label">时辰</span><span class="value" id="statTime">--</span></div>
+          <div class="stat-item"><span class="label">天气</span><span class="value" id="statWeather">--</span></div>
+          <div class="stat-item"><span class="label">第</span><span class="value" id="statDay">1</span><span class="label">日</span></div>
+          <div class="stat-item"><span class="label">制钱</span><span class="value" id="statCoins">--</span><span class="label">文</span></div>
+        </div>
+        <div class="stat-bars">
+          <div class="stat-bar-row">
+            <span class="label">体力</span>
+            <div class="bar-bg"><div class="bar-fill vigor" id="barVigor" style="width:100%;"></div></div>
+            <span class="val" id="statVigor">--/--</span>
+          </div>
+          <div class="stat-bar-row">
+            <span class="label">心气</span>
+            <div class="bar-bg"><div class="bar-fill spirit" id="barSpirit" style="width:100%;"></div></div>
+            <span class="val" id="statSpirit">--/--</span>
+          </div>
+        </div>
+        <div class="inv-row" id="statInv">
+          <span style="color:#555;">身无长物</span>
+        </div>
+      </div>
+
+      <!-- NPC 列表 + 界门 -->
+      <div class="npc-section">
+        <h3>🧑🤝🧑 此地图人物</h3>
+        <ul class="npc-list" id="npcList"></ul>
+        <div class="portal-list" id="portalList"></div>
+      </div>
+
+      <!-- 对话框 -->
+      <div class="dialogue-section">
+        <div class="dialogue-area" id="dialogueArea">
+          <div class="msg system" id="introMsg"></div>
+        </div>
+        <div class="input-bar">
+          <select id="npcSelect"></select>
+          <input type="text" id="msgInput" placeholder="对 TA 说些什么..."
+                 onkeydown="if(event.key==='Enter')App.doTalk()">
+          <button onclick="App.doTalk()" id="talkBtn">发送</button>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<!-- ========== API 配置面板 ========== -->
+<div class="config-overlay" id="configOverlay">
+  <div class="config-panel" id="configPanel" style="display:none;">
+    <h3>⚙ API 配置</h3>
+
+    <div class="cfg-group">
+      <label>运行模式</label>
+      <select id="cfgApiMode">
+        <option value="backend">服务器模式（连接后端 API）</option>
+        <option value="standalone">独立模式（直接 LLM API）</option>
+      </select>
+    </div>
+
+    <div class="cfg-group">
+      <label>后端 API 地址</label>
+      <input type="text" id="cfgBackendUrl" placeholder="http://127.0.0.1:8765">
+    </div>
+
+    <div class="cfg-group">
+      <label>LLM API 地址</label>
+      <input type="text" id="cfgLlmUrl" placeholder="https://llmapi.paratera.com/v1">
+    </div>
+
+    <div class="cfg-group">
+      <label>LLM API Key</label>
+      <input type="password" id="cfgLlmKey" placeholder="sk-...">
+    </div>
+
+    <div class="cfg-group">
+      <label>LLM 模型</label>
+      <input type="text" id="cfgLlmModel" placeholder="DeepSeek-V4-Pro">
+    </div>
+
+    <!-- 连接测试 -->
+    <div class="test-section">
+      <h4>🔌 连接测试</h4>
+      <div class="test-btn-row">
+        <button class="test-btn" onclick="App.testBackendConnection()">测试后端</button>
+        <button class="test-btn" onclick="App.testLlmConnection()">测试 LLM</button>
+      </div>
+      <div id="backendTestResult" class="test-result" style="display:block;"></div>
+      <div id="llmTestResult" class="test-result" style="display:block;"></div>
+    </div>
+
+    <div class="cfg-actions">
+      <button class="btn-primary" onclick="App.applyConfig()">保存配置</button>
+      <button class="btn-secondary" onclick="App.toggleConfigPanel()">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 脚本 -->
+<script src="js/store.js"></script>
+<script src="js/api.js"></script>
+<script src="js/map.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/dialogue.js"></script>
+<script src="js/llm-test.js"></script>
+<script src="js/main.js"></script>
+
+</body>
+</html>
