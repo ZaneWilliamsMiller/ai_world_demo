@@ -3,7 +3,7 @@ extends Node
 ## Autoload singleton — use ApiClient.request(...) anywhere.
 
 # ── Config ──
-@export var base_url: String = "http://127.0.0.1:8766"
+@export var base_url: String = "http://127.0.0.1:8765"
 @export var timeout_sec: float = 30.0
 
 # ── Internal ──
@@ -63,7 +63,7 @@ func _send(path: String, method: String, body: Dictionary, callback: Callable) -
 
 
 func _on_complete(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray, rid: int, http: HTTPRequest) -> void:
-	var cb: Callable = _pending.get(rid)
+	var cb = _pending.get(rid)
 	_pending.erase(rid)
 	http.queue_free()
 
@@ -73,12 +73,12 @@ func _on_complete(result: int, response_code: int, headers: PackedStringArray, b
 		return
 
 	var text := body.get_string_from_utf8()
-	var data: Dictionary
+	var data: Dictionary = {}
 	if text.begins_with("{") or text.begins_with("["):
 		var json := JSON.new()
 		var err := json.parse(text)
 		if err == OK:
-			data = json.data
+			data = json.data as Dictionary
 		else:
 			data = {"_raw": text}
 	else:

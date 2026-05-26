@@ -39,7 +39,7 @@ signal logged_in()
 signal logged_out()
 
 # ── Config ──
-@export var backend_url: String = "http://127.0.0.1:8766"
+@export var backend_url: String = "http://127.0.0.1:8765"
 
 
 func hello(p_name: String, p_gender: String, p_permadeath: bool) -> void:
