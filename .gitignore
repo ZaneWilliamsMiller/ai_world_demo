@@ -16,7 +16,6 @@ saves/
 
 # Godot 编辑器缓存
 godot/.godot/
-godot-standalone/.godot/
 
 # 测试报告（本地生成）
 tests/test_reports/

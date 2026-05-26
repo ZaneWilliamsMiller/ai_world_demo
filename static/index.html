@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>活纸 · 江湖行纪</title>
-  <link rel="stylesheet" href="/static/css/game.css">
+  <link rel="stylesheet" href="css/game.css">
 </head>
 <body>
 <div id="app">
@@ -46,6 +46,11 @@
                 style="background:transparent;color:var(--accent);">
           载入旧档 →
         </button>
+        <span style="margin:0 8px;color:var(--border);">|</span>
+        <button onclick="App.toggleConfigPanel()"
+                style="background:transparent;color:var(--standalone);">
+          ⚙ 配置
+        </button>
       </div>
     </div>
   </div>
@@ -57,6 +62,12 @@
     <h1>🏮 活纸 · 江湖行纪</h1>
     <span class="subtitle" id="topbarInfo"></span>
     <span class="spacer"></span>
+    <span id="apiModeIndicator" class="api-mode-badge backend">服务器模式</span>
+    <select id="apiModeQuickToggle" class="mode-select" title="切换 API 模式">
+      <option value="backend">服务器</option>
+      <option value="standalone">独立</option>
+    </select>
+    <button onclick="App.toggleConfigPanel()">⚙</button>
     <button onclick="App.doSaveFlow()">💾 存档</button>
     <button onclick="App.doLogout()">🚪 退出</button>
   </div>
@@ -121,7 +132,6 @@
                  onkeydown="if(event.key==='Enter')App.doTalk()">
           <button onclick="App.doTalk()" id="talkBtn">发送</button>
         </div>
-        <div id="moveStatus" style="display:none;padding:2px 8px;font-size:11px;color:var(--text-dim);"></div>
       </div>
 
     </div>
@@ -129,13 +139,65 @@
   </div>
 </div>
 
+<!-- ========== API 配置面板 ========== -->
+<div class="config-overlay" id="configOverlay">
+  <div class="config-panel" id="configPanel" style="display:none;">
+    <h3>⚙ API 配置</h3>
+
+    <div class="cfg-group">
+      <label>运行模式</label>
+      <select id="cfgApiMode">
+        <option value="backend">服务器模式（连接后端 API）</option>
+        <option value="standalone">独立模式（直接 LLM API）</option>
+      </select>
+    </div>
+
+    <div class="cfg-group">
+      <label>后端 API 地址</label>
+      <input type="text" id="cfgBackendUrl" placeholder="http://127.0.0.1:8765">
+    </div>
+
+    <div class="cfg-group">
+      <label>LLM API 地址</label>
+      <input type="text" id="cfgLlmUrl" placeholder="https://llmapi.paratera.com/v1">
+    </div>
+
+    <div class="cfg-group">
+      <label>LLM API Key</label>
+      <input type="password" id="cfgLlmKey" placeholder="sk-...">
+    </div>
+
+    <div class="cfg-group">
+      <label>LLM 模型</label>
+      <input type="text" id="cfgLlmModel" placeholder="DeepSeek-V4-Pro">
+    </div>
+
+    <!-- 连接测试 -->
+    <div class="test-section">
+      <h4>🔌 连接测试</h4>
+      <div class="test-btn-row">
+        <button class="test-btn" onclick="App.testBackendConnection()">测试后端</button>
+        <button class="test-btn" onclick="App.testLlmConnection()">测试 LLM</button>
+      </div>
+      <div id="backendTestResult" class="test-result" style="display:block;"></div>
+      <div id="llmTestResult" class="test-result" style="display:block;"></div>
+    </div>
+
+    <div class="cfg-actions">
+      <button class="btn-primary" onclick="App.applyConfig()">保存配置</button>
+      <button class="btn-secondary" onclick="App.toggleConfigPanel()">取消</button>
+    </div>
+  </div>
+</div>
+
 <!-- 脚本 -->
-<script src="/static/js/store.js"></script>
-<script src="/static/js/api.js"></script>
-<script src="/static/js/map.js"></script>
-<script src="/static/js/ui.js"></script>
-<script src="/static/js/dialogue.js"></script>
-<script src="/static/js/main.js"></script>
+<script src="js/store.js"></script>
+<script src="js/api.js"></script>
+<script src="js/map.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/dialogue.js"></script>
+<script src="js/llm-test.js"></script>
+<script src="js/main.js"></script>
 
 </body>
 </html>

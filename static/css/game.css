@@ -11,6 +11,7 @@
   --yellow: #fdd835;
   --red: #ef5350;
   --gold: #ffd700;
+  --standalone: #ab47bc;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -32,11 +33,11 @@ body {
   padding: 6px 16px;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   flex-shrink: 0;
   height: 40px;
 }
-.topbar h1 { font-size: 16px; color: var(--accent); letter-spacing: 2px; }
+.topbar h1 { font-size: 16px; color: var(--accent); letter-spacing: 2px; white-space: nowrap; }
 .topbar .subtitle { font-size: 12px; color: var(--text-dim); }
 .topbar .spacer { flex: 1; }
 .topbar button {
@@ -49,7 +50,29 @@ body {
   font-size: 12px;
 }
 .topbar button:hover { border-color: var(--accent); }
-.topbar button.primary { background: var(--accent); color: #111; font-weight: bold; }
+
+/* API 模式指示器 */
+.api-mode-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: bold;
+  white-space: nowrap;
+}
+.api-mode-badge.backend { background: rgba(79,195,247,0.2); color: var(--accent); }
+.api-mode-badge.standalone { background: rgba(171,71,188,0.2); color: var(--standalone); }
+
+/* 快速模式切换 */
+.mode-select {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.mode-select:focus { outline: none; border-color: var(--accent); }
 
 /* ========== 主区：两栏 ========== */
 .main {
@@ -106,7 +129,6 @@ body {
 .map-cell:hover { background: rgba(79,195,247,0.3); outline: 1px solid var(--accent); }
 
 /* ── 人物模型 ── */
-/* 浮动人物浮标（独立于网格，动画移动） */
 .player-marker {
   position: absolute;
   width: 16px; height: 16px;
@@ -126,10 +148,8 @@ body {
   50%      { box-shadow: 0 0 8px var(--accent), 0 0 16px rgba(79,195,247,0.6); }
 }
 
-/* 玩家所在格（静态标记，动画期间清除） */
 .map-cell.player-pos { box-shadow: inset 0 0 0 2px var(--accent); }
 
-/* NPC 指示器 — 格内小圆点 */
 .map-cell.has-npc {
   position: relative;
 }
@@ -149,14 +169,12 @@ body {
   background: rgba(79,195,247,0.06) !important;
 }
 
-/* 步行激活（走过时短暂高亮） */
 .map-cell.step-active {
   background: rgba(255,215,0,0.25) !important;
   outline: 1px solid var(--gold);
   transition: none;
 }
 
-/* 到达目的地闪烁 */
 .map-cell.step-arrive {
   animation: arrive-ring 0.4s ease-out;
 }
@@ -167,10 +185,8 @@ body {
 }
 
 .map-cell.portal { animation: pulse 1.5s infinite; }
-
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
 
-/* 地图下方图例 */
 .map-legend {
   padding: 4px 12px;
   border-top: 1px solid var(--border);
@@ -252,7 +268,7 @@ body {
   font-size: 10px;
 }
 
-/* ── NPC 列表区（可滚动）── */
+/* ── NPC 列表区 ── */
 .npc-section {
   flex: 1;
   overflow-y: auto;
@@ -303,7 +319,7 @@ body {
 }
 .portal-list .portal-entry:hover { color: var(--gold); }
 
-/* ── 对话框区（底部固定）── */
+/* ── 对话框区 ── */
 .dialogue-section {
   flex-shrink: 0;
   display: flex;
@@ -449,6 +465,120 @@ body {
 }
 .badge.night { background: #2a3a5a; color: var(--accent); }
 .badge.day { background: #4a3a1a; color: var(--yellow); }
+
+/* ========== API 配置面板 ========== */
+.config-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+.config-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 24px;
+  width: 420px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.config-panel h3 {
+  color: var(--accent);
+  margin-bottom: 16px;
+  font-size: 16px;
+  letter-spacing: 2px;
+}
+.config-panel .cfg-group {
+  margin-bottom: 14px;
+}
+.config-panel .cfg-group label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.config-panel .cfg-group input,
+.config-panel .cfg-group select {
+  width: 100%;
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+.config-panel .cfg-group input:focus,
+.config-panel .cfg-group select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.config-panel .cfg-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+.config-panel .cfg-actions button {
+  flex: 1;
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+  border: none;
+}
+.config-panel .cfg-actions .btn-primary {
+  background: var(--accent);
+  color: #111;
+}
+.config-panel .cfg-actions .btn-secondary {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+/* ── 连接测试区 ── */
+.test-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.test-section h4 {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+  letter-spacing: 1px;
+}
+.test-btn-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.test-btn {
+  flex: 1;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+}
+.test-btn:hover { border-color: var(--accent); }
+
+.test-result {
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin-top: 4px;
+  word-break: break-all;
+  line-height: 1.4;
+}
+.test-result.testing { background: rgba(79,195,247,0.1); color: var(--accent); }
+.test-result.success { background: rgba(102,187,106,0.1); color: var(--green); }
+.test-result.fail    { background: rgba(239,83,80,0.1);  color: var(--red); }
 
 /* ========== 滚动条 ========== */
 ::-webkit-scrollbar { width: 5px; }

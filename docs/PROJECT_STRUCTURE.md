@@ -1,16 +1,14 @@
 # 活纸江湖 · 项目结构说明
 
-> 最后更新：2026-05-27 (+双独立前端架构：web-standalone + godot-standalone，项目结构整理)
+> 最后更新：2026-05-27 (统一前端架构：static/ + godot/，合并去除 standalone 版本)
 
 ## 顶层
 
 ```
 living-paper/
 ├── backend/              # Python 后端 (FastAPI 游戏引擎)
-├── static/               # Web 前端 (后端内嵌版 SPA)
-├── web-standalone/       # Web 前端 (独立版，双模式 API)
-├── godot/                # Godot 前端 (后端内嵌版)
-├── godot-standalone/     # Godot 前端 (独立版，严格类型 + 信号驱动)
+├── static/               # Web 前端 (SPA，双模式 API，可独立运行)
+├── godot/                # Godot 前端 (Godot 4，严格类型 + 信号驱动)
 ├── tools/                # 开发辅助脚本
 ├── tests/                # 自动化测试
 ├── docs/                 # 文档与迭代记录
@@ -28,10 +26,8 @@ living-paper/
 | `.env` / `.env.example` | 环境变量（LLM API Key / 模型 / 熔断器 / 缓存等配置） |
 | `.gitignore` | Git 忽略规则 |
 | `backend/` | **Python 后端** — FastAPI 游戏引擎 |
-| `static/` | **Web 前端（内嵌版）** — 由后端直接 serve 的 SPA |
-| `web-standalone/` | **Web 前端（独立版）** — 双 API 模式，可独立运行 |
-| `godot/` | **Godot 前端（内嵌版）** — 原始 Godot 4 客户端 |
-| `godot-standalone/` | **Godot 前端（独立版）** — 严格类型 + 信号驱动架构 |
+| `static/` | **Web 前端** — 双 API 模式 SPA（后端 serve / 独立打开均可） |
+| `godot/` | **Godot 前端** — 严格类型 + 信号驱动，双 API 模式 |
 | `tools/` | 开发辅助脚本（测试、启动、调试、地图工具） |
 | `tests/` | 自动化测试（E2E / 边界 / 综合 / 单元 + 测试报告） |
 | `docs/` | 文档、迭代记录、历史归档 |
@@ -125,72 +121,34 @@ living-paper/
 
 ---
 
-## static/ — Web 前端（后端内嵌版）
+## static/ — Web 前端
 
 ```
 static/
-├── index.html          ← SPA 入口
-├── css/game.css        ← 暗色江湖主题
-└── js/
-    ├── api.js          ← API 通信层（/api 前缀）
-    ├── store.js        ← 状态管理
-    ├── map.js          ← 地图渲染（CSS Grid 16px 瓦片）
-    ├── ui.js           ← UI 更新
-    ├── dialogue.js     ← 对话系统（SSE 流式）
-    └── main.js         ← 入口逻辑
-```
-
-由 `backend/app.py` 通过 `StaticFiles` 中间件直接 serve，需要后端运行。
-
----
-
-## web-standalone/ — Web 前端（独立版）
-
-```
-web-standalone/
 ├── index.html          ← SPA 入口（含 API 配置面板）
 ├── css/game.css        ← 暗色江湖主题
 └── js/
     ├── api.js          ← 双模式 API 层（后端模式 / LLM 直连模式）
-    ├── store.js        ← 状态管理（API_URL / BASE_URL 可切换）
-    ├── map.js          ← 地图渲染
+    ├── store.js        ← 状态管理（自动检测同源/跨域，API_URL 可配置）
+    ├── map.js          ← 地图渲染（CSS Grid 16px 瓦片）
     ├── ui.js           ← UI 更新
-    ├── dialogue.js     ← 对话系统
+    ├── dialogue.js     ← 对话系统（SSE 流式）
     ├── llm-test.js     ← LLM 连接测试模块
     └── main.js         ← 入口逻辑
 ```
 
-**与 `static/` 的区别**：
-- 可独立打开或通过任意 HTTP 服务器运行
-- 双 API 模式：后端模式（BASE_URL → 后端 API）/ 独立模式（API_URL → 直连 LLM API）
-- API 配置面板：URL / Key / Model 可在界面修改
-- 连接测试功能：验证后端或 LLM API 可用性
-- 配置持久化到 localStorage
+**双模式运行**：
+- **后端模式**（默认）：通过后端 `http://127.0.0.1:8765` serve 或独立打开，自动检测同源用相对路径 `/api`
+- **LLM 直连模式**：不依赖后端，直接调用 Paratera LLM API（受 CORS 限制，需后端中转或代理）
+
+**特性**：API 配置面板（URL/Key/Model 可界面修改） · 连接测试 · 配置持久化 localStorage · SSE 打字机流式对话 · 暗色江湖主题
 
 ---
 
-## godot/ — Godot 前端（后端内嵌版）
+## godot/ — Godot 前端 (Godot 4)
 
 ```
 godot/
-├── project.godot       ← 项目配置（Autoload: ApiClient + GameManager）
-├── README.md           ← 使用说明
-├── scenes/
-│   └── game.tscn       ← 主场景
-└── scripts/
-    ├── main_game.gd    ← 程序化构建全部 UI（登录/地图/对话/HUD）
-    ├── api_client.gd   ← HTTP 客户端 Autoload
-    └── game_manager.gd ← 游戏状态 Autoload
-```
-
-需配合后端运行，API 通信通过 `api_client.gd` 的 `@export var base_url` 配置。
-
----
-
-## godot-standalone/ — Godot 前端（独立版）
-
-```
-godot-standalone/
 ├── project.godot       ← 项目配置（Autoload: ApiClient + GameManager）
 ├── .gdextension_ignore
 ├── scenes/
@@ -206,12 +164,12 @@ godot-standalone/
     └── llm_test.gd     ← LLM 连接测试脚本
 ```
 
-**与 `godot/` 的区别**：
+**架构特性**：
 - **GDScript 2.0 严格静态类型**：所有变量、参数、返回值显式类型
-- **信号驱动架构**：组件间通过信号通信，不用 `get_parent()`
+- **信号驱动**：组件间通过信号通信，不用 `get_parent()`
 - **双 API 模式**：后端模式 / LLM 直连模式，可在游戏内切换
 - **独立场景**：`login.tscn` 和 `game.tscn` 可 F6 独立运行
-- **连接测试**：`llm_test.gd` 验证后端和 LLM API
+- **连接测试**：`llm_test.gd` 验证后端和 LLM API 可用性
 
 ---
 
@@ -275,14 +233,13 @@ godot-standalone/
 
 ---
 
-## 前端版本对照
+## 前端 API 模式说明
 
-| 特性 | `static/` | `web-standalone/` | `godot/` | `godot-standalone/` |
-|------|-----------|-------------------|----------|---------------------|
-| 后端依赖 | 必须 | 可选 | 必须 | 可选 |
-| LLM 直连 | 不支持 | 支持 | 不支持 | 支持 |
-| API 配置面板 | 无 | 有 | 无 | 有 |
-| 连接测试 | 无 | 有 | 无 | 有 |
-| 严格静态类型 | N/A | N/A | 部分 | 全部 |
-| 信号驱动 | N/A | N/A | 部分 | 完整 |
-| 独立运行 | 不可以 | 可以 | 不可以 | 可以 |
+两个前端均支持双 API 模式：
+
+| 模式 | 说明 | 适用场景 |
+|------|------|----------|
+| **后端模式**（默认） | 通过后端 API 通信，享受完整的游戏系统（NPC 认知/际遇/经济等） | 正常游戏 |
+| **LLM 直连模式** | 直接调用 LLM API，跳过后端游戏逻辑 | API 调试、无后端环境 |
+
+Web 前端还会自动检测同源环境：由后端 serve 时使用相对路径 `/api`，独立打开时使用完整 `http://127.0.0.1:8765/api`。

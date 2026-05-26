@@ -26,11 +26,11 @@ var player_world_shichen: String = "午时"
 var player_weather: String = "薄阴"
 
 # ── World Data ──
-var maps_data: Dictionary = {}         # map_id → {name, rows, portals}
-var npcs_here: Array = []              # [{id, name}]
-var npc_labels: Dictionary = {}        # npc_id → name (full catalog)
-var npc_catalog: Array = []            # [{id, name, map, x, y}]
-var npc_states: Dictionary = {}        # npc_id → state
+var maps_data: Dictionary = {}
+var npcs_here: Array = []
+var npc_labels: Dictionary = {}
+var npc_catalog: Array = []
+var npc_states: Dictionary = {}
 var intro_text: String = ""
 
 # ── UI Signals ──
@@ -62,11 +62,10 @@ func hello(p_name: String, p_gender: String, p_permadeath: bool) -> void:
 	print("[GM] /api/hello response: %s" % JSON.stringify(res))
 
 	if res.has("error"):
-		print("[GM] hello() ERROR: %s — returning early, logged_in will NOT fire" % res.get("error", "?"))
+		print("[GM] hello() ERROR: %s" % res.get("error", "?"))
 		system_message.emit("连接后端失败: %s" % res.get("error", "?"))
 		return
 
-	print("[GM] hello() OK — calling _apply_hello_response + emitting logged_in")
 	_apply_hello_response(res)
 	logged_in.emit()
 
@@ -89,7 +88,6 @@ func _apply_hello_response(data: Dictionary) -> void:
 	"""Parse /api/hello or /api/load response into game state."""
 	display_name = data.get("display_name", display_name)
 	maps_data = data.get("maps", {})
-	print("[GM] _apply_hello_response — maps_data keys: %s, player_map_id: %s" % [str(maps_data.keys()), str(data.get("player", {}).get("map_id", "N/A"))])
 	npcs_here = data.get("npcs_here", [])
 	npc_labels = data.get("npc_labels", {})
 	npc_catalog = data.get("npc_catalog", [])
@@ -137,31 +135,44 @@ func move_player(tx: int, ty: int) -> void:
 		system_message.emit("此路不通")
 		return
 
-	# ── 步行动画：逐格更新视觉位置 ──
 	for step in path_data:
 		player_px = step[0]
 		player_py = step[1]
 		map_pos_changed.emit()
 		await get_tree().create_timer(0.08).timeout
 
-	# Update player position from response
 	var p: Dictionary = res.get("player", {})
 	if not p.is_empty():
 		_apply_player(p)
 
-	# Check encounter / danger
 	var encounter = res.get("encounter")
 	if encounter and not encounter.is_empty():
 		system_message.emit(str(encounter))
 
-	# Update NPC list
 	npcs_here = res.get("npcs_here", npcs_here)
-
 	state_updated.emit()
 
 
 func talk_to_npc(npc_id: String, message: String) -> bool:
 	"""Send message to NPC. Returns true if LLM fallback was NOT used."""
+	if ApiClient.api_mode == "direct":
+		# Direct LLM mode — bypass backend
+		var messages: Array[Dictionary] = [
+			{"role": "system", "content": "你是江湖中的人物，以古风武侠风格对话。"},
+			{"role": "user", "content": message}
+		]
+		var res: Dictionary = await ApiClient.llm_chat(messages)
+		if res.has("error"):
+			system_message.emit("LLM 对话失败")
+			return false
+		var content: String = ""
+		if res.has("choices") and res["choices"].size() > 0:
+			content = res["choices"][0].get("message", {}).get("content", "")
+		var npc_name: String = npc_labels.get(npc_id, npc_id)
+		chat_message.emit(npc_name, content, npc_id)
+		return true
+
+	# Backend mode
 	var body := {"player_id": player_id, "npc_id": npc_id, "message": message}
 	var res: Dictionary = await ApiClient.request("/api/npc/talk", "POST", body)
 
@@ -173,7 +184,6 @@ func talk_to_npc(npc_id: String, message: String) -> bool:
 	var npc_name: String = npc_labels.get(npc_id, npc_id)
 	chat_message.emit(npc_name, visible, npc_id)
 
-	# Update state
 	var p: Dictionary = res.get("player", {})
 	if not p.is_empty():
 		_apply_player(p)
