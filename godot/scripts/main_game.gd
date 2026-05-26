@@ -101,7 +101,12 @@ func _build_login() -> void:
 	overlay_bg.set_anchors_preset(PRESET_FULL_RECT)
 	_login_overlay.add_child(overlay_bg)
 
-	var box := _mk_panel(Vector2(380, 450), PRESET_CENTER, _login_overlay)
+	# CenterContainer for true centering
+	var center := CenterContainer.new()
+	center.set_anchors_preset(PRESET_FULL_RECT)
+	_login_overlay.add_child(center)
+
+	var box := _mk_panel(Vector2(380, 450), PRESET_CENTER, center)
 	var vb := VBoxContainer.new()
 	vb.set_anchors_preset(PRESET_FULL_RECT)
 	vb.add_theme_constant_override("separation", 12)
@@ -144,7 +149,11 @@ func _build_login() -> void:
 func _show_load_dialog() -> void:
 	var saves: Array = await GameManager.list_saves()
 	var popup := _overlay()
-	var box := _mk_panel(Vector2(320, 300), PRESET_CENTER, popup)
+	# CenterContainer for true centering
+	var center := CenterContainer.new()
+	center.set_anchors_preset(PRESET_FULL_RECT)
+	popup.add_child(center)
+	var box := _mk_panel(Vector2(320, 300), PRESET_CENTER, center)
 	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 6)
 	vb.set_anchors_preset(PRESET_FULL_RECT); box.add_child(vb)
 
