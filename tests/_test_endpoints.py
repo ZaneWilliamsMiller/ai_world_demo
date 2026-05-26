@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 _test_endpoints.py — API 端点回归测试套件
 ==========================================

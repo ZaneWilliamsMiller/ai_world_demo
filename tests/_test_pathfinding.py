@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 _test_pathfinding.py — 寻路 & 传送门专项深度测试
 ==================================================

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """NPC 人际关系网：态度、旧账、可聊的闲话
 
 设计原则：

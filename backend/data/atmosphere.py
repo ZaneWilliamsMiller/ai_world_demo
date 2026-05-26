@@ -1,3 +1,4 @@
+from __future__ import annotations
 """地图格位的气氛描写数据
 
 每个 tile 符号对应一种「此地此刻」的环境笔触。

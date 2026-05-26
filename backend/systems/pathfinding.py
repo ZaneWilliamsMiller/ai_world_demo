@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import Any
 from backend.data.maps_data import MAPS
 

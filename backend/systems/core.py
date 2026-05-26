@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import Any
 from backend.models.player import PlayerState
 from backend.data.npcs_data import NPCS, NPC_FACTION, NPC_HABITS, NPC_STATE, LONG_DISTANCE_WANDERERS

@@ -18,9 +18,18 @@ import math
 import re
 import time
 import uuid
+from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
+
+from backend.memory_index import (
+    MemoryIndex,
+    tokenize,
+    check_retrieval_cache,
+    set_retrieval_cache,
+    get_cached_retrieval_key,
+)
 
 log = logging.getLogger("memory")
 
@@ -40,23 +49,16 @@ W_RELEVANCE = 0.50  # 注意可超过 1,论文是三项各自归一相加,权重
 REFLECTION_IMPORTANCE_TRIGGER = 35.0
 REFLECTION_MIN_INTERVAL_S = 30.0      # 两次反思的最小间隔(秒),避免重复反思
 
+# ── Fast Memory Index（2026 优化）──
+# 每个 AgentMind 的索引实例（延迟初始化，按 mind id 索引）
+_mind_indexes: dict[int, MemoryIndex] = {}
+
 # ─── 工具:分词与相似度 ─────────────────────
 _PUNCT_RE = re.compile(r"[\s,。、,.;;::!?!?\"'「」『』《》()()【】]+")
 
 def _tokenize(text: str) -> set[str]:
-    s = (_PUNCT_RE.sub("", text or "")).strip()
-    if not s:
-        return set()
-    if HAS_JIEBA:
-        # 使用 jieba 分词
-        words = set(jieba.cut(s))
-        # 移除单字停用词(简单处理)
-        return {w for w in words if len(w) > 1 or w in ("死", "杀", "毒", "银", "钱", "仇", "救")}
-    else:
-        # 回退到字符 bigram
-        if len(s) < 2:
-            return set(s)
-        return {s[i : i + 2] for i in range(len(s) - 1)}
+    """分词（向后兼容：内部调用 memory_index.tokenize）。"""
+    return set(tokenize(text))
 
 
 def _generate_insight_text(old_text: str, new_text: str, old_importance: float) -> str:
@@ -132,8 +134,10 @@ def _generate_insight_text(old_text: str, new_text: str, old_importance: float) 
     return random.choice(variants)
 
 def text_relevance(query: str, doc: str) -> float:
-    """基于词/字符二元组的 Jaccard 相似度。0..1。"""
-    a, b = _tokenize(query), _tokenize(doc)
+    """基于词/字符二元组的 Jaccard 相似度。0..1。
+
+    使用索引模块的 tokenize（与记忆索引一致）。"""
+    a, b = tokenize(query), tokenize(doc)
     if not a or not b:
         return 0.0
     inter = len(a & b)
@@ -215,8 +219,26 @@ class AgentMind:
     last_insight_at: float = 0.0      # epoch 秒,最近一次顿悟(A-Mem记忆演化)
     linked_memory_ids: set = field(default_factory=set)  # 已建立过链接的记忆ID集合(防重复链接)
 
+    def _ensure_index(self) -> MemoryIndex:
+        """延迟初始化记忆索引 — 2026 优化。"""
+        mind_id = id(self)
+        if mind_id not in _mind_indexes:
+            _mind_indexes[mind_id] = MemoryIndex()
+        idx = _mind_indexes[mind_id]
+        return idx
+
+    def _dirty_index(self) -> None:
+        """标记索引需重建（记忆变更时调用）。"""
+        idx = _mind_indexes.get(id(self))
+        if idx is not None:
+            idx.rebuild(self.items)
+
     def add(self, mem: Memory, *, _skip_evolve: bool = False) -> None:
         self.items.append(mem)
+        # 索引增量更新（仅新增记忆，不重建）
+        idx = _mind_indexes.get(id(self))
+        if idx is not None:
+            idx.index(mem.id, mem.text)
         if mem.kind == "observation":
             self.importance_since_reflect += mem.importance
             # A-Mem 记忆演化:新观察与旧记忆碰撞时可能产生「顿悟」
@@ -505,50 +527,83 @@ def retrieve(
     """按斯坦福式分数检索:recency × importance × relevance(线性加权)。
 
     2026-05-25 改进：融入心境一致性偏差（mood-congruent memory）。
-    当 NPC 情绪较强时（|affect_valence| >= 3），与当前心境一致的
-    记忆会得到微幅加成——愤怒者更易记起旧怨，欣悦者更常想起好事。
-    这使 NPC 的回忆更符合人类的心理真实。
-
     2026-05-25 改进：熟人引航（acquaintance priming）。
-    当提供 player_name 时，记忆文本中含玩家姓名的条项获得微幅加成，
-    让 NPC 更自然地回忆起与此人的直接互动，而非泛泛记忆。
-    加成幅度 0.06，约为反思/种子记忆加成 1.2 倍，温和但能引导优先序。"""
+
+    2026-05-26 改进：Fast Memory Index 索引辅助检索。
+    - 先用倒排索引过滤候选集，将 O(n) 降为 O(c)（c ≪ n）
+    - 仅对候选做精确 Jaccard 评分
+    - 检索结果缓存 15s（缓解并发下同一 mind 的重复评分）
+    - 记忆创建时预存 token 集，检索时直接使用（免重复分词）"""
     if not mind.items:
         return []
     now = time.time()
-    scored: list[tuple[float, Memory]] = []
-    rel_max = 0.0
+
+    # ── 索引辅助候选过滤（2026 优化）──
+    query_tokens = tokenize(query)
+
+    # 检查检索结果缓存
+    cache_key = get_cached_retrieval_key(id(mind), hash(query))
+    cached_ids = check_retrieval_cache(cache_key)
+    if cached_ids is not None:
+        # 缓存命中：直接用缓存的 memory IDs 恢复对象
+        id_to_mem = {m.id: m for m in mind.items}
+        candidates = [id_to_mem[mid] for mid in cached_ids if mid in id_to_mem]
+    else:
+        # 使用倒排索引过滤候选
+        idx: MemoryIndex = mind._ensure_index()
+        candidate_ids = idx.candidates(query_tokens, mind)
+        id_to_mem = {m.id: m for m in mind.items}
+        if candidate_ids:
+            candidates = [id_to_mem[mid] for mid in candidate_ids if mid in id_to_mem]
+        else:
+            # 索引无候选 → 扩大到全量（兜底）
+            candidates = list(mind.items)
+
+    if not candidates:
+        return []
+
+    # ── 精确评分：仅对候选，而非全量 ──
+    # 用 memory_index 的预存 token 集计算 relevance
+    idx_ref: MemoryIndex | None = _mind_indexes.get(id(mind)) if _mind_indexes else None
+
     rels: list[float] = []
-    for m in mind.items:
-        rel = text_relevance(query, m.text)
+    rel_max = 0.0
+    for m in candidates:
+        if idx_ref is not None:
+            rel = idx_ref.relevance(query_tokens, m.id)
+        else:
+            rel = text_relevance(query, m.text)
         rels.append(rel)
         if rel > rel_max:
             rel_max = rel
+
     # ── 心境一致性偏差：情绪较强时启用 ──
     mood_valence = float(getattr(mind, 'affect_valence', 0.0) or 0.0)
     apply_mood_bias = abs(mood_valence) >= _MOOD_BIAS_THRESHOLD
-    for m, rel in zip(mind.items, rels):
-        # 归一化:importance/10;recency 衰减;relevance/rel_max(避免一边倒)
+
+    scored: list[tuple[float, Memory]] = []
+    for m, rel in zip(candidates, rels):
         rec = _decay_recency(now - m.last_accessed, half_life_s)
         imp = m.importance / 10.0
         rel_norm = (rel / rel_max) if rel_max > 0 else 0.0
-        # 反思与种子记忆给小幅加成;锚点记忆给大幅加成(关键时刻永不忘记)
         bonus = 0.05 if m.kind in ("reflection", "cross_reflection", "seed", "insight") else 0.0
         if m.is_anchor or m.kind == "anchor":
-            bonus += 0.35   # 锚点记忆几乎总是被检索到
-        # ── 熟人引航：与当前玩家直接相关的记忆轻微加成 ──
+            bonus += 0.35
         if player_name and player_name in m.text:
-            bonus += 0.06  # 温和加成，引导优先检索与当前玩家的互动记忆
-        # ── 心境一致性偏差：情绪极性一致的记忆更容易浮起 ──
+            bonus += 0.06
         if apply_mood_bias:
-            sent = _sentiment_hint(m.text)  # -1..1
-            # 心境一致：sent 符号与 mood_valence 符号相同 ⇒ 正值 ⇒ 加成
+            sent = _sentiment_hint(m.text)
             mood_congruence = sent * (mood_valence / 10.0)
             bonus += mood_congruence * _MOOD_BIAS_WEIGHT
         score = (W_RECENCY * rec) + (W_IMPORTANCE * imp) + (W_RELEVANCE * rel_norm) + bonus
         scored.append((score, m))
+
     scored.sort(key=lambda kv: kv[0], reverse=True)
     top = [m for _, m in scored[: max(1, int(k))]]
+
+    # 写入检索结果缓存
+    set_retrieval_cache(cache_key, [m.id for m in top])
+
     # 命中即视为「访问过」,刷新 recency
     for m in top:
         m.last_accessed = now

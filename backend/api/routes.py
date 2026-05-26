@@ -1,3 +1,4 @@
+from __future__ import annotations
 import asyncio
 import json
 import time
@@ -752,6 +753,12 @@ async def npc_talk(body: TalkBody, bg: BackgroundTasks) -> dict[str, Any]:
         hist = p.history.setdefault(body.npc_id, [])
         hist_slice = list(hist[-14:])
 
+    # ── Prompt 压缩：历史超过 14 轮时压缩早期对话 ──
+    import backend.systems.prompt_compress as _pc
+    if len(hist_slice) >= _pc.COMPRESS_THRESHOLD:
+        hist_slice = await _pc.compress_conversation_history(
+            hist_slice, npc_name=NPCS.get(body.npc_id, {}).get("name", ""))
+
     messages = build_npc_messages(p, body.npc_id, body.message, hist_slice)
     t0 = time.perf_counter()
 
@@ -807,6 +814,12 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
     async with p.lock:
         hist = p.history.setdefault(body.npc_id, [])
         hist_slice = list(hist[-14:])
+
+    # ── Prompt 压缩：历史超过 14 轮时压缩早期对话 ──
+    import backend.systems.prompt_compress as _pc
+    if len(hist_slice) >= _pc.COMPRESS_THRESHOLD:
+        hist_slice = await _pc.compress_conversation_history(
+            hist_slice, npc_name=NPCS.get(body.npc_id, {}).get("name", ""))
 
     messages = build_npc_messages(p, body.npc_id, body.message, hist_slice)
 
@@ -923,6 +936,89 @@ async def finale(body: FinaleBody) -> dict[str, Any]:
         "flags": p.flags,
         "server_ms": server_ms,
     }
+
+
+# ══════════════════════════════════════════════════════════════
+# 悬赏榜 API（2026-05-26 新增）
+# ══════════════════════════════════════════════════════════════
+from backend.systems.bounty_board import (
+    generate_bounties,
+    can_accept_bounty,
+    accept_bounty,
+    check_bounty_progress,
+    complete_bounty,
+    abandon_bounty,
+    format_bounty_board,
+    refresh_bounties,
+)
+
+
+class RefreshBountyBody(BaseModel):
+    player_id: str
+
+
+class AcceptBountyBody(BaseModel):
+    player_id: str
+    bounty_id: str
+
+
+class CompleteBountyBody(BaseModel):
+    player_id: str
+
+
+class AbandonBountyBody(BaseModel):
+    player_id: str
+
+
+@router.post("/api/bounty/refresh")
+async def bounty_refresh(body: RefreshBountyBody) -> dict[str, Any]:
+    p = room.players.get(body.player_id)
+    if not p:
+        raise HTTPException(404, "未知 player_id")
+    refresh_bounties(p)
+    # 首次生成
+    if not p.bounties:
+        p.bounties = generate_bounties(p, count=3)
+    board_text = format_bounty_board(p)
+    return {"bounties": p.bounties, "board_text": board_text}
+
+
+@router.post("/api/bounty/accept")
+async def bounty_accept(body: AcceptBountyBody) -> dict[str, Any]:
+    p = room.players.get(body.player_id)
+    if not p:
+        raise HTTPException(404, "未知 player_id")
+    ok, msg = accept_bounty(p, body.bounty_id)
+    return {"ok": ok, "message": msg}
+
+
+@router.post("/api/bounty/check")
+async def bounty_check(body: CompleteBountyBody) -> dict[str, Any]:
+    p = room.players.get(body.player_id)
+    if not p:
+        raise HTTPException(404, "未知 player_id")
+    progress = check_bounty_progress(p)
+    if progress is None:
+        return {"has_active": False}
+    return {"has_active": True, **progress}
+
+
+@router.post("/api/bounty/complete")
+async def bounty_complete(body: CompleteBountyBody) -> dict[str, Any]:
+    p = room.players.get(body.player_id)
+    if not p:
+        raise HTTPException(404, "未知 player_id")
+    ok, msg, reward = complete_bounty(p)
+    return {"ok": ok, "message": msg, "reward": reward}
+
+
+@router.post("/api/bounty/abandon")
+async def bounty_abandon(body: AbandonBountyBody) -> dict[str, Any]:
+    p = room.players.get(body.player_id)
+    if not p:
+        raise HTTPException(404, "未知 player_id")
+    ok, msg = abandon_bounty(p)
+    return {"ok": ok, "message": msg}
 
 
 async def _bg_encounter(player_id: str) -> None:

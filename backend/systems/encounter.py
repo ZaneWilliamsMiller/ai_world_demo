@@ -1,3 +1,4 @@
+from __future__ import annotations
 """动态奇遇系统：基于世界状态生成上下文感知的叙事碎片
 
 设计理念（2026 AI前沿落地）：

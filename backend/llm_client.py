@@ -1,5 +1,8 @@
+from __future__ import annotations
 import json
 import logging
+import time
+import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -8,28 +11,69 @@ from pydantic import ValidationError
 
 from .config import settings
 from .models.llm_schema import NpcResponseSchema
+from .llm_cache import get_llm_cache
+from .circuit_breaker import get_circuit_breaker
 
 log = logging.getLogger("llm_client")
 
-# ═══════════════════════════════════════════════════════════════
+# ── 共享 httpx AsyncClient（连接池复用）──
+#  单例模式：整个进程复用同一个 client，避免每次创建新连接
+_client: httpx.AsyncClient | None = None
+_client_lock = asyncio.Lock()
+
+
+async def _get_client() -> httpx.AsyncClient:
+    """获取共享的 httpx AsyncClient（连接池）。"""
+    global _client
+    if _client is None or _client.is_closed:
+        async with _client_lock:
+            # 二次检查（double-check）
+            if _client is None or _client.is_closed:
+                timeout = httpx.Timeout(
+                    connect=10.0,    # 连接建立超时
+                    read=settings.llm_timeout_s,
+                    write=10.0,
+                    pool=5.0,
+                )
+                limits = httpx.Limits(
+                    max_connections=100,    # 最大并发连接
+                    max_keepalive_connections=20,  # 保活连接数
+                )
+                _client = httpx.AsyncClient(
+                    timeout=timeout,
+                    limits=limits,
+                    headers={"Authorization": f"Bearer {settings.llm_api_key}"},
+                )
+    return _client
+
+
+async def _close_client() -> None:
+    """关闭共享 client（用于优雅退出）。"""
+    global _client
+    if _client and not _client.is_closed:
+        await _client.aclose()
+        _client = None
+
+
+# ── 并发限速（Semaphore）──
+#  防止并发请求过多压垮 LLM API
+_llm_semaphore: asyncio.Semaphore | None = None
+
+
+def _get_semaphore() -> asyncio.Semaphore:
+    global _llm_semaphore
+    if _llm_semaphore is None:
+        _llm_semaphore = asyncio.Semaphore(settings.llm_max_concurrency)
+    return _llm_semaphore
+
+
+# ══════════════════════════════════════════════════════════════
 #  Prompt Cache (OpenAI 兼容)
-# ═══════════════════════════════════════════════════════════════
-# 原理：
-#   - 将大段静态 system prompt 标记 cache_control={type:"ephemeral"}，
-#     缓存命中时 API 跳过该块的推理计费，延迟降低 30~60%。
-#   - 多数兼容 API 在缓存窗口内（约 5 min）自动复用相同前缀 content。
-#   - 对于不支持 cache_control 的端点，标记会被静默忽略（不报错）。
-#   - 关键优化：talk_service.build_npc_messages 将 SOCIETY_BIBLE +
-#     角色卡等静态块放入 system 可缓存层；动态 context 放在
-#     后续 user message 中非缓存传递。
+# ══════════════════════════════════════════════════════════════
 
 
 def cached_system(content: str) -> list[dict[str, Any]]:
-    """生成带 cache_control 标记的 system content 数组。
-
-    把一大段静态 system prompt 包在一个 ephemeral cache 块里，
-    后续调用相同 content 即可命中缓存。
-    """
+    """生成带 cache_control 标记的 system content 数组。"""
     return [{
         "type": "text",
         "text": content,
@@ -38,84 +82,153 @@ def cached_system(content: str) -> list[dict[str, Any]]:
 
 
 def uncached(content: str) -> list[dict[str, Any]]:
-    """生成不带缓存的 content 数组（动态上下文块）。
-    
-    与 cached_system 配对使用：先拼 cached_system 块，再拼 uncached 动态块，
-    确保 API 只对缓存后的新内容计费。
-    """
+    """生成不带缓存的 content 数组（动态上下文块）。"""
     return [{"type": "text", "text": content}]
 
 
 async def chat_completion(
-    messages: list[dict[str, str]],
+    messages: list[dict[str, Any]],
     temperature: float = 0.7,
     max_tokens: int = 1024,
     response_format: dict[str, Any] | None = None,
 ) -> str:
-    url = f"{settings.llm_base_url.rstrip('/')}/chat/completions"
-    headers = {"Authorization": f"Bearer {settings.llm_api_key}"}
-    body: dict[str, Any] = {
-        "model": settings.llm_model,
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-    }
-    if response_format:
-        body["response_format"] = response_format
+    """OpenAI 兼容聊天补全（带连接池 + 熔断器 + 缓存 + 智能重试）。"""
+    cache = get_llm_cache()
+    cb = get_circuit_breaker()
+    sem = _get_semaphore()
 
-    # 简单重试逻辑
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            async with httpx.AsyncClient(timeout=settings.llm_timeout_s) as client:
-                r = await client.post(url, headers=headers, json=body)
+    # ── 1. 检查缓存 ──
+    cached = await cache.get(messages)
+    if cached is not None:
+        return cached
+
+    # ── 2. 熔断器检查 ──
+    if not await cb.allow():
+        raise RuntimeError(
+            f"LLM API circuit breaker OPEN (state={cb.state.value}); "
+            "requests blocked to prevent cascading failures"
+        )
+
+    # ── 3. 限速 ──
+    async with sem:
+        url = f"{settings.llm_base_url.rstrip('/')}/chat/completions"
+        body: dict[str, Any] = {
+            "model": settings.llm_model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        if response_format:
+            body["response_format"] = response_format
+
+        max_retries = settings.llm_max_retries
+        base_delay = settings.llm_retry_base_delay_s
+
+        for attempt in range(max_retries):
+            try:
+                client = await _get_client()
+                r = await client.post(url, json=body)
                 r.raise_for_status()
                 data = r.json()
-            # 记录缓存命中信息（如果 API 返回了 usage.cache 相关字段）
-            usage = data.get("usage", {})
-            if isinstance(usage, dict):
-                cached_tokens = usage.get("prompt_tokens_details", {}).get("cached_tokens", 0)
-                if cached_tokens:
-                    log.info("Prompt cache hit: %d cached tokens", cached_tokens)
-            return data["choices"][0]["message"]["content"] or ""
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 429 and attempt < max_retries - 1:
-                import asyncio
-                await asyncio.sleep(2 ** attempt)
-                continue
-            log.error("LLM API Error: %s", e.response.text[:512])
-            raise
-        except Exception as e:
-            if attempt < max_retries - 1:
-                import asyncio
-                await asyncio.sleep(2 ** attempt)
-                continue
-            log.error("LLM Request Failed: %s", e)
-            raise
+
+                # 记录缓存命中信息
+                usage = data.get("usage", {})
+                if isinstance(usage, dict):
+                    cached_tokens = usage.get("prompt_tokens_details", {}).get("cached_tokens", 0)
+                    if cached_tokens:
+                        log.info("Prompt cache hit: %d cached tokens", cached_tokens)
+
+                content = data["choices"][0]["message"]["content"] or ""
+
+                # ── 4. 写入缓存 ──
+                await cache.set(messages, content)
+
+                # ── 5. 熔断器：记录成功 ──
+                await cb.success()
+
+                return content
+
+            except httpx.HTTPStatusError as e:
+                status = e.response.status_code
+                is_retryable = status in (429, 502, 503, 504)
+
+                if is_retryable and attempt < max_retries - 1:
+                    # 智能退避：指数 + 随机 jitter
+                    delay = base_delay * (2 ** attempt) + (time.time() % 1.0) * 0.5
+                    log.warning(
+                        "LLM API %d error (attempt %d/%d), retrying in %.1fs: %s",
+                        status, attempt + 1, max_retries, delay, e.response.text[:128]
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+
+                # 非可重试错误或重试次数用尽
+                await cb.failure()
+                log.error("LLM API Error: %s", e.response.text[:512])
+                raise
+
+            except httpx.TimeoutException as e:
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt) + (time.time() % 1.0) * 0.3
+                    log.warning(
+                        "LLM API timeout (attempt %d/%d), retrying in %.1fs: %s",
+                        attempt + 1, max_retries, delay, e
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                await cb.failure()
+                log.error("LLM Request Timeout: %s", e)
+                raise
+
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt) + (time.time() % 1.0) * 0.3
+                    log.warning(
+                        "LLM request failed (attempt %d/%d), retrying in %.1fs: %s",
+                        attempt + 1, max_retries, delay, e
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                await cb.failure()
+                log.error("LLM Request Failed: %s", e)
+                raise
+
     return ""
 
 
 async def stream_chat_completion(
-    messages: list[dict[str, str]],
+    messages: list[dict[str, Any]],
     temperature: float = 0.7,
     max_tokens: int = 1024,
 ) -> AsyncIterator[str]:
-    """OpenAI 兼容流式：逐段产出 delta content（DeepSeek / vLLM 等常见）。"""
-    url = f"{settings.llm_base_url.rstrip('/')}/chat/completions"
-    headers = {"Authorization": f"Bearer {settings.llm_api_key}"}
-    body: dict[str, Any] = {
-        "model": settings.llm_model,
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-        "stream": True,
-    }
+    """OpenAI 兼容流式输出（带连接池 + 熔断器 + 智能重试）。"""
+    cb = get_circuit_breaker()
+    sem = _get_semaphore()
 
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            async with httpx.AsyncClient(timeout=settings.llm_timeout_s) as client:
-                async with client.stream("POST", url, headers=headers, json=body) as r:
+    # 熔断器检查
+    if not await cb.allow():
+        raise RuntimeError(
+            f"LLM API circuit breaker OPEN (state={cb.state.value}); "
+            "streaming request blocked"
+        )
+
+    async with sem:
+        url = f"{settings.llm_base_url.rstrip('/')}/chat/completions"
+        body: dict[str, Any] = {
+            "model": settings.llm_model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": True,
+        }
+
+        max_retries = settings.llm_max_retries
+        base_delay = settings.llm_retry_base_delay_s
+
+        for attempt in range(max_retries):
+            try:
+                client = await _get_client()
+                async with client.stream("POST", url, json=body) as r:
                     r.raise_for_status()
                     async for line in r.aiter_lines():
                         if not line or line.startswith(":"):
@@ -133,21 +246,40 @@ async def stream_chat_completion(
                             piece = delta.get("content")
                             if piece:
                                 yield piece
-            break
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 429 and attempt < max_retries - 1:
-                import asyncio
-                await asyncio.sleep(2 ** attempt)
-                continue
-            log.error("LLM Stream API Error: %s", e.response.text[:512])
-            raise
-        except Exception as e:
-            if attempt < max_retries - 1:
-                import asyncio
-                await asyncio.sleep(2 ** attempt)
-                continue
-            log.error("LLM Stream Request Failed: %s", e)
-            raise
+
+                # 流式成功 → 熔断器记录成功
+                await cb.success()
+                return
+
+            except httpx.HTTPStatusError as e:
+                status = e.response.status_code
+                is_retryable = status in (429, 502, 503, 504)
+
+                if is_retryable and attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt) + (time.time() % 1.0) * 0.5
+                    log.warning(
+                        "LLM Stream %d error (attempt %d/%d), retrying in %.1fs",
+                        status, attempt + 1, max_retries, delay
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+
+                await cb.failure()
+                log.error("LLM Stream API Error: %s", e.response.text[:512])
+                raise
+
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt) + (time.time() % 1.0) * 0.3
+                    log.warning(
+                        "LLM stream failed (attempt %d/%d), retrying in %.1fs: %s",
+                        attempt + 1, max_retries, delay, e
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                await cb.failure()
+                log.error("LLM Stream Request Failed: %s", e)
+                raise
 
 
 def parse_npc_reply_json(text: str) -> NpcResponseSchema:
@@ -173,10 +305,26 @@ def parse_finale(text: str) -> tuple[str, str | None]:
     m = pattern.search(text)
     if not m:
         return text.strip(), None
-    body = text[: m.start()].strip()
+    body = text[:m.start()].strip()
     title = m.group(1).strip().strip("《》").strip('"').strip("'")
     if not title:
         return body, None
     if len(title) > 32:
         title = title[:32]
     return body, title
+
+
+# ── 优雅退出：关闭共享 client ──
+import atexit
+
+
+def _cleanup() -> None:
+    """进程退出时关闭共享 client。"""
+    if _client and not _client.is_closed:
+        try:
+            asyncio.get_event_loop().run_until_complete(_close_client())
+        except Exception:
+            pass
+
+
+atexit.register(_cleanup)
