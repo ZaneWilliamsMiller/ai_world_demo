@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 
 # ── 配置 ──
-BACKEND_URL = "http://127.0.0.1:8766"
+BACKEND_URL = "http://127.0.0.1:8765"
 LLM_API_URL = "https://llmapi.paratera.com/v1"
 LLM_API_KEY = "sk-o5exptybwJAro8OfIqqmjQ"
 LLM_MODEL = "DeepSeek-V4-Pro"

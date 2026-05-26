@@ -549,6 +549,10 @@ async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
             save_game(p)
         except Exception:
             pass
+        # 悬赏进度追踪：记下最近一次移动后的坐标
+        p.last_move_map_id = p.map_id
+        p.last_move_px = p.px
+        p.last_move_py = p.py
         # 一次性陡差通行许可,用后即焚
         if allow_steep:
             p.allow_steep_next_move = False
@@ -788,6 +792,9 @@ async def npc_talk(body: TalkBody, bg: BackgroundTasks) -> dict[str, Any]:
 
     async with p.lock:
         out, needs_reflect = apply_npc_reply(p, body.npc_id, body.message, parsed)
+        # 悬赏进度追踪：记下最近对话的 NPC 与内容
+        p.last_talk_npc_id = body.npc_id
+        p.last_talk_message = body.message
 
     # 降级响应不触发反思（无实质内容可反思）
     if needs_reflect and not is_light_inquiry and not is_fallback:
@@ -855,6 +862,8 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
             try:
                 async with p.lock:
                     out, _ = apply_npc_reply(p, body.npc_id, body.message, parsed)
+                    p.last_talk_npc_id = body.npc_id
+                    p.last_talk_message = body.message
             except Exception:
                 out = {}
             out["server_ms"] = int((time.perf_counter() - t0) * 1000)
@@ -873,6 +882,8 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
         try:
             async with p.lock:
                 out, needs_reflect = apply_npc_reply(p, body.npc_id, body.message, parsed)
+                p.last_talk_npc_id = body.npc_id
+                p.last_talk_message = body.message
         except Exception as e:
             yield _sse({"error": f"状态写入失败:{e}", "fatal": True})
             return

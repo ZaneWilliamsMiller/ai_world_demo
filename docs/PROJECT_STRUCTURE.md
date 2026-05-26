@@ -1,6 +1,6 @@
 # 活纸江湖 · 项目结构说明
 
-> 最后更新：2026-05-27 (统一前端架构：static/ + godot/，合并去除 standalone 版本)
+> 最后更新：2026-05-27 (悬赏榜进度检测真实判定 + requires 变量填充修复)
 
 ## 顶层
 
@@ -87,7 +87,7 @@ living-paper/
 
 | 文件 | 作用 |
 |------|------|
-| `player.py` | PlayerState：属性/坐标/背包/声望/历史/悬赏榜 |
+| `player.py` | PlayerState：属性/坐标/背包/声望/历史/悬赏榜/对话移动追踪 |
 | `npc.py` | NPC 角色卡格式化函数 |
 | `llm_schema.py` | LLM JSON 响应 Schema（NpcResponseSchema 等） |
 

@@ -28,7 +28,7 @@ from typing import Any
 from backend.models.player import PlayerState
 from backend.data.npcs_data import NPCS
 from backend.data.factions import FACTIONS
-from backend.data.maps_data import MAPS
+from backend.data.maps_data import MAPS, MAP_LOCATIONS
 from backend.systems.time_weather import shichen_name
 from backend.systems.reputation import apply_rep_delta
 from backend.systems.core import push_rumor, apply_favor
@@ -62,7 +62,7 @@ _BOUNTY_TEMPLATES = [
         "type": "打探",
         "title": "打探{target_name}之虚实",
         "desc": "有人想了解{target_name}（{target_short}）最近在干什么，去向{location}的人打听。",
-        "requires": {"talk_to_npc": "{location_npc}", "ask_about": "{target_name}"},
+        "requires": {"talk_to_npc": "{location_npc_id}", "ask_about": "{target_name}"},
         "reward": {"coins": 150, "rep": {"caobang": 1, "yamen": 1}, "items_gain": ["密信"]},
         "min_rep": {},
     },
@@ -91,15 +91,18 @@ def _random_target_npc(p: PlayerState) -> str | None:
     return random.choice(candidates)
 
 
-def _random_location(p: PlayerState) -> tuple[str, str]:
-    """随机选一个地图格作为地点。"""
+def _random_location(p: PlayerState) -> tuple[str, str, int, int]:
+    """随机选一个地图格作为地点，返回 (map_id, loc_name, px, py)。"""
     map_id = p.map_id
     maps_data = MAPS.get(map_id, {})
     locations = maps_data.get("locations", [])
     if locations:
         loc = random.choice(locations)
-        return (map_id, loc["name"])
-    return (map_id, "市口")
+        loc_name = loc["name"]
+        # 查 MAP_LOCATIONS 获取坐标
+        coords = MAP_LOCATIONS.get(map_id, {}).get(loc_name, (10, 14))
+        return (map_id, loc_name, coords[0], coords[1])
+    return (map_id, "市口", 13, 13)
 
 
 def generate_bounties(p: PlayerState, count: int = 3) -> list[dict[str, Any]]:
@@ -123,31 +126,46 @@ def generate_bounties(p: PlayerState, count: int = 3) -> list[dict[str, Any]]:
         target_name = target_meta.get("name", target_id)
         target_short = target_meta.get("short", target_id)
 
-        map_id, loc_name = _random_location(p)
-        dest_id = p.map_id  # 简化：目的地是当前地图的某个地点
+        map_id, loc_name, loc_px, loc_py = _random_location(p)
+        # 再随机选一个目的地 NPC/位置（用于押送类）
+        dest_id = _random_target_npc(p)
+        if not dest_id:
+            dest_id = target_id
         dest_meta = NPCS.get(dest_id, {})
         dest_name = dest_meta.get("name", dest_id)
+        dest_coords = MAP_LOCATIONS.get(map_id, {}).get(dest_name, (10, 16))
 
-        title = tmpl["title"].format(
-            target_name=target_name,
-            target_short=target_short,
-            location=loc_name,
-            dest_name=dest_name,
-            lost_item="旧信物",
-            location_id=loc_name,
-            target_id=target_id,
-            dest_id=dest_name,
-        )
-        desc = tmpl["desc"].format(
-            target_name=target_name,
-            target_short=target_short,
-            location=loc_name,
-            dest_name=dest_name,
-            lost_item="旧信物",
-            location_id=loc_name,
-            target_id=target_id,
-            dest_id=dest_name,
-        )
+        # 对于 location_npc：选一个在当前地点活跃的 NPC
+        location_npc_id = target_id  # 兜底用目标 NPC
+        for nid, m in NPCS.items():
+            if m.get("hidden") or nid == "jiang":
+                continue
+            location_npc_id = nid
+            break
+        location_npc_meta = NPCS.get(location_npc_id, {})
+        location_npc_name = location_npc_meta.get("name", location_npc_id)
+
+        fmt = {
+            "target_name": target_name,
+            "target_short": target_short,
+            "target_id": target_id,
+            "location": loc_name,
+            "location_id": loc_name,
+            "location_npc_id": location_npc_id,   # NPC id (用于 requires 匹配)
+            "location_npc": location_npc_name,    # NPC 显示名 (用于用户展示)
+            "dest_name": dest_name,
+            "dest_id": dest_name,
+            "lost_item": "旧信物",
+        }
+
+        title = tmpl["title"].format(**fmt)
+        desc = tmpl["desc"].format(**fmt)
+
+        # 填充 requires 字典（模板占位符替换为实际值）
+        raw_req = tmpl["requires"].copy()
+        requires: dict[str, str] = {}
+        for k, v in raw_req.items():
+            requires[k] = str(v).format(**fmt)
 
         bounty: dict[str, Any] = {
             "id": f"{tmpl['id']}_{random.randint(1000, 9999)}",
@@ -155,10 +173,12 @@ def generate_bounties(p: PlayerState, count: int = 3) -> list[dict[str, Any]]:
             "title": title,
             "desc": desc,
             "reward": tmpl["reward"].copy(),
-            "requires": tmpl["requires"].copy(),
+            "requires": requires,
             "min_rep": tmpl.get("min_rep", {}),
             "issued_at_day": int(p.world_day),
             "issued_at_shichen": shichen_name(p.world_shichen),
+            # 押送/寻回类：预设目的地坐标，供 accept 时快照
+            "_target_coords": (map_id, loc_px, loc_py),
         }
         result.append(bounty)
 
@@ -184,7 +204,7 @@ def can_accept_bounty(p: PlayerState, bounty: dict[str, Any]) -> tuple[bool, str
 
 
 def accept_bounty(p: PlayerState, bounty_id: str) -> tuple[bool, str]:
-    """接取一个悬赏。"""
+    """接取一个悬赏。接取时快照目标坐标（押送类后续用）。"""
     bounties = p.bounties or []
     bounty = next((b for b in bounties if b["id"] == bounty_id), None)
     if not bounty:
@@ -194,12 +214,28 @@ def accept_bounty(p: PlayerState, bounty_id: str) -> tuple[bool, str]:
     if not ok:
         return False, reason
 
+    # ── 押送类：快照目的地坐标（用于 check_bounty_progress 的精确判定）──
+    requires = bounty.get("requires", {})
+    if "move_to" in requires:
+        # 使用生成时预设的坐标
+        coords = bounty.get("_target_coords")
+        if coords:
+            bounty["_target_pos"] = coords
+        else:
+            bounty["_target_pos"] = (p.map_id, p.px, p.py)
+
     p.active_bounty = bounty
     return True, f"已接取悬赏：「{bounty['title']}」。"
 
 
 def check_bounty_progress(p: PlayerState) -> dict[str, Any] | None:
-    """检查当前悬赏的完成进度（在玩家行动后调用）。"""
+    """检查当前悬赏的完成进度（在玩家行动后调用）。
+
+    非简化实现：真实判定玩家是否完成了悬赏要求。
+    - 缉拿/打探类：需与目标 NPC 对话，且内容涉及关键话题
+    - 押送类：需移动到目的地坐标
+    - 寻回类：需拥有目标物品
+    """
     bounty = p.active_bounty
     if not bounty:
         return None
@@ -207,28 +243,60 @@ def check_bounty_progress(p: PlayerState) -> dict[str, Any] | None:
     requires = bounty.get("requires", {})
     progress: dict[str, Any] = {"done": False, "reason": ""}
 
-    # 缉拿类：需要与目标 NPC 对话并问及关键词
+    # ── 缉拿/打探类：需要与目标 NPC 对话并问及关键词 ──
     if "talk_to_npc" in requires:
-        target = requires["talk_to_npc"]
-        # 检查最近一次对话是否是和目标 NPC 对话，且内容涉及关键词
-        # 简化实现：对话后自动判定进度
-        progress["done"] = True
-        progress["reason"] = f"已向{target}打探消息。"
+        target_npc = requires["talk_to_npc"]
+        ask_about = requires.get("ask_about", "")
+        last_npc = getattr(p, "last_talk_npc_id", None)
+        last_msg = getattr(p, "last_talk_message", None) or ""
 
-    # 押送类：需要移动到目的地
+        if last_npc == target_npc:
+            # 检查对话内容是否包含关键话题词
+            if ask_about and ask_about.lower() in last_msg.lower():
+                progress["done"] = True
+                npc_name = NPCS.get(target_npc, {}).get("name", target_npc)
+                progress["reason"] = f"已向{npc_name}打探「{ask_about}」。"
+            elif not ask_about:
+                # 无关键词限制：与目标 NPC 对话即算完成
+                progress["done"] = True
+                npc_name = NPCS.get(target_npc, {}).get("name", target_npc)
+                progress["reason"] = f"已与{npc_name}交谈。"
+            else:
+                npc_name = NPCS.get(target_npc, {}).get("name", target_npc)
+                progress["reason"] = f"已找到{npc_name}，但尚未问及「{ask_about}」。"
+        else:
+            npc_name = NPCS.get(target_npc, {}).get("name", target_npc)
+            progress["reason"] = f"尚未找到{npc_name}（目标：{target_npc}）。"
+
+    # ── 押送类：需要移动到目的地 ──
     elif "move_to" in requires:
-        dest = requires.get("move_to", "")
-        # 检查玩家是否已在目的地
-        # 简化实现：移动后自动判定
-        progress["done"] = True
-        progress["reason"] = f"已抵达{dest}。"
+        dest_map_id = requires.get("move_to", "")
+        # 使用 bounty 中存的目标坐标或 last_move 的坐标
+        target_pos = bounty.get("_target_pos")
+        if target_pos:
+            t_map, t_px, t_py = target_pos
+            if p.map_id == t_map and p.px == t_px and p.py == t_py:
+                progress["done"] = True
+                progress["reason"] = f"已抵达目的地坐标 ({t_px},{t_py})。"
+            else:
+                progress["reason"] = f"尚在途中，未到目的地。"
+        else:
+            # 兜底：检查最近的一次移动
+            last_map = getattr(p, "last_move_map_id", None)
+            if last_map and last_map == dest_map_id:
+                progress["done"] = True
+                progress["reason"] = f"已抵达{dest_map_id}。"
+            else:
+                progress["reason"] = f"尚未到达目的地。"
 
-    # 寻回类：需要获得物品并移动到地点
+    # ── 寻回类：需要获得物品 ──
     elif "have_item" in requires:
         item = requires["have_item"]
         if (p.inventory or {}).get(item, 0) > 0:
             progress["done"] = True
             progress["reason"] = f"已找到{item}。"
+        else:
+            progress["reason"] = f"尚未获得{item}。"
 
     return progress
 
