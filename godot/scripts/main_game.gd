@@ -322,7 +322,7 @@ func _add_stat_section(parent: VBoxContainer, title: String, color: Color) -> Pr
 	row.add_child(Control.new())
 	var vallbl := _lbl("--/--", 12, TEXT); row.add_child(vallbl)
 
-	var bar := ProgressBar.new(); bar.percent_visible = false
+	var bar := ProgressBar.new(); bar.show_percentage = false
 	bar.custom_minimum_size = Vector2(0, 8); bar.size_flags_horizontal = SIZE_EXPAND
 	var sb := StyleBoxFlat.new(); sb.bg_color = color
 	sb.corner_radius_top_left = 4; sb.corner_radius_top_right = 4
