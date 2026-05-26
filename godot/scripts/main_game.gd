@@ -96,7 +96,15 @@ func _ready() -> void:
 func _logged_in_deferred() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
+	# Apply split_offset after container has a real size
+	for c in _game_ui.get_children():
+		if c is HSplitContainer:
+			c.split_offset = -340
+			print("[Game] HSplitContainer size=%s children=%d" % [str(c.size), c.get_child_count()])
+			for gc in c.get_children():
+				print("[Game]   child name=%s size=%s cm=%s sf_h=%d sf_v=%d" % [gc.name, str(gc.size), str(gc.custom_minimum_size), gc.size_flags_horizontal, gc.size_flags_vertical])
 	print("[Game] _logged_in_deferred — sizes: game_ui=%s, self=%s" % [str(_game_ui.size), str(size)])
+	print("[Game] _npc_select is null: %s" % str(_npc_select == null))
 	_refresh()
 
 
@@ -218,6 +226,7 @@ func _overlay() -> ColorRect:
 #  └─────────────────────────────────┴──────────┘
 # ═══════════════════════════════════════════════════════
 func _build_game_ui() -> void:
+	print("[Game] _build_game_ui() START")
 	_game_ui = Control.new()
 	_game_ui.set_anchors_preset(PRESET_FULL_RECT)
 	add_child(_game_ui)
@@ -256,8 +265,7 @@ func _build_game_ui() -> void:
 	var hsplit := HSplitContainer.new()
 	hsplit.set_anchors_and_offsets_preset(PRESET_FULL_RECT, PRESET_MODE_MINSIZE, 0)
 	hsplit.offset_top = 40  # below top bar
-	split.dragger_visibility = SplitContainer.DRAGGER_HIDDEN
-	hsplit.split_offset = -340  # negative → right child gets ~340px
+	hsplit.dragger_visibility = SplitContainer.DRAGGER_HIDDEN
 	_game_ui.add_child(hsplit)
 
 	# ═══ LEFT: Map Panel (flex:1, fills available space) ═══
@@ -302,7 +310,9 @@ func _build_game_ui() -> void:
 	var side_panel := VBoxContainer.new()
 	side_panel.custom_minimum_size = Vector2(340, 0)
 	side_panel.add_theme_constant_override("separation", 6)
+	side_panel.size_flags_horizontal = SIZE_FILL
 	side_panel.size_flags_vertical = SIZE_EXPAND_FILL
+	side_panel.name = "SidePanel"
 	hsplit.add_child(side_panel)
 
 	# ─── Card 1: Player Status ───
@@ -565,18 +575,20 @@ func _refresh() -> void:
 	_update_map_player()
 
 	# NPC select dropdown
-	var cur_idx := _npc_select.selected
-	_npc_select.clear()
-	for n in gm.npcs_here:
-		_npc_select.add_item(n.get("name", n.get("id","?")))
-	if cur_idx >= 0 and cur_idx < _npc_select.item_count:
-		_npc_select.select(cur_idx)
+	if _npc_select:
+		var cur_idx := _npc_select.selected
+		_npc_select.clear()
+		for n in gm.npcs_here:
+			_npc_select.add_item(n.get("name", n.get("id","?")))
+		if cur_idx >= 0 and cur_idx < _npc_select.item_count:
+			_npc_select.select(cur_idx)
 
 	# NPC list in sidebar
-	for c in _npc_list_container.get_children(): c.queue_free()
-	for n in gm.npcs_here:
-		var entry := _npc_entry(n.get("name", n.get("id","?")), n.get("id",""))
-		_npc_list_container.add_child(entry)
+	if _npc_list_container:
+		for c in _npc_list_container.get_children(): c.queue_free()
+		for n in gm.npcs_here:
+			var entry := _npc_entry(n.get("name", n.get("id","?")), n.get("id",""))
+			_npc_list_container.add_child(entry)
 
 	# HUD bars & labels
 	_vigor_bar.max_value = gm.player_vigor_max; _vigor_bar.value = gm.player_vigor
