@@ -99,17 +99,20 @@ func _build_login() -> void:
 	var overlay_bg := ColorRect.new()
 	overlay_bg.color = Color(0,0,0,0.85)
 	overlay_bg.set_anchors_preset(PRESET_FULL_RECT)
-	overlay_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE  # let clicks pass through to panel
+	overlay_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_login_overlay.add_child(overlay_bg)
 
-	# Use VBoxContainer as centering layer — it handles SIZE_SHRINK_CENTER reliably
-	var center_vb := VBoxContainer.new()
-	center_vb.set_anchors_preset(PRESET_FULL_RECT)
-	center_vb.alignment = BoxContainer.ALIGNMENT_CENTER
-	center_vb.add_theme_constant_override("separation", 0)
-	_login_overlay.add_child(center_vb)
-
-	var box := _mk_panel(Vector2(380, 450), PRESET_CENTER, center_vb)
+	# Panel as direct child — center it next frame when size is known
+	var box := Panel.new()
+	box.custom_minimum_size = Vector2(380, 450)
+	box.size = Vector2(380, 450)
+	_add_panel_style(box)
+	_login_overlay.add_child(box)
+	# Defer centering until after first layout pass
+	_login_overlay.resized.connect(func():
+		var ps: Vector2 = _login_overlay.size
+		box.position = (ps - Vector2(380, 450)) / 2.0
+	)
 	var vb := VBoxContainer.new()
 	vb.set_anchors_preset(PRESET_FULL_RECT)
 	vb.add_theme_constant_override("separation", 12)
@@ -134,6 +137,10 @@ func _build_login() -> void:
 	vb.add_child(pd_cb)
 
 	var start_btn := _btn("踏入江湖", ACCENT)
+	start_btn.gui_input.connect(func(ev: InputEvent):
+		if ev is InputEventMouseButton and ev.pressed:
+			print("[Game] btn gui_input: button %d" % ev.button_index)
+	)
 	start_btn.pressed.connect(func():
 		print("[Game] 踏入江湖 clicked")
 		var nm: String = name_input.get_child(1).text.strip_edges()
@@ -153,13 +160,15 @@ func _build_login() -> void:
 func _show_load_dialog() -> void:
 	var saves: Array = await GameManager.list_saves()
 	var popup := _overlay()
-	# Use VBoxContainer as centering layer
-	var center_vb := VBoxContainer.new()
-	center_vb.set_anchors_preset(PRESET_FULL_RECT)
-	center_vb.alignment = BoxContainer.ALIGNMENT_CENTER
-	center_vb.add_theme_constant_override("separation", 0)
-	popup.add_child(center_vb)
-	var box := _mk_panel(Vector2(320, 300), PRESET_CENTER, center_vb)
+	var box := Panel.new()
+	box.custom_minimum_size = Vector2(320, 300)
+	box.size = Vector2(320, 300)
+	_add_panel_style(box)
+	popup.add_child(box)
+	popup.resized.connect(func():
+		var ps: Vector2 = popup.size
+		box.position = (ps - Vector2(320, 300)) / 2.0
+	)
 	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 6)
 	vb.set_anchors_preset(PRESET_FULL_RECT); box.add_child(vb)
 
