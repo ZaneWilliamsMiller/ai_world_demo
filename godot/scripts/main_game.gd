@@ -242,15 +242,29 @@ func _build_game_ui() -> void:
 	var main_margin := MarginContainer.new()
 	main_margin.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	main_margin.add_theme_constant_override("margin_top", 44)
+	# Debug: margin background
+	var mg_style := StyleBoxFlat.new()
+	mg_style.bg_color = Color(0.2, 0.1, 0.1, 1.0)
+	main_margin.add_theme_stylebox_override("panel", mg_style)
 	_game_ui.add_child(main_margin)
 
 	var hsplit := HSplitContainer.new()
 	hsplit.set_anchors_preset(PRESET_FULL_RECT)
+	# Debug: hsplit background
+	var hs_style := StyleBoxFlat.new()
+	hs_style.bg_color = Color(0.1, 0.2, 0.1, 1.0)
+	hsplit.add_theme_stylebox_override("panel", hs_style)
 	main_margin.add_child(hsplit)
 
 	# Left: Map
 	var left := VBoxContainer.new(); left.custom_minimum_size = Vector2(360, 0)
+	left.size_flags_horizontal = SIZE_EXPAND_FILL
+	left.size_flags_vertical = SIZE_EXPAND_FILL
 	hsplit.add_child(left)
+	# Debug: left background
+	var left_style := StyleBoxFlat.new()
+	left_style.bg_color = Color(0.1, 0.1, 0.15, 1.0)
+	left.add_theme_stylebox_override("panel", left_style)
 	left.add_child(_lbl(" 🗺️ 地图", 13, ACCENT, HORIZONTAL_ALIGNMENT_LEFT))
 
 	_map_scroll = ScrollContainer.new()
@@ -341,6 +355,10 @@ func _build_game_ui() -> void:
 	_favor_vbox = VBoxContainer.new()
 	_favor_vbox.add_theme_constant_override("separation", 2)
 	hud_vb.add_child(_favor_vbox)
+
+	# Debug: print layout chain sizes after a frame
+	await get_tree().process_frame
+	print("[Game] UI layout: game_ui=%s, margin=%s, hsplit=%s" % [str(_game_ui.size), str(main_margin.size), str(hsplit.size)])
 
 
 func _add_stat_section(parent: VBoxContainer, title: String, color: Color) -> ProgressBar:
