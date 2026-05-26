@@ -32,11 +32,13 @@ window.App = window.App || {};
 
   // ── 右栏：状态面板 ──
   function renderRightPanel(p, data) {
-    // 时辰
+    // 时辰 · 天气 · 天数
     document.getElementById("statTime").textContent =
-      (p.world_shichen || "") + "  " + (p.weather || "");
+      p.world_shichen || "--";
     document.getElementById("statWeather").textContent =
-      "\u7b2c" + (p.world_day || 1) + "\u65e5";
+      p.weather || "--";
+    var dayEl = document.getElementById("statDay");
+    if (dayEl) dayEl.textContent = p.world_day || 1;
 
     // 体力
     var v = p.vigor || 0, vm = p.vigor_max || 100;
@@ -52,7 +54,7 @@ window.App = window.App || {};
 
     // 钱银
     document.getElementById("statCoins").textContent =
-      (p.coins || 0) + " \u6587";
+      p.coins || 0;
 
     // 背包
     var inv = p.inventory || {};
@@ -150,7 +152,7 @@ window.App = window.App || {};
     }
     div.innerHTML = mapInfo.portals.map(function(pt) {
       var target = App.mapsData[pt.target_map_id];
-      return '<div style="cursor:pointer;padding:4px 0;" onclick="App.doMove('
+      return '<div class="portal-entry" onclick="App.doMove('
         + pt.to_x + ',' + pt.to_y + ').then(App.updateUI)">\u2197 \u5f80\u3010'
         + (target ? target.name : pt.target_map_id)
         + '\u3011(' + pt.to_x + ',' + pt.to_y + ')</div>';

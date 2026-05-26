@@ -63,77 +63,73 @@
 
   <div class="main" id="mainUI" style="display:none;">
 
-    <!-- 左栏：地图 -->
-    <div class="left-panel">
+    <!-- ========== 左栏：大地图 ========== -->
+    <div class="map-panel">
       <div class="panel-title" id="mapTitle">🗺️ 地图</div>
       <div class="map-container" id="mapContainer"></div>
-      <div class="legend">
-        <div>图例：
-          <span style="color:#4fc3f7;">■</span>你
-          <span style="color:#ff7043;">■</span>NPC
-          <span style="color:#ffd700;">↗</span>界门
-        </div>
+      <div class="map-legend">
+        <span style="color:#4fc3f7;">■</span> 你
+        <span style="color:#ff7043;">■</span> NPC
+        <span style="color:#ffd700;">↗</span> 界门
       </div>
     </div>
 
-    <!-- 中栏：对话 -->
-    <div class="center-panel">
-      <div class="dialogue-area" id="dialogueArea">
-        <div class="msg system" id="introMsg"></div>
-      </div>
-      <div class="input-bar">
-        <select id="npcSelect"></select>
-        <input type="text" id="msgInput" placeholder="对 TA 说些什么..."
-               onkeydown="if(event.key==='Enter')App.doTalk()">
-        <button onclick="App.doTalk()" id="talkBtn">发送</button>
-      </div>
-      <div id="moveStatus" style="display:none;padding:4px 12px;font-size:12px;color:var(--text-dim);"></div>
-    </div>
+    <!-- ========== 右栏：状态 + NPC + 对话 ========== -->
+    <div class="side-panel">
 
-    <!-- 右栏：状态 -->
-    <div class="right-panel">
-      <div class="stat-block">
-        <h3>🧭 时辰气象</h3>
-        <div class="stat-row">
-          <span id="statTime">--</span><span id="statWeather">--</span>
+      <!-- 状态区（紧凑） -->
+      <div class="stat-section">
+        <h3>🧭 时辰 · 气象</h3>
+        <div class="stat-grid">
+          <div class="stat-item"><span class="label">时辰</span><span class="value" id="statTime">--</span></div>
+          <div class="stat-item"><span class="label">天气</span><span class="value" id="statWeather">--</span></div>
+          <div class="stat-item"><span class="label">第</span><span class="value" id="statDay">1</span><span class="label">日</span></div>
+          <div class="stat-item"><span class="label">制钱</span><span class="value" id="statCoins">--</span><span class="label">文</span></div>
+        </div>
+        <div class="stat-bars">
+          <div class="stat-bar-row">
+            <span class="label">体力</span>
+            <div class="bar-bg"><div class="bar-fill vigor" id="barVigor" style="width:100%;"></div></div>
+            <span class="val" id="statVigor">--/--</span>
+          </div>
+          <div class="stat-bar-row">
+            <span class="label">心气</span>
+            <div class="bar-bg"><div class="bar-fill spirit" id="barSpirit" style="width:100%;"></div></div>
+            <span class="val" id="statSpirit">--/--</span>
+          </div>
+        </div>
+        <div class="inv-row" id="statInv">
+          <span style="color:#555;">身无长物</span>
         </div>
       </div>
-      <div class="stat-block">
-        <h3>💪 身心状态</h3>
-        <div class="stat-row">
-          <span>体力</span><span id="statVigor">--/--</span>
-        </div>
-        <div class="bar-bg">
-          <div class="bar-fill vigor" id="barVigor" style="width:0%;"></div>
-        </div>
-        <div class="stat-row" style="margin-top:6px;">
-          <span>心气</span><span id="statSpirit">--/--</span>
-        </div>
-        <div class="bar-bg">
-          <div class="bar-fill spirit" id="barSpirit" style="width:0%;"></div>
-        </div>
-      </div>
-      <div class="stat-block">
-        <h3>💰 钱银货物</h3>
-        <div class="stat-row">
-          <span>制钱</span><span id="statCoins">--</span>
-        </div>
-        <div class="inv-list" id="statInv"></div>
-      </div>
-      <div class="stat-block">
+
+      <!-- NPC 列表 + 界门 -->
+      <div class="npc-section">
         <h3>🧑🤝🧑 此地图人物</h3>
         <ul class="npc-list" id="npcList"></ul>
+        <div class="portal-list" id="portalList"></div>
       </div>
-      <div class="stat-block">
-        <h3>🏘️ 地图切换</h3>
-        <div id="portalList" style="font-size:12px;color:var(--text-dim);"></div>
+
+      <!-- 对话框 -->
+      <div class="dialogue-section">
+        <div class="dialogue-area" id="dialogueArea">
+          <div class="msg system" id="introMsg"></div>
+        </div>
+        <div class="input-bar">
+          <select id="npcSelect"></select>
+          <input type="text" id="msgInput" placeholder="对 TA 说些什么..."
+                 onkeydown="if(event.key==='Enter')App.doTalk()">
+          <button onclick="App.doTalk()" id="talkBtn">发送</button>
+        </div>
+        <div id="moveStatus" style="display:none;padding:2px 8px;font-size:11px;color:var(--text-dim);"></div>
       </div>
+
     </div>
 
   </div>
 </div>
 
-<!-- 脚本（加载顺序 = 依赖顺序） -->
+<!-- 脚本 -->
 <script src="/static/js/store.js"></script>
 <script src="/static/js/api.js"></script>
 <script src="/static/js/map.js"></script>
