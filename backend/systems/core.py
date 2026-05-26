@@ -3,7 +3,7 @@ from backend.models.player import PlayerState
 from backend.data.npcs_data import NPCS, NPC_FACTION, NPC_HABITS, NPC_STATE, LONG_DISTANCE_WANDERERS
 from backend.data.factions import FACTIONS
 from backend.data.maps_data import MAPS, MAP_LOCATIONS, LOCATION_KEYWORDS
-from backend.systems.pathfinding import tile_at, can_step_between, find_path, apply_portal
+from backend.systems.pathfinding import tile_at, can_step_between, find_path, apply_portal, is_dangerous
 from backend.systems.time_weather import is_night, shichen_name
 
 def clamp_delta(d: dict[str, int]) -> dict[str, int]:
@@ -804,3 +804,278 @@ def recent_events_block(p: PlayerState, npc_id: str) -> str:
         tag = f"[{e['shichen']}]"
         lines.append(f"· {tag} {e['text']}")
     return "\n".join(lines)
+
+# ────────────────────────────────────────────────────────────────────
+#  自然休息系统 — 安全地点歇脚恢复体力/心气/睡眠债 🎮
+# ────────────────────────────────────────────────────────────────────
+#  可休息的补给点：客栈 T、驿站 Y、市集 M、兵站 B、佛寺 @
+#  黑店 I 不可休息（虽可复活至此，但不能主动歇脚——险地不宜久留）
+#  每次休息消耗 2 时辰，恢复 25% 体力/心气（不超过上限），降低睡眠债
+
+REST_TILES = {"T", "Y", "M", "B", "@"}
+REST_VIGOR_FRAC = 0.25     # 恢复体力上限的 25%
+REST_SPIRIT_FRAC = 0.20    # 恢复心气上限的 20%
+REST_SLEEP_DEBT_DELTA = -3 # 减少睡眠债
+REST_TIME_TICKS = 2         # 消耗 2 时辰
+
+TILE_REST_MOOD: dict[str, str] = {
+    "T": "客栈",
+    "Y": "驿站",
+    "M": "市集",
+    "B": "兵站",
+    "@": "佛寺",
+}
+
+
+def can_rest_at(p: PlayerState) -> tuple[bool, str]:
+    """检查玩家是否可在当前位置休息，返回 (可休息, 原因说明)。"""
+    ch = tile_at(p.map_id, p.px, p.py) or "."
+    if ch not in REST_TILES:
+        mood = TILE_REST_MOOD.get(ch, "")
+        if ch == "I":
+            return (False, "黑店虎狼之地，不敢闭眼——换个安生处再说。")
+        nearby_hint = _nearby_rest_hint(p)
+        if nearby_hint:
+            return (False, f"此处无歇脚之所。{nearby_hint}")
+        return (False, "此处无歇脚之所，寻客栈(T)、佛寺(@)或驿站(Y)再歇不迟。")
+    mood = TILE_REST_MOOD.get(ch, "歇脚处")
+    return (True, mood)
+
+
+def _nearby_rest_hint(p: PlayerState) -> str:
+    """给玩家最近补给点的方向提示。"""
+    from backend.data.maps_data import MAPS
+    m = MAPS.get(p.map_id)
+    if not m:
+        return ""
+    best_dist = 999
+    best_tile = ""
+    for y, row in enumerate(m["rows"]):
+        for x, tile in enumerate(row):
+            if tile in REST_TILES:
+                d = abs(x - p.px) + abs(y - p.py)
+                if d < best_dist:
+                    best_dist = d
+                    best_tile = tile
+    if best_dist < 6 and best_tile:
+        mood = TILE_REST_MOOD.get(best_tile, "补给点")
+        direction = ""
+        dx = best_dist + 1
+        dy = best_dist + 1
+        return f"最近的{mood}距此约{best_dist}格，往那个方向走走看。"
+    return ""
+
+
+# ════════════════════════════════════════════════════════════════
+# 感知扫描系统 🎮 游戏性 - 危险直觉预警
+# ════════════════════════════════════════════════════════════════
+
+DANGER_SENSE_TILES: dict[str, str] = {
+    "~": "水声诡谲，似有暗流",
+    "!": "地面龟裂，隙缝纵横",
+    "@": "残垣断壁，已成危楼",
+    "^": "悬崖壁立，下临深渊",
+    "I": "门户虚掩，恐有埋伏",
+    "&": "草丛蹊跷，谨防剪径",
+}
+
+FOG_WEATHERS: frozenset[str] = frozenset({"重雾", "薄雾", "湿瘴"})
+
+
+def perception_scan(p: PlayerState) -> dict[str, Any] | None:
+    """玩家感知扫描：检测周围危险与特殊地形。
+    
+    受天气（雾减视距）和心气（低心气减感知）影响。
+    返回感知结果或 None（无感知）。
+    """
+    # 感知半径：基础 2 格，雾天减 1 格，心气低于 40% 减 1 格
+    radius = 2
+    if p.weather in FOG_WEATHERS:
+        radius -= 1
+    spirit = int(getattr(p, "spirit", 80))
+    if spirit < 40:
+        radius -= 1
+    radius = max(1, radius)
+
+    warnings: list[dict[str, Any]] = []
+    suspicions: list[dict[str, Any]] = []
+
+    rows = MAPS.get(p.map_id, {}).get("rows")
+    if not rows:
+        return None
+
+    for dy in range(-radius, radius + 1):
+        for dx in range(-radius, radius + 1):
+            if dx == 0 and dy == 0:
+                continue
+            nx, ny = p.px + dx, p.py + dy
+            if not (0 <= ny < len(rows) and 0 <= nx < len(rows[0])):
+                continue
+            ch = rows[ny][nx]
+            dist = abs(dx) + abs(dy)
+            if dist > radius:
+                continue
+            # 危险地形
+            if ch in DANGER_SENSE_TILES:
+                if is_dangerous(ch):
+                    warnings.append({
+                        "x": nx, "y": ny,
+                        "dist": dist,
+                        "danger": DANGER_SENSE_TILES[ch],
+                    })
+                elif ch in ("&"):
+                    # 草丛只在 1 格内感知
+                    if dist <= 1:
+                        suspicions.append({
+                            "x": nx, "y": ny,
+                            "dist": dist,
+                            "note": "草丛深处似有动静",
+                        })
+                elif ch == "I":
+                    if dist <= 1:
+                        suspicions.append({
+                            "x": nx, "y": ny,
+                            "dist": dist,
+                            "note": "这户门半掩，不太对劲",
+                        })
+
+    if not warnings and not suspicions:
+        return None
+
+    return {
+        "warnings": warnings,
+        "suspicions": suspicions,
+        "radius": radius,
+        "weather_penalty": p.weather in FOG_WEATHERS,
+        "spirit_penalty": spirit < 40,
+    }
+
+
+def danger_sense_narrative(p: PlayerState, scan: dict[str, Any] | None) -> str:
+    """将感知扫描结果转化为叙事性文字，用于对话上下文。"""
+    if not scan:
+        return ""
+
+    parts: list[str] = []
+    # 按距离排序，近的先
+    warnings = sorted(scan.get("warnings", []), key=lambda x: x.get("dist", 99))
+    suspicions = sorted(scan.get("suspicions", []), key=lambda x: x.get("dist", 99))
+
+
+    for w in warnings[:3]:
+        d = w.get("dist", 99)
+        txt = w.get("danger", "")
+        if d == 1:
+            parts.append(f"{txt}就在近旁")
+        elif d == 2:
+            parts.append(f"{txt}在左近")
+        else:
+            parts.append(f"{txt}在远处")
+
+    for s in suspicions[:2]:
+        dist = s.get("dist", 99)
+        note = s.get("note", "")
+        if dist <= 1:
+            parts.append(note)
+
+    if not parts:
+        return ""
+
+    prefixes = [
+        "【感知】",
+        "【直觉】",
+        "【警惕】",
+    ]
+    prefix = prefixes[len(parts) % 3] if parts else "【感知】"
+    return f"{prefix}{'，'.join(parts)}。"
+
+
+def rest_at_location(p: PlayerState) -> dict[str, object]:
+    """在当前位置休息，恢复体力/心气，降低睡眠债。
+
+    返回：
+    {
+        "ok": True/False,
+        "reason": str,           # 成功/失败原因
+        "delta": {vigor, spirit, sleep_debt},
+        "ticks_passed": int,     # 过去多少时辰
+        "note": str,             # 叙事描述
+    }
+    """
+    can, mood = can_rest_at(p)
+    if not can:
+        return {
+            "ok": False,
+            "reason": mood,
+            "delta": {"vigor": 0, "spirit": 0, "sleep_debt": 0},
+            "ticks_passed": 0,
+            "note": "",
+        }
+
+    vmax = int(getattr(p, "vigor_max", 100) or 100)
+    smax = int(getattr(p, "spirit_max", 100) or 100)
+    cur_v = int(getattr(p, "vigor", 80) or 0)
+    cur_s = int(getattr(p, "spirit", 80) or 0)
+    cur_sd = int(getattr(p, "sleep_debt", 0) or 0)
+
+    # 计算恢复量（不对已满者硬回）
+    v_restore = max(1, int(vmax * REST_VIGOR_FRAC))
+    s_restore = max(1, int(smax * REST_SPIRIT_FRAC))
+    actual_v = min(v_restore, vmax - cur_v)
+    actual_s = min(s_restore, smax - cur_s)
+    actual_sd = max(REST_SLEEP_DEBT_DELTA, -cur_sd)  # 不降到 0 以下
+
+    # 已充满的情况下：仍消耗时间但不恢复（歇会儿也是好的）
+    if actual_v <= 0 and actual_s <= 0 and actual_sd >= 0:
+        # 推进时辰（即使不值，也算打发时间）
+        from backend.systems.time_weather import advance_clock
+        advance_clock(p, REST_TIME_TICKS)
+        return {
+            "ok": True,
+            "reason": f"你在{mood}略坐了坐，身上已经松快了，再歇也是白坐。",
+            "delta": {"vigor": 0, "spirit": 0, "sleep_debt": 0},
+            "ticks_passed": REST_TIME_TICKS,
+            "note": f"你在{mood}略坐了坐——时辰不声不响地溜了过去。",
+        }
+
+    # 应用恢复
+    from backend.systems.time_weather import advance_clock, shichen_name
+    actual_vigor = apply_vigor_delta(p, actual_v) if actual_v > 0 else 0
+    actual_spirit = apply_spirit_delta(p, actual_s) if actual_s > 0 else 0
+    if actual_sd < 0:
+        p.sleep_debt = max(0, cur_sd + actual_sd)
+        actual_sleep_d = cur_sd - p.sleep_debt  # 正数=减少量
+    else:
+        actual_sleep_d = 0
+
+    # 推进时辰
+    advance_clock(p, REST_TIME_TICKS)
+
+    # 构建叙事
+    parts: list[str] = []
+    if actual_vigor > 0:
+        parts.append(f"体力恢复了些（+{actual_vigor}）")
+    if actual_spirit > 0:
+        parts.append(f"心头松快了（+{actual_spirit}）")
+    if actual_sleep_d > 0:
+        parts.append("倦意减了几分")
+
+    detail = "、".join(parts) if parts else "略坐了坐"
+    note = f"你在{mood}歇了一阵——{detail}。"
+
+    # 记录事件
+    from backend.systems.reputation import push_event
+    push_event(p, f"{p.display_name}在{mood}歇脚，{detail}", scope="self", actor=p.display_name)
+
+    return {
+        "ok": True,
+        "reason": detail,
+        "delta": {
+            "vigor": actual_vigor,
+            "spirit": actual_spirit,
+            "sleep_debt": -(actual_sleep_d) if actual_sleep_d > 0 else 0,
+        },
+        "ticks_passed": REST_TIME_TICKS,
+        "note": note,
+        "location": mood,
+    }

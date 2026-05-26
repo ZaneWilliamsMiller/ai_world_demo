@@ -29,6 +29,8 @@ from backend.systems.core import (
     init_npc_positions,
     npc_catalog_for_player,
     maybe_wander_npcs,
+    perception_scan,
+    danger_sense_narrative,
 )
 from backend.systems.encounter import should_trigger_encounter, generate_dynamic_encounter, apply_encounter
 from backend.systems.reputation import push_event
@@ -222,6 +224,8 @@ async def load_player(body: LoadBody) -> dict[str, Any]:
     room.players[body.player_id] = loaded
     init_npc_positions(loaded)
     init_npc_inventories(loaded)
+    scan = perception_scan(loaded)
+    danger_sense = danger_sense_narrative(loaded, scan) if scan else None
     return {
         "player_id": loaded.player_id,
         "display_name": loaded.display_name,
@@ -231,6 +235,10 @@ async def load_player(body: LoadBody) -> dict[str, Any]:
         "npc_catalog": _npc_catalog(loaded),
         "player": _player_public(loaded),
         "npcs_here": _npcs_here(loaded),
+        "danger_sense": {
+            "alert": danger_sense or None,
+            "scan": scan,
+        },
         "flags": loaded.flags,
         "ended": loaded.ended,
         "ending_label": loaded.ending_label,
@@ -295,11 +303,67 @@ async def use_item(body: UseItemBody) -> dict[str, Any]:
     }
 
 
+# ═══════════════════════════════════════════════════════
+#  自然休息 API（🎮 游戏性）
+# ═══════════════════════════════════════════════════════
+
+class RestBody(BaseModel):
+    player_id: str
+
+
+@router.post("/api/rest")
+async def player_rest(body: RestBody) -> dict[str, Any]:
+    """在补给点歇脚恢复体力/心气/睡眠债。
+
+    可休息的地形：客栈(T)、驿站(Y)、市集(M)、兵站(B)、佛寺(@)。
+    每次休息消耗 2 时辰；若属性已满则略坐一坐（仍过时辰但不回）。
+
+    返回：ok、delta（变化量）、ticks_passed、note（叙事）。
+    """
+    p = room.players.get(body.player_id)
+    if not p:
+        raise HTTPException(404, f"未知 player_id: {body.player_id}")
+    if getattr(p, "dead", False):
+        raise HTTPException(400, "魂已归西，无足歇矣。")
+    if p.ended:
+        raise HTTPException(400, "本局已收束")
+    if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
+        raise HTTPException(400, "昏迷之中，身不由己。")
+    if getattr(p, "move_locked", False):
+        raise HTTPException(409, "身陷险局，须先周旋脱身方可歇息。")
+
+    from backend.systems.core import rest_at_location
+
+    async with p.lock:
+        result = rest_at_location(p)
+        # 自动存档
+        try:
+            from backend.systems.save_system import save_game
+            save_game(p)
+        except Exception:
+            pass
+
+    scan = perception_scan(p)
+    danger_sense = danger_sense_narrative(p, scan) if scan else None
+    return {
+        **result,
+        "player": _player_public(p),
+        "danger_sense": {
+            "alert": danger_sense or None,
+            "scan": scan,
+        },
+        "atmosphere": scene_context(p),
+        "events": list(p.events[-5:]),
+    }
+
+
 @router.post("/api/hello")
 async def hello(body: HelloBody) -> dict[str, Any]:
     p = room.get_or_create(body.player_id, body.display_name, body.gender, body.permadeath)
     init_npc_positions(p)
     init_npc_inventories(p)
+    scan = perception_scan(p)
+    danger_sense = danger_sense_narrative(p, scan) if scan else None
     return {
         "player_id": p.player_id,
         "display_name": p.display_name,
@@ -309,6 +373,10 @@ async def hello(body: HelloBody) -> dict[str, Any]:
         "npc_catalog": _npc_catalog(p),
         "player": _player_public(p),
         "npcs_here": _npcs_here(p),
+        "danger_sense": {
+            "alert": danger_sense or None,
+            "scan": scan,
+        },
         "flags": p.flags,
         "ended": p.ended,
         "ending_label": p.ending_label,
@@ -500,9 +568,17 @@ async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
         if should_trigger_encounter(p):
             bg.add_task(_bg_encounter, p.player_id)
 
+    # 感知扫描：当前位置周围危险预警
+    scan = perception_scan(p)
+    danger_sense = danger_sense_narrative(p, scan) if scan else None
+
     return {
         "player": _player_public(p),
         "npcs_here": _npcs_here(p),
+        "danger_sense": {
+            "alert": danger_sense or None,
+            "scan": scan,
+        },
         "path_map_id": prev_map,
         "path": actual_path,
         "path_cost": cost,
@@ -531,10 +607,17 @@ async def get_state(player_id: str) -> dict[str, Any]:
     p = room.players.get(player_id)
     if not p:
         raise HTTPException(404, "未知 player_id")
+    scan = perception_scan(p)
+    danger_sense = danger_sense_narrative(p, scan) if scan else None
+
     return {
         "display_name": p.display_name,
         "player": _player_public(p),
         "npcs_here": _npcs_here(p),
+        "danger_sense": {
+            "alert": danger_sense or None,
+            "scan": scan,
+        },
         "flags": p.flags,
         "ended": p.ended,
         "ending_label": p.ending_label,
