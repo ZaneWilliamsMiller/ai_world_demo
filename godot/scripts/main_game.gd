@@ -397,6 +397,8 @@ func _build_map() -> void:
 	var total_h := _map_rows.size() * TILE_SIZE
 	_map_container.set_position(Vector2.ZERO)
 	_map_container.custom_minimum_size = Vector2(total_w, total_h)
+	# Force actual size — Control nodes don't auto-expand to custom_minimum_size
+	_map_container.set_size(Vector2(total_w, total_h))
 
 	for y in _map_rows.size():
 		var row: String = _map_rows[y]
