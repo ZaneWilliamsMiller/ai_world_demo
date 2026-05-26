@@ -81,6 +81,9 @@ def _player_public(p: PlayerState) -> dict[str, Any]:
         "inventory": dict(p.inventory),
         "reputation": dict(p.reputation),
         "npc_states": dict(getattr(p, "npc_states", {}) or {}),
+        "bounties": getattr(p, "bounties", None) or [],
+        "active_bounty": getattr(p, "active_bounty", None),
+        "completed_bounties": getattr(p, "completed_bounties", None) or [],
     }
 
 def _maps_public() -> dict[str, Any]:
