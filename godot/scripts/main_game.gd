@@ -1,6 +1,7 @@
 extends Control
 ## 活纸 · 江湖行纪 — Godot 桌面版
 ## 单文件 UI，程序化构建全部界面元素。
+## 布局对齐 Web 版：两栏（地图主视区 | 侧栏 360px）
 ## 依赖 Autoload: ApiClient, GameManager
 
 # ═══════════════════════════════════════════════════════
@@ -34,7 +35,7 @@ const TILE_COLORS := {
 const TILE_SIZE := 14
 
 # ═══════════════════════════════════════════════════════
-#  Node Refs (set in _ready)
+#  Node Refs (set in _ready / _build_game_ui)
 # ═══════════════════════════════════════════════════════
 var _login_overlay: Control
 var _game_ui: Control
@@ -55,13 +56,14 @@ var _msg_input: LineEdit
 var _send_btn: Button
 var _is_streaming: bool = false
 
-# HUD
+# HUD — direct Label refs (no more _mini_panel indirection)
 var _vigor_bar: ProgressBar ; var _vigor_label: Label
 var _spirit_bar: ProgressBar ; var _spirit_label: Label
 var _coins_label: Label
 var _time_label: Label ; var _weather_label: Label ; var _map_name_label: Label
 var _inventory_flow: HFlowContainer
 var _favor_vbox: VBoxContainer
+var _npc_list_container: VBoxContainer  # NPC list in sidebar
 
 
 func _ready() -> void:
@@ -75,10 +77,8 @@ func _ready() -> void:
 
 	GameManager.logged_in.connect(func():
 		print("[Game] logged_in signal fired — switching UI")
-		print("[Game] _login_overlay=%s _game_ui=%s" % ["null" if _login_overlay == null else "ok", "null" if _game_ui == null else "ok"])
 		_login_overlay.visible = false
 		_game_ui.visible = true
-		# Force layout recalculation — visible change doesn't trigger resize cascade
 		call_deferred("_logged_in_deferred")
 	)
 	GameManager.logged_out.connect(func():
@@ -92,7 +92,6 @@ func _ready() -> void:
 
 
 func _logged_in_deferred() -> void:
-	# Deferred after visibility change — wait for full layout cascade
 	await get_tree().process_frame
 	await get_tree().process_frame
 	print("[Game] _logged_in_deferred — sizes: game_ui=%s, self=%s" % [str(_game_ui.size), str(size)])
@@ -113,11 +112,11 @@ func _build_login() -> void:
 	overlay_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_login_overlay.add_child(overlay_bg)
 
-	# Full-screen centered panel — use entire overlay as the panel
 	var box := Panel.new()
 	box.set_anchors_preset(PRESET_FULL_RECT)
 	_add_panel_style(box)
 	_login_overlay.add_child(box)
+
 	var vb := VBoxContainer.new()
 	vb.set_anchors_preset(PRESET_FULL_RECT)
 	vb.add_theme_constant_override("separation", 12)
@@ -142,20 +141,13 @@ func _build_login() -> void:
 	vb.add_child(pd_cb)
 
 	var start_btn := _btn("踏入江湖", ACCENT)
-	start_btn.gui_input.connect(func(ev: InputEvent):
-		if ev is InputEventMouseButton and ev.pressed:
-			print("[Game] btn gui_input: button %d" % ev.button_index)
-	)
 	start_btn.pressed.connect(func():
-		print("[Game] 踏入江湖 clicked")
 		var nm: String = name_input.get_child(1).text.strip_edges()
 		if nm == "": nm = "江湖客"
 		var g: String = "未言"
 		var sel: int = gender_sel.get_selected_id()
 		if sel >= 0 and sel <= 2: g = ["男","女","未言"][sel]
-		print("[Game] calling GameManager.hello(%s, %s, %s)" % [nm, g, pd_cb.button_pressed])
 		GameManager.hello(nm, g, pd_cb.button_pressed)
-		print("[Game] hello() returned (async — UI switch via logged_in signal)")
 	)
 	vb.add_child(start_btn)
 
@@ -212,22 +204,33 @@ func _overlay() -> ColorRect:
 
 
 # ═══════════════════════════════════════════════════════
-#  Game UI
+#  Game UI — 两栏布局（对齐 Web 版）
+#  ┌─────────────────────────────────┬──────────┐
+#  │         Top Bar (40px)          │          │
+#  ├─────────────────────────────────┤  Side    │
+#  │                                 │  Panel   │
+#  │       Map Panel (flex:1)        │  (360px) │
+#  │                                 │          │
+#  │                                 ├──────────┤
+#  │                                 │ Dialogue │
+#  └─────────────────────────────────┴──────────┘
 # ═══════════════════════════════════════════════════════
 func _build_game_ui() -> void:
 	_game_ui = Control.new()
 	_game_ui.set_anchors_preset(PRESET_FULL_RECT)
 	add_child(_game_ui)
 
-	# ── Top Bar ──
+	# ═══ Top Bar (fixed height 40px) ═══
 	var topbar := Panel.new()
 	topbar.set_anchors_and_offsets_preset(PRESET_TOP_WIDE, PRESET_MODE_MINSIZE, 0)
-	topbar.custom_minimum_size = Vector2(0, 44)
+	topbar.custom_minimum_size = Vector2(0, 40)
 	_add_panel_style(topbar)
 	_game_ui.add_child(topbar)
 
-	var top_hb := HBoxContainer.new(); top_hb.add_theme_constant_override("separation", 12)
-	top_hb.set_anchors_preset(PRESET_FULL_RECT); topbar.add_child(top_hb)
+	var top_hb := HBoxContainer.new()
+	top_hb.add_theme_constant_override("separation", 16)
+	top_hb.set_anchors_preset(PRESET_FULL_RECT)
+	topbar.add_child(top_hb)
 	top_hb.add_child(_lbl("🏮 活纸 · 江湖行纪", 16, ACCENT))
 	top_hb.add_child(Control.new())  # spacer
 
@@ -247,63 +250,148 @@ func _build_game_ui() -> void:
 	)
 	top_hb.add_child(quit_btn)
 
-	# ── Main 3-column ──
-	var main_margin := MarginContainer.new()
-	main_margin.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
-	main_margin.add_theme_constant_override("margin_top", 44)
-	# Debug: margin background
-	var mg_style := StyleBoxFlat.new()
-	mg_style.bg_color = Color(0.2, 0.1, 0.1, 1.0)
-	main_margin.add_theme_stylebox_override("panel", mg_style)
-	_game_ui.add_child(main_margin)
+	# ═══ Main Area: 2-column HSplitContainer ═══
+	var main_mc := MarginContainer.new()
+	main_mc.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	main_mc.add_theme_constant_override("margin_top", 40)
+	_game_ui.add_child(main_mc)
 
 	var hsplit := HSplitContainer.new()
 	hsplit.set_anchors_preset(PRESET_FULL_RECT)
-	# Debug: hsplit background
-	var hs_style := StyleBoxFlat.new()
-	hs_style.bg_color = Color(0.1, 0.2, 0.1, 1.0)
-	hsplit.add_theme_stylebox_override("panel", hs_style)
-	main_margin.add_child(hsplit)
+	hsplit.dragger_visibility = HSplitContainer.DRAGGER_HIDDEN
+	hsplit.split_offset = -360  # negative → right child gets ~360px
+	main_mc.add_child(hsplit)
 
-	# Left: Map
-	var left := VBoxContainer.new(); left.custom_minimum_size = Vector2(360, 0)
-	left.size_flags_horizontal = SIZE_EXPAND_FILL
-	left.size_flags_vertical = SIZE_EXPAND_FILL
-	hsplit.add_child(left)
-	# Debug: left background
-	var left_style := StyleBoxFlat.new()
-	left_style.bg_color = Color(0.1, 0.1, 0.15, 1.0)
-	left.add_theme_stylebox_override("panel", left_style)
-	left.add_child(_lbl(" 🗺️ 地图", 13, ACCENT, HORIZONTAL_ALIGNMENT_LEFT))
+	# ═══ LEFT: Map Panel (flex:1, fills available space) ═══
+	var map_panel := VBoxContainer.new()
+	map_panel.size_flags_horizontal = SIZE_EXPAND_FILL
+	map_panel.size_flags_vertical = SIZE_EXPAND_FILL
+	hsplit.add_child(map_panel)
 
+	# Map title bar
+	var map_title := Panel.new()
+	map_title.custom_minimum_size = Vector2(0, 28)
+	var mt_sb := StyleBoxFlat.new()
+	mt_sb.bg_color = BG_PANEL
+	mt_sb.border_width_bottom = 1; mt_sb.border_color = BORDER
+	mt_sb.content_margin_left = 12; mt_sb.content_margin_right = 12
+	mt_sb.content_margin_top = 4; mt_sb.content_margin_bottom = 4
+	map_title.add_theme_stylebox_override("panel", mt_sb)
+	map_panel.add_child(map_title)
+	var mt_hb := HBoxContainer.new()
+	mt_hb.set_anchors_preset(PRESET_FULL_RECT); map_title.add_child(mt_hb)
+	mt_hb.add_child(_lbl("🗺️ 地图", 13, ACCENT, HORIZONTAL_ALIGNMENT_LEFT))
+	mt_hb.add_child(Control.new())
+	_map_name_label = _lbl("--", 11, DIM)  # reuse as map name in title bar
+	mt_hb.add_child(_map_name_label)
+
+	# Map scroll container (fills remaining space)
 	_map_scroll = ScrollContainer.new()
-	_map_scroll.size_flags_horizontal = SIZE_EXPAND
-	_map_scroll.size_flags_vertical = SIZE_EXPAND
-	# Debug: give scroll a visible background
-	var scroll_style := StyleBoxFlat.new()
-	scroll_style.bg_color = Color.RED
-	_map_scroll.add_theme_stylebox_override("panel", scroll_style)
-	left.add_child(_map_scroll)
+	_map_scroll.size_flags_horizontal = SIZE_EXPAND_FILL
+	_map_scroll.size_flags_vertical = SIZE_EXPAND_FILL
+	map_panel.add_child(_map_scroll)
 
-	# Use plain Control as map container — PanelContainer adds unwanted padding
+	# Map content container (plain Control with dark bg)
 	_map_container = Control.new()
-	# Give it a visible background so we can confirm it renders
 	var map_bg := ColorRect.new()
 	map_bg.name = "MapBackground"
-	map_bg.color = Color(0.08, 0.08, 0.12)  # dark blue-gray
+	map_bg.color = BG_DARK
 	map_bg.set_anchors_preset(PRESET_FULL_RECT)
 	_map_container.add_child(map_bg)
 	_map_scroll.add_child(_map_container)
 
-	# Center: Dialogue
-	var center := VBoxContainer.new(); center.add_theme_constant_override("separation", 0)
-	center.size_flags_horizontal = SIZE_EXPAND
-	hsplit.add_child(center)
+	# ═══ RIGHT: Side Panel (status + NPC list + dialogue) ═══
+	var side_panel := VBoxContainer.new()
+	side_panel.custom_minimum_size = Vector2(360, 0)
+	side_panel.size_flags_vertical = SIZE_EXPAND_FILL
+	hsplit.add_child(side_panel)
 
+	# --- Status Section ---
+	var stat_panel := Panel.new(); _add_panel_style(stat_panel)
+	side_panel.add_child(stat_panel)
+	var stat_vb := VBoxContainer.new()
+	stat_vb.add_theme_constant_override("separation", 4)
+	stat_vb.set_anchors_preset(PRESET_FULL_RECT)
+	stat_panel.add_child(stat_vb)
+
+	# Vigor bar
+	_vigor_bar = ProgressBar.new(); _vigor_bar.show_percentage = false
+	_vigor_bar.custom_minimum_size = Vector2(0, 8); _vigor_bar.size_flags_horizontal = SIZE_EXPAND
+	var vg_sb := StyleBoxFlat.new(); vg_sb.bg_color = GREEN
+	vg_sb.corner_radius_top_left = 4; vg_sb.corner_radius_top_right = 4
+	vg_sb.corner_radius_bottom_left = 4; vg_sb.corner_radius_bottom_right = 4
+	_vigor_bar.add_theme_stylebox_override("fill", vg_sb)
+	var vigor_row := HBoxContainer.new(); stat_vb.add_child(vigor_row)
+	vigor_row.add_child(_lbl("💪 体力", 12, DIM)); vigor_row.add_child(Control.new())
+	_vigor_label = _lbl("--/--", 12, TEXT); vigor_row.add_child(_vigor_label)
+	stat_vb.add_child(_vigor_bar)
+
+	# Spirit bar
+	_spirit_bar = ProgressBar.new(); _spirit_bar.show_percentage = false
+	_spirit_bar.custom_minimum_size = Vector2(0, 8); _spirit_bar.size_flags_horizontal = SIZE_EXPAND
+	var sp_sb := StyleBoxFlat.new(); sp_sb.bg_color = ACCENT
+	sp_sb.corner_radius_top_left = 4; sp_sb.corner_radius_top_right = 4
+	sp_sb.corner_radius_bottom_left = 4; sp_sb.corner_radius_bottom_right = 4
+	_spirit_bar.add_theme_stylebox_override("fill", sp_sb)
+	var spirit_row := HBoxContainer.new(); stat_vb.add_child(spirit_row)
+	spirit_row.add_child(_lbl("🧘 心气", 12, DIM)); spirit_row.add_child(Control.new())
+	_spirit_label = _lbl("--/--", 12, TEXT); spirit_row.add_child(_spirit_label)
+	stat_vb.add_child(_spirit_bar)
+
+	# Info labels
+	_coins_label = _lbl("💰 制钱: 0 文", 13, TEXT); stat_vb.add_child(_coins_label)
+	_time_label = _lbl("🧭 时辰: --", 13, TEXT); stat_vb.add_child(_time_label)
+	_weather_label = _lbl("🌤 天气: --", 13, TEXT); stat_vb.add_child(_weather_label)
+	# Note: _map_name_label is reused in map title bar above
+
+	# --- Inventory (compact, in status panel) ---
+	stat_vb.add_child(_lbl("🎒 行囊", 12, DIM))
+	_inventory_flow = HFlowContainer.new()
+	_inventory_flow.add_theme_constant_override("h_separation", 4)
+	_inventory_flow.add_theme_constant_override("v_separation", 2)
+	stat_vb.add_child(_inventory_flow)
+
+	# --- Favor (compact, in status panel) ---
+	stat_vb.add_child(_lbl("❤ 好感", 12, DIM))
+	_favor_vbox = VBoxContainer.new()
+	_favor_vbox.add_theme_constant_override("separation", 2)
+	stat_vb.add_child(_favor_vbox)
+
+	# --- NPC Section (scrollable, flexible height) ---
+	var npc_header := Panel.new()
+	var nh_sb := StyleBoxFlat.new(); nh_sb.bg_color = BG_PANEL
+	nh_sb.border_width_bottom = 1; nh_sb.border_color = BORDER
+	nh_sb.content_margin_left = 12; nh_sb.content_margin_right = 12
+	nh_sb.content_margin_top = 6; nh_sb.content_margin_bottom = 4
+	npc_header.add_theme_stylebox_override("panel", nh_sb)
+	side_panel.add_child(npc_header)
+	npc_header.add_child(_lbl("👥 人物", 11, DIM, HORIZONTAL_ALIGNMENT_LEFT))
+
+	var npc_scroll := ScrollContainer.new()
+	npc_scroll.size_flags_vertical = SIZE_EXPAND_FILL
+	npc_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	side_panel.add_child(npc_scroll)
+	_npc_list_container = VBoxContainer.new()
+	_npc_list_container.add_theme_constant_override("separation", 0)
+	_npc_list_container.size_flags_horizontal = SIZE_EXPAND
+	npc_scroll.add_child(_npc_list_container)
+
+	# --- Dialogue Section (bottom, fixed ~260px) ---
+	var dlg_panel := Panel.new(); _add_panel_style(dlg_panel)
+	dlg_panel.custom_minimum_size = Vector2(0, 260)
+	dlg_panel.size_flags_vertical = SIZE_SHRINK_END
+	side_panel.add_child(dlg_panel)
+
+	var dlg_vb := VBoxContainer.new()
+	dlg_vb.add_theme_constant_override("separation", 6)
+	dlg_vb.set_anchors_preset(PRESET_FULL_RECT)
+	dlg_panel.add_child(dlg_vb)
+
+	# Chat scroll area
 	_chat_scroll = ScrollContainer.new()
 	_chat_scroll.size_flags_vertical = SIZE_EXPAND
 	_chat_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	center.add_child(_chat_scroll)
+	dlg_vb.add_child(_chat_scroll)
 
 	_dialogue_label = RichTextLabel.new()
 	_dialogue_label.bbcode_enabled = true
@@ -315,10 +403,11 @@ func _build_game_ui() -> void:
 	_dialogue_label.add_theme_color_override("default_color", TEXT)
 	_chat_scroll.add_child(_dialogue_label)
 
+	# Input bar
 	var input_bar := HBoxContainer.new()
-	input_bar.custom_minimum_size = Vector2(0, 42)
+	input_bar.custom_minimum_size = Vector2(0, 38)
 	input_bar.add_theme_constant_override("separation", 8)
-	center.add_child(input_bar)
+	dlg_vb.add_child(input_bar)
 
 	_npc_select = OptionButton.new(); _npc_select.add_theme_font_size_override("font_size", 13)
 	input_bar.add_child(_npc_select)
@@ -334,82 +423,7 @@ func _build_game_ui() -> void:
 	_send_btn.pressed.connect(_on_send)
 	input_bar.add_child(_send_btn)
 
-	# Right: HUD
-	var right_scroll := ScrollContainer.new()
-	right_scroll.custom_minimum_size = Vector2(270, 0)
-	right_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	hsplit.add_child(right_scroll)
-
-	var hud_vb := VBoxContainer.new()
-	hud_vb.add_theme_constant_override("separation", 6)
-	right_scroll.add_child(hud_vb)
-
-	# HUD sections
-	_vigor_bar = _add_stat_section(hud_vb, "💪 体力", GREEN)
-	_vigor_label = _vigor_bar.get_parent().get_child(0).get_child(2)
-	_spirit_bar = _add_stat_section(hud_vb, "🧘 心气", ACCENT)
-	_spirit_label = _spirit_bar.get_parent().get_child(0).get_child(2)
-
-	_coins_label = _add_info_section(hud_vb, "💰 制钱", "0 文")
-	_time_label = _add_info_section(hud_vb, "🧭 时辰", "--")
-	_weather_label = _add_info_section(hud_vb, "🌤 天气", "--")
-	_map_name_label = _add_info_section(hud_vb, "📍 位置", "--")
-
-	var inv_title := _lbl("🎒 行囊", 12, DIM)
-	hud_vb.add_child(inv_title)
-	_inventory_flow = HFlowContainer.new()
-	_inventory_flow.add_theme_constant_override("h_separation", 4)
-	_inventory_flow.add_theme_constant_override("v_separation", 2)
-	hud_vb.add_child(_inventory_flow)
-
-	var fav_title := _lbl("❤ 好感", 12, DIM)
-	hud_vb.add_child(fav_title)
-	_favor_vbox = VBoxContainer.new()
-	_favor_vbox.add_theme_constant_override("separation", 2)
-	hud_vb.add_child(_favor_vbox)
-
-	# Debug: print layout chain sizes after a frame
-	await get_tree().process_frame
-	print("[Game] UI layout: game_ui=%s, margin=%s, hsplit=%s" % [str(_game_ui.size), str(main_margin.size), str(hsplit.size)])
-
-
-func _add_stat_section(parent: VBoxContainer, title: String, color: Color) -> ProgressBar:
-	var panel := _mini_panel(parent)
-	var vb := panel.get_child(0) as VBoxContainer
-
-	var row := HBoxContainer.new(); vb.add_child(row)
-	row.add_child(_lbl(title, 12, DIM))
-	row.add_child(Control.new())
-	var vallbl := _lbl("--/--", 12, TEXT); row.add_child(vallbl)
-
-	var bar := ProgressBar.new(); bar.show_percentage = false
-	bar.custom_minimum_size = Vector2(0, 8); bar.size_flags_horizontal = SIZE_EXPAND
-	var sb := StyleBoxFlat.new(); sb.bg_color = color
-	sb.corner_radius_top_left = 4; sb.corner_radius_top_right = 4
-	sb.corner_radius_bottom_left = 4; sb.corner_radius_bottom_right = 4
-	bar.add_theme_stylebox_override("fill", sb)
-	vb.add_child(bar)
-	return bar
-
-
-func _add_info_section(parent: VBoxContainer, title: String, value: String) -> Label:
-	var panel := _mini_panel(parent)
-	var vb := panel.get_child(0) as VBoxContainer
-	var l := _lbl("%s: %s" % [title, value], 13, TEXT)
-	vb.add_child(l)
-	return l
-
-
-func _mini_panel(parent: VBoxContainer) -> Panel:
-	var p := Panel.new()
-	_add_panel_style(p)
-	parent.add_child(p)
-	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 4)
-	vb.set_anchors_preset(PRESET_FULL_RECT)
-	vb.set_position(Vector2(8,6))
-	p.add_child(vb)
-	p.set_size(Vector2(270, 52))
-	return p
+	print("[Game] UI built — 2-column layout like Web")
 
 
 # ═══════════════════════════════════════════════════════
@@ -420,37 +434,26 @@ func _build_map() -> void:
 	_map_cells.clear()
 
 	_current_map_id = GameManager.player_map_id
-	print("[Game] _build_map() — _current_map_id=%s, maps_data keys=%s" % [_current_map_id, str(GameManager.maps_data.keys())])
+	print("[Game] _build_map() — id=%s" % _current_map_id)
 	var info = GameManager.maps_data.get(_current_map_id, {})
-	print("[Game] _build_map() — info keys=%s" % str(info.keys() if info is Dictionary else "NOT_DICT"))
 	_map_rows = info.get("rows", [])
-	print("[Game] _build_map() — _map_rows count=%d, first_row type=%s len=%d" % [_map_rows.size(), typeof(_map_rows[0]) if _map_rows.size() > 0 else -1, (_map_rows[0] as String).length() if _map_rows.size() > 0 else 0])
 	if _map_rows.is_empty():
-		print("[Game] _build_map() — rows EMPTY, returning early!")
+		print("[Game] _build_map() — rows EMPTY!")
 		return
 	_map_cols = _map_rows[0].length()
 	var total_w := _map_cols * TILE_SIZE
 	var total_h := _map_rows.size() * TILE_SIZE
-	print("[Game] _build_map() — building %d x %d tiles, total=(%d,%d), tile_size=%d" % [_map_rows.size(), _map_cols, total_w, total_h, TILE_SIZE])
+	print("[Game] _build_map() — %d×%d tiles, total=(%d,%d)" % [_map_rows.size(), _map_cols, total_w, total_h])
 
-	# Set size on Control directly (custom_minimum_size doesn't work on plain Control)
+	# Set map container size directly (it's a plain Control)
 	_map_container.set_size(Vector2(total_w, total_h))
-	# Also set scroll container min size to something reasonable
-	_map_scroll.custom_minimum_size = Vector2(200, 200)
-
-	# Force layout pass: wait for resize cascade
-	await get_tree().process_frame
-	await get_tree().process_frame
-	print("[Game] _build_map() — AFTER frames: map_container=%s, scroll=%s, scroll_parent=%s" % [
-		str(_map_container.size), str(_map_scroll.size),
-		str(_map_scroll.get_parent().size if _map_scroll.get_parent() else "NO_PARENT")])
 
 	for y in _map_rows.size():
 		var row: String = _map_rows[y]
 		for x in _map_cols:
 			var ch := " " if x >= row.length() else row[x]
 			var tile := ColorRect.new()
-			tile.color = Color.RED if x == 0 and y == 0 else TILE_COLORS.get(ch, Color(0.2,0.2,0.2))
+			tile.color = TILE_COLORS.get(ch, Color(0.2,0.2,0.2))
 			tile.set_position(Vector2(x * TILE_SIZE, y * TILE_SIZE))
 			tile.set_size(Vector2(TILE_SIZE, TILE_SIZE))
 			tile.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -484,10 +487,8 @@ func _update_map_player() -> void:
 func _on_tile_click(ev: InputEvent, x: int, y: int) -> void:
 	if ev is InputEventMouseButton and ev.pressed:
 		if ev.button_index == MOUSE_BUTTON_LEFT:
-			# 点击 NPC 格则选中该 NPC 对话
 			for n in GameManager.npc_catalog:
 				if n.get("map", "") == _current_map_id and n.get("x", -1) == x and n.get("y", -1) == y:
-					# 选中对话框中的 NPC
 					for idx in _npc_select.item_count:
 						if _npc_select.get_item_text(idx) == n.get("name", ""):
 							_npc_select.select(idx)
@@ -554,11 +555,10 @@ func _refresh() -> void:
 
 	# Map
 	if gm.player_map_id != _current_map_id:
-		print("[Game] _refresh() — calling _build_map()")
 		_build_map()
 	_update_map_player()
 
-	# NPC select
+	# NPC select dropdown
 	var cur_idx := _npc_select.selected
 	_npc_select.clear()
 	for n in gm.npcs_here:
@@ -566,7 +566,13 @@ func _refresh() -> void:
 	if cur_idx >= 0 and cur_idx < _npc_select.item_count:
 		_npc_select.select(cur_idx)
 
-	# HUD
+	# NPC list in sidebar
+	for c in _npc_list_container.get_children(): c.queue_free()
+	for n in gm.npcs_here:
+		var entry := _npc_entry(n.get("name", n.get("id","?")), n.get("id",""))
+		_npc_list_container.add_child(entry)
+
+	# HUD bars & labels
 	_vigor_bar.max_value = gm.player_vigor_max; _vigor_bar.value = gm.player_vigor
 	_vigor_label.text = "%d/%d" % [gm.player_vigor, gm.player_vigor_max]
 	_spirit_bar.max_value = gm.player_spirit_max; _spirit_bar.value = gm.player_spirit
@@ -575,7 +581,7 @@ func _refresh() -> void:
 	_time_label.text = "🧭 时辰: 第%d日 · %s" % [gm.player_world_day, gm.player_world_shichen]
 	_weather_label.text = "🌤 天气: %s" % gm.player_weather
 	var mname = gm.maps_data.get(gm.player_map_id,{}).get("name", gm.player_map_id)
-	_map_name_label.text = "📍 位置: %s (%d,%d)" % [mname, gm.player_px, gm.player_py]
+	_map_name_label.text = "%s (%d,%d)" % [mname, gm.player_px, gm.player_py]
 
 	# Inventory
 	for c in _inventory_flow.get_children(): c.queue_free()
@@ -607,19 +613,6 @@ func _add_panel_style(p: Panel) -> void:
 	p.add_theme_stylebox_override("panel", sb)
 
 
-func _mk_panel(size: Vector2, preset: int, parent: Control) -> Panel:
-	var p := Panel.new()
-	p.custom_minimum_size = size
-	p.set_anchors_preset(preset)
-	# Ensure the panel is visible and receives input
-	if preset == PRESET_CENTER:
-		p.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		p.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_add_panel_style(p)
-	parent.add_child(p)
-	return p
-
-
 func _lbl(text: String, size: int, color: Color, align := HORIZONTAL_ALIGNMENT_LEFT) -> Label:
 	var l := Label.new(); l.text = text
 	l.add_theme_color_override("font_color", color)
@@ -648,3 +641,28 @@ func _btn(text: String, bg: Color) -> Button:
 	sb.content_margin_top = 6; sb.content_margin_bottom = 6
 	b.add_theme_stylebox_override("normal", sb)
 	return b
+
+
+func _npc_entry(name: String, _id: String) -> Panel:
+	"""Create a single NPC list entry for the sidebar."""
+	var p := Panel.new()
+	p.custom_minimum_size = Vector2(0, 32)
+	var esb := StyleBoxFlat.new()
+	esb.bg_color = BG_CARD
+	esb.border_width_bottom = 1; esb.border_color = Color(0.2, 0.25, 0.38, 0.5)
+	esb.content_margin_left = 10; esb.content_margin_right = 10
+	esb.content_margin_top = 6; esb.content_margin_bottom = 4
+	p.add_theme_stylebox_override("panel", esb)
+
+	var hb := HBoxContainer.new()
+	hb.set_anchors_preset(PRESET_FULL_RECT)
+	p.add_child(hb)
+
+	# NPC dot indicator
+	var dot := ColorRect.new()
+	dot.custom_minimum_size = Vector2(8, 8)
+	dot.color = ACCENT2
+	hb.add_child(dot)
+
+	hb.add_child(_lbl(name, 13, TEXT))
+	return p
