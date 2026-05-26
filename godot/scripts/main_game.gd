@@ -129,7 +129,9 @@ func _build_login() -> void:
 	start_btn.pressed.connect(func():
 		var nm := name_input.get_child(1).text.strip_edges()
 		if nm == "": nm = "江湖客"
-		var g := ["男","女","未言"][gender_sel.get_selected_id()]
+		var g: String = "未言"
+		var sel: int = gender_sel.get_selected_id()
+		if sel >= 0 and sel <= 2: g = ["男","女","未言"][sel]
 		GameManager.hello(nm, g, pd_cb.button_pressed)
 	)
 	vb.add_child(start_btn)

@@ -129,7 +129,7 @@ func _on_stream_complete(result: int, response_code: int, headers: PackedStringA
 			var payload := line.substr(6)
 			var json := JSON.new()
 			if json.parse(payload) == OK:
-				var d := json.data
+				var d: Dictionary = json.data
 				if d.has("chunk"):
 					full_text += d["chunk"]
 					stream_chunk.emit(d["chunk"])

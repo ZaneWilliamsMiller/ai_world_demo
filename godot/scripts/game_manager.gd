@@ -1,3 +1,4 @@
+class_name GameManager
 extends Node
 ## Central game state — autoload singleton.
 ## Holds player data, map data, NPC info, and coordinates UI updates.
