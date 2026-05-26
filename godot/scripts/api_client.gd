@@ -57,12 +57,15 @@ func _send(path: String, method: String, body: Dictionary, callback: Callable) -
 		_:
 			err = http.request(full_url, headers, HTTPClient.METHOD_POST, json_body)
 
+	print("[API] request() err=%d url=%s" % [err, full_url])
+
 	if err != OK:
 		_pending.erase(rid)
 		callback.call({"error": "request_failed", "code": err})
 
 
 func _on_complete(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray, rid: int, http: HTTPRequest) -> void:
+	print("[API] _on_complete rid=%d result=%d status=%d body_len=%d" % [rid, result, response_code, body.size()])
 	var cb = _pending.get(rid)
 	_pending.erase(rid)
 	http.queue_free()
