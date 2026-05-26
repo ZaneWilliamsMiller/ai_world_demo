@@ -89,6 +89,7 @@ func _apply_hello_response(data: Dictionary) -> void:
 	"""Parse /api/hello or /api/load response into game state."""
 	display_name = data.get("display_name", display_name)
 	maps_data = data.get("maps", {})
+	print("[GM] _apply_hello_response — maps_data keys: %s, player_map_id: %s" % [str(maps_data.keys()), str(data.get("player", {}).get("map_id", "N/A"))])
 	npcs_here = data.get("npcs_here", [])
 	npc_labels = data.get("npc_labels", {})
 	npc_catalog = data.get("npc_catalog", [])

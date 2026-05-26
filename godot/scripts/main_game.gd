@@ -382,9 +382,15 @@ func _build_map() -> void:
 	_map_cells.clear()
 
 	_current_map_id = GameManager.player_map_id
+	print("[Game] _build_map() — _current_map_id=%s, maps_data keys=%s" % [_current_map_id, str(GameManager.maps_data.keys())])
 	var info = GameManager.maps_data.get(_current_map_id, {})
+	print("[Game] _build_map() — info keys=%s" % str(info.keys() if info is Dictionary else "NOT_DICT"))
 	_map_rows = info.get("rows", [])
-	if _map_rows.is_empty(): return
+	print("[Game] _build_map() — _map_rows count=%d, first_row type=%s len=%d" % [_map_rows.size(), typeof(_map_rows[0]) if _map_rows.size() > 0 else -1, (_map_rows[0] as String).length() if _map_rows.size() > 0 else 0])
+	if _map_rows.is_empty():
+		print("[Game] _build_map() — rows EMPTY, returning early!")
+		return
+	print("[Game] _build_map() — building %d x %d tiles, tile_size=%d" % [_map_rows.size(), _map_cols, TILE_SIZE])
 
 	_map_cols = _map_rows[0].length()
 	var total_w := _map_cols * TILE_SIZE
@@ -491,11 +497,15 @@ func _add_chat(color: Color, speaker: String, body: String) -> void:
 #  Refresh
 # ═══════════════════════════════════════════════════════
 func _refresh() -> void:
-	if not _game_ui.visible: return
+	if not _game_ui.visible:
+		print("[Game] _refresh() — _game_ui NOT visible, returning")
+		return
 	var gm = GameManager
+	print("[Game] _refresh() — map_id: cur=%s gm=%s" % [_current_map_id, gm.player_map_id])
 
 	# Map
 	if gm.player_map_id != _current_map_id:
+		print("[Game] _refresh() — calling _build_map()")
 		_build_map()
 	_update_map_player()
 
