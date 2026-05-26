@@ -403,7 +403,7 @@ func _build_map() -> void:
 		for x in _map_cols:
 			var ch := " " if x >= row.length() else row[x]
 			var tile := ColorRect.new()
-			tile.color = TILE_COLORS.get(ch, Color(0.2,0.2,0.2))
+			tile.color = Color.RED if x == 0 and y == 0 else TILE_COLORS.get(ch, Color(0.2,0.2,0.2))
 			tile.set_position(Vector2(x * TILE_SIZE, y * TILE_SIZE))
 			tile.set_size(Vector2(TILE_SIZE, TILE_SIZE))
 			tile.mouse_filter = Control.MOUSE_FILTER_STOP
