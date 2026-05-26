@@ -256,11 +256,17 @@ func _build_game_ui() -> void:
 	_map_scroll = ScrollContainer.new()
 	_map_scroll.size_flags_horizontal = SIZE_EXPAND
 	_map_scroll.size_flags_vertical = SIZE_EXPAND
+	# Debug: give scroll a visible background
+	var scroll_style := StyleBoxFlat.new()
+	scroll_style.bg_color = Color.RED
+	_map_scroll.add_theme_stylebox_override("panel", scroll_style)
 	left.add_child(_map_scroll)
 
 	# Use PanelContainer so ScrollContainer can detect content size reliably
 	_map_container = PanelContainer.new()
-	_map_container.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	var map_style := StyleBoxFlat.new()
+	map_style.bg_color = Color.BLUE
+	_map_container.add_theme_stylebox_override("panel", map_style)
 	_map_scroll.add_child(_map_container)
 
 	# Center: Dialogue
@@ -401,8 +407,8 @@ func _build_map() -> void:
 	var total_w := _map_cols * TILE_SIZE
 	var total_h := _map_rows.size() * TILE_SIZE
 	_map_container.set_position(Vector2.ZERO)
-	# PanelContainer: use rect_min_size for reliable ScrollContainer detection
-	_map_container.rect_min_size = Vector2(total_w, total_h)
+	# PanelContainer: use custom_minimum_size (Godot 4 API)
+	_map_container.custom_minimum_size = Vector2(total_w, total_h)
 
 	for y in _map_rows.size():
 		var row: String = _map_rows[y]
