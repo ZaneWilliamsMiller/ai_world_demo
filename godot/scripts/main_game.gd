@@ -258,7 +258,9 @@ func _build_game_ui() -> void:
 	_map_scroll.size_flags_vertical = SIZE_EXPAND
 	left.add_child(_map_scroll)
 
-	_map_container = Control.new()
+	# Use PanelContainer so ScrollContainer can detect content size reliably
+	_map_container = PanelContainer.new()
+	_map_container.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	_map_scroll.add_child(_map_container)
 
 	# Center: Dialogue
@@ -391,14 +393,16 @@ func _build_map() -> void:
 		print("[Game] _build_map() — rows EMPTY, returning early!")
 		return
 	print("[Game] _build_map() — building %d x %d tiles, tile_size=%d" % [_map_rows.size(), _map_cols, TILE_SIZE])
+	# Force a frame so layout updates, then check sizes
+	await get_tree().process_frame
+	print("[Game] _build_map() — AFTER frame: map_container size=%s, scroll size=%s" % [str(_map_container.size), str(_map_scroll.size)])
 
 	_map_cols = _map_rows[0].length()
 	var total_w := _map_cols * TILE_SIZE
 	var total_h := _map_rows.size() * TILE_SIZE
 	_map_container.set_position(Vector2.ZERO)
-	_map_container.custom_minimum_size = Vector2(total_w, total_h)
-	# Force actual size — Control nodes don't auto-expand to custom_minimum_size
-	_map_container.set_size(Vector2(total_w, total_h))
+	# PanelContainer: use rect_min_size for reliable ScrollContainer detection
+	_map_container.rect_min_size = Vector2(total_w, total_h)
 
 	for y in _map_rows.size():
 		var row: String = _map_rows[y]
