@@ -109,7 +109,7 @@ func _build_login() -> void:
 
 	vb.add_child(_lbl("🏮 活纸 · 江湖行纪", 22, ACCENT, HORIZONTAL_ALIGNMENT_CENTER))
 
-	var name_input := _input("江湖名号", "输入你的名号...")
+	var name_input := _make_input("江湖名号", "输入你的名号...")
 	vb.add_child(name_input)
 
 	var gs_vb := VBoxContainer.new()
@@ -127,7 +127,7 @@ func _build_login() -> void:
 
 	var start_btn := _btn("踏入江湖", ACCENT)
 	start_btn.pressed.connect(func():
-		var nm := name_input.get_child(1).text.strip_edges()
+		var nm: String = name_input.get_child(1).text.strip_edges()
 		if nm == "": nm = "江湖客"
 		var g: String = "未言"
 		var sel: int = gender_sel.get_selected_id()
@@ -509,8 +509,8 @@ func _refresh() -> void:
 	for c in _favor_vbox.get_children(): c.queue_free()
 	if not gm.player_favor.is_empty():
 		for nid in gm.player_favor:
-			var val := gm.player_favor[nid]
-			var nm := gm.npc_labels.get(nid, nid)
+			var val: int = gm.player_favor[nid]
+			var nm: String = gm.npc_labels.get(nid, nid)
 			_favor_vbox.add_child(_lbl("%s: %+d" % [nm, val], 11,
 				GREEN if val >= 0 else RED))
 
@@ -544,7 +544,7 @@ func _lbl(text: String, size: int, color: Color, align := HORIZONTAL_ALIGNMENT_L
 	return l
 
 
-func _input(label: String, placeholder: String) -> VBoxContainer:
+func _make_input(label: String, placeholder: String) -> VBoxContainer:
 	var vb := VBoxContainer.new()
 	vb.add_child(_lbl(label, 13, DIM))
 	var le := LineEdit.new()
