@@ -74,6 +74,8 @@ func _ready() -> void:
 	_game_ui.visible = false
 
 	GameManager.logged_in.connect(func():
+		print("[Game] logged_in signal fired — switching UI")
+		print("[Game] _login_overlay=%s _game_ui=%s" % ["null" if _login_overlay == null else "ok", "null" if _game_ui == null else "ok"])
 		_login_overlay.visible = false
 		_game_ui.visible = true
 		_refresh()

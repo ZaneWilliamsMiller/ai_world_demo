@@ -62,9 +62,11 @@ func hello(p_name: String, p_gender: String, p_permadeath: bool) -> void:
 	print("[GM] /api/hello response: %s" % JSON.stringify(res))
 
 	if res.has("error"):
+		print("[GM] hello() ERROR: %s — returning early, logged_in will NOT fire" % res.get("error", "?"))
 		system_message.emit("连接后端失败: %s" % res.get("error", "?"))
 		return
 
+	print("[GM] hello() OK — calling _apply_hello_response + emitting logged_in")
 	_apply_hello_response(res)
 	logged_in.emit()
 
