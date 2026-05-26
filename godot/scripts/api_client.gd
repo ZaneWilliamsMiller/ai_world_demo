@@ -7,31 +7,11 @@ extends Node
 @export var timeout_sec: float = 30.0
 
 # ── Internal ──
-var _pending: Dictionary = {}   # request_id → Callable(result)
 var _req_id: int = 0
 
-
+## Signal-based request — returns the parsed response Dictionary.
+## Awaits the actual HTTPRequest completion signal, no spin-wait.
 func request(path: String, method: String = "GET", body: Dictionary = {}) -> Dictionary:
-	"""Synchronous wrapper — blocks until response arrives.  Use in UI code."""
-	var done := false
-	var result: Dictionary = {}
-
-	_send(path, method, body, func(r: Dictionary):
-		result = r
-		done = true
-	)
-
-	# Spin-wait (only used from UI buttons, so this is fine)
-	var t0 := Time.get_ticks_msec()
-	while not done and (Time.get_ticks_msec() - t0) < timeout_sec * 1000:
-		await get_tree().process_frame
-
-	if not done:
-		result = {"error": "timeout"}
-	return result
-
-
-func _send(path: String, method: String, body: Dictionary, callback: Callable) -> void:
 	var http := HTTPRequest.new()
 	add_child(http)
 
@@ -41,12 +21,6 @@ func _send(path: String, method: String, body: Dictionary, callback: Callable) -
 		"Accept: application/json",
 	])
 	var json_body := JSON.stringify(body) if not body.is_empty() else ""
-
-	_req_id += 1
-	var rid := _req_id
-	_pending[rid] = callback
-
-	http.request_completed.connect(_on_complete.bind(rid, http))
 
 	var err: Error
 	match method:
@@ -60,36 +34,34 @@ func _send(path: String, method: String, body: Dictionary, callback: Callable) -
 	print("[API] request() err=%d url=%s" % [err, full_url])
 
 	if err != OK:
-		_pending.erase(rid)
-		callback.call({"error": "request_failed", "code": err})
+		http.queue_free()
+		return {"error": "request_failed", "code": err}
 
-
-func _on_complete(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray, rid: int, http: HTTPRequest) -> void:
-	print("[API] _on_complete rid=%d result=%d status=%d body_len=%d" % [rid, result, response_code, body.size()])
-	var cb = _pending.get(rid)
-	_pending.erase(rid)
+	# Await the real completion signal — no spin-wait race condition
+	var result_arr := await http.request_completed
 	http.queue_free()
 
-	if result != HTTPRequest.RESULT_SUCCESS:
-		if cb.is_valid():
-			cb.call({"error": "network_error", "code": result})
-		return
+	var response_code: int = result_arr[1]
+	var body_bytes: PackedByteArray = result_arr[3]
+	print("[API] request_completed status=%d body_len=%d" % [response_code, body_bytes.size()])
 
-	var text := body.get_string_from_utf8()
+	if result_arr[0] != HTTPRequest.RESULT_SUCCESS:
+		return {"error": "network_error", "code": result_arr[0]}
+
+	var text := body_bytes.get_string_from_utf8()
 	var data: Dictionary = {}
 	if text.begins_with("{") or text.begins_with("["):
 		var json := JSON.new()
-		var err := json.parse(text)
-		if err == OK:
-			data = json.data as Dictionary
+		var parse_err := json.parse(text)
+		if parse_err == OK:
+			data = json.data as Dictionary if json.data is Dictionary else {}
 		else:
 			data = {"_raw": text}
 	else:
 		data = {"_raw": text}
 
 	data["_status"] = response_code
-	if cb.is_valid():
-		cb.call(data)
+	return data
 
 
 ## Talk to NPC with Server-Sent Events (streaming).
@@ -112,9 +84,6 @@ func talk_stream(player_id: String, npc_id: String, message: String) -> void:
 		"message": message
 	})
 
-	# For SSE, we use a blocking-style HTTP request; Godot's HTTPRequest
-	# doesn't natively support streaming, so we fall back to polling.
-	# We send the request and when it completes, we parse the SSE body.
 	http.request_completed.connect(_on_stream_complete.bind(http))
 	http.request(full_url, headers, HTTPClient.METHOD_POST, json_body)
 
@@ -139,7 +108,6 @@ func _on_stream_complete(result: int, response_code: int, headers: PackedStringA
 				if d.get("done", false):
 					done_data = d
 				else:
-					# non-stream fallback: the whole response is in done chunk
 					if not d.has("chunk") and d.has("visible_text"):
 						full_text = d.get("visible_text", "")
 						stream_chunk.emit(full_text)
