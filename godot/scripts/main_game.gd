@@ -471,7 +471,7 @@ func _add_chat(color: Color, speaker: String, body: String) -> void:
 # ═══════════════════════════════════════════════════════
 func _refresh() -> void:
 	if not _game_ui.visible: return
-	var gm := GameManager
+	var gm = GameManager
 
 	# Map
 	if gm.player_map_id != _current_map_id:
