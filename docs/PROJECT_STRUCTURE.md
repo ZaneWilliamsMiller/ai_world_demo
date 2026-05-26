@@ -1,8 +1,25 @@
 # 活纸江湖 · 项目结构说明
 
-> 最后更新：2026-05-27 01:59 (+双前端架构：Web SPA + Godot 桌面端，持久化三层防护，工具/测试文件归位)
+> 最后更新：2026-05-27 (+双独立前端架构：web-standalone + godot-standalone，项目结构整理)
 
 ## 顶层
+
+```
+living-paper/
+├── backend/              # Python 后端 (FastAPI 游戏引擎)
+├── static/               # Web 前端 (后端内嵌版 SPA)
+├── web-standalone/       # Web 前端 (独立版，双模式 API)
+├── godot/                # Godot 前端 (后端内嵌版)
+├── godot-standalone/     # Godot 前端 (独立版，严格类型 + 信号驱动)
+├── tools/                # 开发辅助脚本
+├── tests/                # 自动化测试
+├── docs/                 # 文档与迭代记录
+├── saves/                # 角色存档 (运行时生成, gitignore)
+├── .env / .env.example   # 环境变量
+├── requirements.txt      # Python 依赖
+├── README.md             # 项目说明
+└── .gitignore            # Git 忽略规则
+```
 
 | 路径 | 作用 |
 |------|------|
@@ -11,12 +28,14 @@
 | `.env` / `.env.example` | 环境变量（LLM API Key / 模型 / 熔断器 / 缓存等配置） |
 | `.gitignore` | Git 忽略规则 |
 | `backend/` | **Python 后端** — FastAPI 游戏引擎 |
-| `static/` | **Web 前端** — 单文件 SPA |
-| `godot/` | **Godot 前端** — Godot 4.3 桌面客户端 |
-| `tools/` | 辅助工具脚本（地图生成/校验/验证/调试） |
-| `tests/` | 自动化测试（E2E / 边界 / 综合 / 单元） |
-| `docs/` | 文档与迭代记录 |
-| `saves/` | 角色存档（运行时生成，JSON 格式） |
+| `static/` | **Web 前端（内嵌版）** — 由后端直接 serve 的 SPA |
+| `web-standalone/` | **Web 前端（独立版）** — 双 API 模式，可独立运行 |
+| `godot/` | **Godot 前端（内嵌版）** — 原始 Godot 4 客户端 |
+| `godot-standalone/` | **Godot 前端（独立版）** — 严格类型 + 信号驱动架构 |
+| `tools/` | 开发辅助脚本（测试、启动、调试、地图工具） |
+| `tests/` | 自动化测试（E2E / 边界 / 综合 / 单元 + 测试报告） |
+| `docs/` | 文档、迭代记录、历史归档 |
+| `saves/` | 角色存档（运行时生成，JSON 格式，gitignore） |
 
 ---
 
@@ -106,49 +125,102 @@
 
 ---
 
-## static/ — Web 前端 (单文件 SPA)
+## static/ — Web 前端（后端内嵌版）
 
 ```
 static/
-└── index.html          ← 22.8KB 单文件 SPA
-    ├── CSS (暗色主题)   → 登录遮罩 / 三栏布局 / 地图色块 / 对话气泡 / HUD 面板
-    ├── JS  (Vanilla)    → fetch API / SSE ReadableStream 流式对话 / 状态轮询(30s)
-    └── 地图渲染          → CSS Grid 16px 瓦片 / Unicode 表情符号地形 / 点击移动
+├── index.html          ← SPA 入口
+├── css/game.css        ← 暗色江湖主题
+└── js/
+    ├── api.js          ← API 通信层（/api 前缀）
+    ├── store.js        ← 状态管理
+    ├── map.js          ← 地图渲染（CSS Grid 16px 瓦片）
+    ├── ui.js           ← UI 更新
+    ├── dialogue.js     ← 对话系统（SSE 流式）
+    └── main.js         ← 入口逻辑
 ```
 
-**特性**：登录/新建角色 → CSS Grid 地图渲染 → NPC 下拉选择 → SSE 打字机流式对话 → 实时 HUD 状态面板 → 存档载入管理
+由 `backend/app.py` 通过 `StaticFiles` 中间件直接 serve，需要后端运行。
 
 ---
 
-## godot/ — Godot 前端 (Godot 4.3 桌面客户端)
+## web-standalone/ — Web 前端（独立版）
+
+```
+web-standalone/
+├── index.html          ← SPA 入口（含 API 配置面板）
+├── css/game.css        ← 暗色江湖主题
+└── js/
+    ├── api.js          ← 双模式 API 层（后端模式 / LLM 直连模式）
+    ├── store.js        ← 状态管理（API_URL / BASE_URL 可切换）
+    ├── map.js          ← 地图渲染
+    ├── ui.js           ← UI 更新
+    ├── dialogue.js     ← 对话系统
+    ├── llm-test.js     ← LLM 连接测试模块
+    └── main.js         ← 入口逻辑
+```
+
+**与 `static/` 的区别**：
+- 可独立打开或通过任意 HTTP 服务器运行
+- 双 API 模式：后端模式（BASE_URL → 后端 API）/ 独立模式（API_URL → 直连 LLM API）
+- API 配置面板：URL / Key / Model 可在界面修改
+- 连接测试功能：验证后端或 LLM API 可用性
+- 配置持久化到 localStorage
+
+---
+
+## godot/ — Godot 前端（后端内嵌版）
 
 ```
 godot/
-├── project.godot                  ← 项目配置（Autoload: ApiClient + GameManager）
-├── README.md                      ← 使用说明
-├── .godot/                        ← Godot 编辑器缓存（自动生成）
+├── project.godot       ← 项目配置（Autoload: ApiClient + GameManager）
+├── README.md           ← 使用说明
 ├── scenes/
-│   └── game.tscn                  ← 主场景（加载 main_game.gd）
+│   └── game.tscn       ← 主场景
 └── scripts/
-    ├── main_game.gd               ← 主场景脚本（18.6KB）— 程序化构建全部 UI
-    │                                · 登录界面（新建/载入/性别/永久死亡）
-    │                                · 地图渲染（ColorRect 14px 色块网格）
-    │                                · 对话系统（RichTextLabel BBcode + LineEdit 输入）
-    │                                · HUD 面板（体力/心气 ProgressBar + 制钱/时辰/天气/位置/行囊/好感）
-    ├── api_client.gd              ← HTTP 客户端 Autoload
-    │                                · request() 同步封装 + talk_stream() SSE 流
-    └── game_manager.gd            ← 游戏状态 Autoload
-                                     · hello/load/move/talk/save/list_saves/fetch_state 全套 API
+    ├── main_game.gd    ← 程序化构建全部 UI（登录/地图/对话/HUD）
+    ├── api_client.gd   ← HTTP 客户端 Autoload
+    └── game_manager.gd ← 游戏状态 Autoload
 ```
 
-**架构**：Autoload 单例模式 — `ApiClient` 处理 HTTP，`GameManager` 管理状态，`main_game.gd` 纯 UI 层，三者通过信号解耦。
+需配合后端运行，API 通信通过 `api_client.gd` 的 `@export var base_url` 配置。
 
 ---
 
-## tools/ — 辅助工具
+## godot-standalone/ — Godot 前端（独立版）
+
+```
+godot-standalone/
+├── project.godot       ← 项目配置（Autoload: ApiClient + GameManager）
+├── .gdextension_ignore
+├── scenes/
+│   ├── game.tscn       ← 游戏主场景
+│   └── login.tscn      ← 登录场景（可 F6 独立运行）
+└── scripts/
+    ├── api_client.gd   ← 双模式 HTTP 客户端（后端 / LLM 直连）
+    ├── game_manager.gd ← 游戏状态管理（信号驱动）
+    ├── main_game.gd    ← 游戏主场景脚本
+    ├── login_screen.gd ← 登录界面脚本
+    ├── map_renderer.gd ← 地图渲染组件
+    ├── dialogue_ui.gd  ← 对话界面组件
+    └── llm_test.gd     ← LLM 连接测试脚本
+```
+
+**与 `godot/` 的区别**：
+- **GDScript 2.0 严格静态类型**：所有变量、参数、返回值显式类型
+- **信号驱动架构**：组件间通过信号通信，不用 `get_parent()`
+- **双 API 模式**：后端模式 / LLM 直连模式，可在游戏内切换
+- **独立场景**：`login.tscn` 和 `game.tscn` 可 F6 独立运行
+- **连接测试**：`llm_test.gd` 验证后端和 LLM API
+
+---
+
+## tools/ — 开发辅助脚本
 
 | 文件 | 作用 |
 |------|------|
+| `auto_test.py` | 自动化集成测试（8 项：健康检查/静态页面/LLM列表/LLM直连/角色创建/NPC对话/移动/存档） |
+| `start.sh` | 开发启动脚本（一键启动后端） |
 | `gen_map.py` | 地图生成工具 |
 | `check_map.py` | 地图校验工具 |
 | `smoke_api.py` | API 烟雾测试 |
@@ -174,6 +246,7 @@ godot/
 | `test_backend.py` | 后端基础测试 |
 | `test_debug_llm.py` | LLM 调试测试 |
 | `test_deep.py` | 深度对话测试 |
+| `test_reports/` | 自动化测试报告（JSON，gitignore） |
 
 ---
 
@@ -182,7 +255,11 @@ godot/
 | 路径 | 作用 |
 |------|------|
 | `PROJECT_STRUCTURE.md` | 本文件（项目结构总览） |
+| `overview.md` | 项目迭代概述 |
 | `iterations/` | 迭代产物归档（task-artifact-*.md / 2026-*-*.md） |
+| `static_legacy/` | 旧版 Web 前端归档（仅供历史参考） |
+
+---
 
 ## 持久化流程
 
@@ -195,3 +272,17 @@ godot/
 
 游戏结束     → FastAPI shutdown hook → autosave_all() + httpx 连接池释放
 ```
+
+---
+
+## 前端版本对照
+
+| 特性 | `static/` | `web-standalone/` | `godot/` | `godot-standalone/` |
+|------|-----------|-------------------|----------|---------------------|
+| 后端依赖 | 必须 | 可选 | 必须 | 可选 |
+| LLM 直连 | 不支持 | 支持 | 不支持 | 支持 |
+| API 配置面板 | 无 | 有 | 无 | 有 |
+| 连接测试 | 无 | 有 | 无 | 有 |
+| 严格静态类型 | N/A | N/A | 部分 | 全部 |
+| 信号驱动 | N/A | N/A | 部分 | 完整 |
+| 独立运行 | 不可以 | 可以 | 不可以 | 可以 |

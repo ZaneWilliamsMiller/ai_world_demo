@@ -1,9 +1,33 @@
+# 环境与密钥
 .env
+.env.local
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
 .venv/
 venv/
+
+# 运行时数据
 resume/
 saves/
 *.log
+
+# Godot 编辑器缓存
 godot/.godot/
+godot-standalone/.godot/
+
+# 测试报告（本地生成）
+tests/test_reports/
+
+# IDE / 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 操作系统
+.DS_Store
+Thumbs.db
+NVIDIA Corporation/
