@@ -1,6 +1,11 @@
+/**
+ * Dialogue Module - Enhanced with AbortController for safe stream management.
+ */
 import { store } from "../store.js";
 import { el, escapeHtml } from "./utils.js";
 import { talkToNpcNormal } from "../api.js";
+
+let _abortController = null;
 
 const WORLD_ACTIONS = {
   explore: "[动作：探路] 你袖手低腰，沿墙根与车辙试探前路，耳听风声、狗吠与远处梆子。",
@@ -17,7 +22,6 @@ const ACTION_LABEL = {
   probe: "试探", deal: "议价", bribe: "行贿", pressure: "施压", help: "卖好", refuse: "推却", goodbye: "作别", woo: "献殷勤",
 };
 
-// 极简模板：一行意图 + 一行筹码/底线 + 一行台词位
 const SOCIAL_TEMPLATE_BODY = {
   probe:   "意图：摸底，不摊牌。\n筹码：抛半真半假之语。\n台词：",
   deal:    "意图：谈一笔互利。\n筹码：银钱/消息/人情，任选其一。\n台词：",
@@ -38,9 +42,10 @@ function buildSocialTemplate(action, npcName) {
 export function initDialogue(onTalkEnd) {
   el("talkForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
-    const raw = el("msg").value.trim();
+    const msgEl = el("msg");
+    const raw = msgEl.value.trim();
     if (!raw) return;
-    el("msg").value = "";
+    msgEl.value = "";
     appendLog("你", raw);
     await doTalk(raw, store.getState().activeNpc, onTalkEnd);
   });
@@ -66,7 +71,7 @@ export function initDialogue(onTalkEnd) {
       msgEl.value = buildSocialTemplate(act, npcName);
       msgEl.focus();
       msgEl.setSelectionRange(msgEl.value.length, msgEl.value.length);
-      appendLog("你（快捷·人情）", `已载入模板：${ACTION_LABEL[act] || act} → ${npcName}（可改写后发送）`, "bubble-meta");
+      appendLog("你（快捷·人情）", `已载入：${ACTION_LABEL[act] || act} → ${npcName}（可改写）`, "bubble-meta");
     }
   });
 
@@ -78,15 +83,23 @@ export function initDialogue(onTalkEnd) {
   });
 }
 
+/** Abort any running stream before starting a new one */
+export function abortCurrentTalk() {
+  if (_abortController) {
+    _abortController.abort();
+    _abortController = null;
+  }
+}
+
 export function appendLog(who, text, extraClass = "") {
   const log = el("log");
+  if (!log) return;
   const wrap = document.createElement("div");
   wrap.className = "bubble" + (extraClass ? ` ${extraClass}` : "");
   wrap.innerHTML = `<div class="who">${escapeHtml(who)}</div><div class="txt"></div>`;
   wrap.querySelector(".txt").textContent = text;
   log.appendChild(wrap);
-  
-  // 限制日志长度，防止 DOM 膨胀
+
   while (log.children.length > 50) {
     log.removeChild(log.firstChild);
   }
@@ -95,6 +108,7 @@ export function appendLog(who, text, extraClass = "") {
 
 export function appendStreamingBubble(who) {
   const log = el("log");
+  if (!log) return { wrap: document.createElement("div"), txtEl: document.createElement("div") };
   const wrap = document.createElement("div");
   wrap.className = "bubble bubble-streaming";
   wrap.innerHTML = `<div class="who">${escapeHtml(who)}</div><div class="txt"></div>`;
@@ -123,8 +137,9 @@ export function appendDeltaLine(delta) {
   }
   if (Array.isArray(delta.events) && delta.events.length) bits.push(`事：${delta.events.join("； ")}`);
   if (!bits.length) return;
-  
+
   const log = el("log");
+  if (!log) return;
   const div = document.createElement("div");
   div.className = "bubble bubble-meta";
   div.innerHTML = `<div class="who">江湖回执</div><div class="txt"></div>`;
@@ -137,10 +152,15 @@ export function setInteractionBusy(on) {
   const state = store.getState();
   const lock = !!on;
   const base = state.ended || state.player.dead;
-  el("msg").disabled = lock || base;
-  el("btnSend").disabled = lock || base;
-  el("btnSend").classList.toggle("is-loading", lock);
-  
+  const msgEl = el("msg");
+  const btnSend = el("btnSend");
+
+  if (msgEl) msgEl.disabled = lock || base;
+  if (btnSend) {
+    btnSend.disabled = lock || base;
+    btnSend.classList.toggle("is-loading", lock);
+  }
+
   for (const b of document.querySelectorAll("#actionBar .action-chip")) {
     if (lock || base) {
       b.disabled = true;
@@ -154,8 +174,12 @@ export function setInteractionBusy(on) {
 export async function doTalk(inner, npcId, onTalkEnd) {
   const state = store.getState();
   if (!state.playerId || state.ended || state.player.dead) return;
-  
+
   const useStream = el("useNpcStream")?.checked;
+
+  // Cancel any in-flight request
+  abortCurrentTalk();
+
   setInteractionBusy(true);
   try {
     if (useStream) {
@@ -169,6 +193,7 @@ export async function doTalk(inner, npcId, onTalkEnd) {
       }
     }
   } finally {
+    if (!on) setInteractionBusy(false);
     setInteractionBusy(false);
     if (onTalkEnd) onTalkEnd();
   }
@@ -180,11 +205,15 @@ async function talkStream(inner, npcId) {
   let wrap = null;
   let txtEl = null;
 
+  // Create fresh AbortController for this stream
+  _abortController = new AbortController();
+
   try {
     const r = await fetch(`/api/npc/talk_stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ player_id: state.playerId, npc_id: npcId, message: inner }),
+      signal: _abortController.signal,
     });
 
     if (!r.ok) {
@@ -209,35 +238,46 @@ async function talkStream(inner, npcId) {
           if (!line.startsWith("data: ")) continue;
           try {
             const j = JSON.parse(line.slice(6));
-            if (j.chunk) {
+            if (j.chunk && txtEl) {
               txtEl.textContent += j.chunk;
               el("log").scrollTop = el("log").scrollHeight;
             }
             if (j.fatal) {
-              wrap.classList.remove("bubble-streaming");
-              if (j.error) {
+              if (wrap) wrap.classList.remove("bubble-streaming");
+              if (j.error && txtEl) {
                 txtEl.textContent = (txtEl.textContent || "") + `\n[错误] ${j.error}`;
               }
+              _abortController = null;
               return;
             }
             if (j.done) {
-              wrap.classList.remove("bubble-streaming");
-              if (typeof j.reply === "string") txtEl.textContent = j.reply;
+              if (wrap) wrap.classList.remove("bubble-streaming");
+              if (typeof j.reply === "string" && txtEl) txtEl.textContent = j.reply;
               applyTalkResult(j);
+              _abortController = null;
               return;
             }
-          } catch (_e) {
-            // ignore JSON parse error for partial chunks
-          }
+          } catch (_e) { /* partial chunk, continue */ }
         }
       }
     }
     if (wrap) wrap.classList.remove("bubble-streaming");
   } catch (e) {
-    console.error(e);
+    if (e?.name === "AbortError") {
+      // Stream was aborted intentionally — silently
+      if (wrap) {
+        wrap.classList.remove("bubble-streaming");
+        if (txtEl && !txtEl.textContent) txtEl.textContent = "[已取消]";
+      }
+      _abortController = null;
+      return;
+    }
+    console.error("Stream error:", e);
     if (!wrap) ({ wrap, txtEl } = appendStreamingBubble(npcName));
-    wrap.classList.remove("bubble-streaming");
-    txtEl.textContent = (txtEl.textContent || "") + `\n[错误] ${e?.message || e}`;
+    if (wrap) wrap.classList.remove("bubble-streaming");
+    if (txtEl) txtEl.textContent = (txtEl.textContent || "") + `\n[错误] ${e?.message || e}`;
+  } finally {
+    _abortController = null;
   }
 }
 
@@ -250,11 +290,11 @@ function applyTalkResult(data) {
     atmosphere: data.atmosphere ?? store.getState().atmosphere ?? "",
   });
   store.updatePlayer(data.player);
-  
+
   if (data.npcs_here) {
     store.setState({ npcsHere: data.npcs_here });
   }
-  
+
   if (data.delta) {
     appendDeltaLine(data.delta);
     if (data.delta.coins) {

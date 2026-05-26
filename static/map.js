@@ -1,66 +1,47 @@
-// 视口渲染：以玩家为中心，根据容器实际尺寸动态计算列/行数
-// 自适应屏幕宽高比，矩形容器→矩形网格，填满不留白
-const TARGET_TILE = 32; // 目标格子尺寸（含 gap 2px）
-const MIN_TILES = 9;   // 单方向最少格数
-const MAX_TILES = 51;  // 单方向最多格数（性能上限）
+/**
+ * Map Module - Viewport rendering with ResizeObserver for optimal performance.
+ * Dynamic viewport centering on player with efficient tile updates.
+ */
+
+const TARGET_TILE = 32;
+const MIN_TILES = 9;
+const MAX_TILES = 51;
 
 const DYNAMIC_TILE_CLASSES = [
-  "tile-player",
-  "tile-npc",
-  "tile-route",
-  "tile-route-end",
-  "tile-danger",
-  "tile-hurt",
-  "tile-ambush",
-  "tile-unwalkable",
+  "tile-player", "tile-npc", "tile-route", "tile-route-end",
+  "tile-danger", "tile-hurt", "tile-ambush", "tile-unwalkable"
 ];
 
-const LABEL_MAP = {
-  "#": "墙", "^": "悬崖", "~": "险水", ",": "草地", ".": "土路",
-  "F": "林子", ";": "泥地", "/": "山道", "m": "山岭",
-  "T": "客栈", "I": "客栈", "M": "市集", "Y": "衙前", "B": "桥",
-  "=": "河道", "!": "裂隙", "@": "废墟", "&": "密林",
-};
-
-const DANGER_SET = new Set(["~", "!", "@", "^"]);
 const UNWALKABLE_SET = new Set(["#", "^", "!"]);
+const DANGER_SET = new Set(["~", "!", "@", "^"]);
+
 const TERRAIN_CLASS_MAP = {
   "#": "tile-wall", "^": "tile-cliff", "~": "tile-water",
   ",": "tile-grass", ".": "tile-grass", F: "tile-forest",
   "&": "tile-forest", ";": "tile-mud", "/": "tile-mountainpath",
   m: "tile-mountain", T: "tile-tavern", I: "tile-tavern",
   M: "tile-market", Y: "tile-yamen", B: "tile-bridge",
-  "=": "tile-river", "!": "tile-chasm", "@": "tile-ruins",
+  "=": "tile-river", "!": "tile-chasm", "@": "tile-ruins"
 };
-const CACHE = new WeakMap();
 
-/**
- * 以玩家为中心的视口渲染。
- * - 首次或视口偏移时重建 grid（仅 VIEW_SIZE×VIEW_SIZE 格）
- * - 后续动态更新样式
- * - 玩家始终位于视口中央（地图边缘时贴边）
- */
 export function renderMap(host, opts, onCellPick) {
   const {
-    mapId,
-    maps,
-    player,
-    npcCatalog,
-    ambushMarkers = [],
-    moveLocked = false,
-    routeOverlay = null,
-    injuryEvents = [],
+    mapId, maps, player, npcCatalog,
+    ambushMarkers = [], moveLocked = false,
+    routeOverlay = null, injuryEvents = []
   } = opts;
+
   const m = maps[mapId];
   if (!m || !m.rows || !m.rows.length) {
-    host.textContent = "地图未载入";
-    return;
+    host.innerHTML = '<div class="map-placeholder muted">地图未载入</div>';
+    return { destroy: () => {} };
   }
-  const rows = m.rows;
-  const mapH = rows.length;
-  const mapW = rows[0].length;
 
-  // 1. 根据容器实际尺寸动态计算视口宽/高（非正方形，随屏幕比例自适应）
+  const rows = m.rows;
+  const mapW = rows[0].length;
+  const mapH = rows.length;
+
+  // Compute viewport dimensions from container
   const rect = host.getBoundingClientRect();
   const gap = 2;
   const colsFit = Math.max(MIN_TILES, Math.floor((rect.width + gap) / (TARGET_TILE + gap)));
@@ -68,73 +49,110 @@ export function renderMap(host, opts, onCellPick) {
   const viewW = Math.min(colsFit, mapW, MAX_TILES);
   const viewH = Math.min(rowsFit, mapH, MAX_TILES);
 
-  // 2. 视口原点：玩家居中，贴边时 clamp
+  // Viewport origin: center on player, clamp at edges
   const playerOnMap = player.map_id === mapId;
   const vx = clamp(
     (playerOnMap ? player.px : Math.floor(mapW / 2)) - Math.floor(viewW / 2),
-    0, Math.max(0, mapW - viewW),
+    0, Math.max(0, mapW - viewW)
   );
   const vy = clamp(
     (playerOnMap ? player.py : Math.floor(mapH / 2)) - Math.floor(viewH / 2),
-    0, Math.max(0, mapH - viewH),
+    0, Math.max(0, mapH - viewH)
   );
+
   const viewKey = `${mapId}:${vx},${vy}:${viewW}x${viewH}`;
 
-  // 3. 缓存判断
-  let cache = CACHE.get(host);
-  const layoutChanged = !cache || cache.viewKey !== viewKey || cache.viewW !== viewW || cache.viewH !== viewH;
+  // Build grid only when view key changes
+  let cache = host._mapCache;
+  const layoutChanged = !cache || cache.viewKey !== viewKey;
 
   if (layoutChanged) {
-    cache = buildViewportGrid(host, viewKey, m, rows, vx, vy, viewW, viewH);
-    cache.viewW = viewW;
-    cache.viewH = viewH;
-    CACHE.set(host, cache);
-  }
+    host.innerHTML = "";
+    const frag = document.createDocumentFragment();
 
-  // 4. 事件代理（只需绑定一次）
-  if (!cache.delegated) {
-    host.addEventListener("click", (ev) => {
-      const c = CACHE.get(host);
-      if (!c) return;
-      const btn = ev.target.closest(".tile");
-      if (!btn || !host.contains(btn) || btn.disabled) return;
-      const fn = c.onCellPick;
-      if (typeof fn !== "function") return;
-      fn(Number(btn.dataset.x), Number(btn.dataset.y), ev);
-      ev.stopPropagation();
-    });
-    cache.delegated = true;
-  }
-  cache.onCellPick = onCellPick;
-
-  // 5. 容器 resize 时自动重建（rAF 轮询，比 ResizeObserver 兼容性更好）
-  if (!cache._resizeTick) {
-    cache._resizeTick = requestAnimationFrame(function tick() {
-      const r = host.getBoundingClientRect();
-      if (Math.abs(r.width - cache._resizeW) > 4 || Math.abs(r.height - cache._resizeH) > 4) {
-        cache.viewKey = null; // 强制重建
-        const cb = cache._resizeCb;
-        if (cb) cb();
+    for (let dy = 0; dy < viewH; dy++) {
+      for (let dx = 0; dx < viewW; dx++) {
+        const x = vx + dx;
+        const y = vy + dy;
+        const ch = rows[y]?.[x] || ",";
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = `tile ${TERRAIN_CLASS_MAP[ch] || "tile-grass"}`;
+        btn.dataset.x = String(x);
+        btn.dataset.y = String(y);
+        btn.title = `${m.name} (${x},${y}) · ${tileLabel(ch)}${DANGER_SET.has(ch) ? " ⚠" : ""}`;
+        btn.textContent = tileGlyph(ch, false, false);
+        frag.appendChild(btn);
       }
-      cache._resizeTick = requestAnimationFrame(tick);
-    });
+    }
+    host.appendChild(frag);
+    cache = { viewKey, cells: host.querySelectorAll(".tile") };
+    host._mapCache = cache;
   }
-  cache._resizeW = rect.width;
-  cache._resizeH = rect.height;
-  cache._resizeCb = () => {
-    const opts2 = { mapId, maps, player, npcCatalog, ambushMarkers, moveLocked, routeOverlay, injuryEvents };
-    renderMap(host, opts2, onCellPick);
-  };
 
-  // 6. 应用 CSS 变量和类
+  // Setup click handler once
+  if (!cache.clickHandler) {
+    const handler = (ev) => {
+      const btn = ev.target.closest(".tile");
+      if (!btn || !host.contains(btn) || btn.disabled || !onCellPick) return;
+      const tx = Number(btn.dataset.x);
+      const ty = Number(btn.dataset.y);
+      onCellPick(tx, ty, ev);
+      ev.stopPropagation();
+    };
+    host.addEventListener("click", handler);
+    cache.clickHandler = handler;
+  }
+
+  // Setup ResizeObserver for responsive resizing
+  if (!host._resizeObs) {
+    host._resizeObs = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.width > 8 && entry.contentRect.height > 8) {
+          host._mapCache = null; // Force rebuild on resize
+          renderMap(host, opts, onCellPick);
+        }
+      }
+    });
+    host._resizeObs.observe(host);
+  }
+
+  // Apply CSS variables
   host.classList.add("map-host-wrap", "map-host");
   host.style.setProperty("--view-cols", String(viewW));
   host.style.setProperty("--view-rows", String(viewH));
   host.classList.toggle("map-move-locked", !!moveLocked);
 
-  // --- 动态状态 ---
+  // Render dynamic states efficiently
+  renderDynamicTiles(cache.cells, {
+    mapId, rows, mapW, mapH,
+    player, npcCatalog, ambushMarkers,
+    routeOverlay, moveLocked, injuryEvents
+  });
+
+  return {
+    destroy: () => {
+      if (host._resizeObs) {
+        host._resizeObs.disconnect();
+        host._resizeObs = null;
+      }
+      host._mapCache = null;
+    }
+  };
+}
+
+function renderDynamicTiles(cells, opts) {
+  const {
+    rows, mapW, mapH, player, npcCatalog,
+    ambushMarkers, routeOverlay, moveLocked, injuryEvents
+  } = opts;
+
+  const mapId = opts.mapId;
   const dead = !!player.dead;
   const canStep = !dead && !moveLocked;
+  const playerKey = player.map_id === mapId ? `${player.px},${player.py}` : "";
+
+  // Build coordinate sets once
   const routeSet = new Set();
   let routeEndKey = "";
   if (routeOverlay && routeOverlay.mapId === mapId && Array.isArray(routeOverlay.path)) {
@@ -144,30 +162,34 @@ export function renderMap(host, opts, onCellPick) {
       routeEndKey = `${end[0]},${end[1]}`;
     }
   }
+
   const npcSet = new Set(
-    (npcCatalog || []).filter((n) => n.map === mapId).map((n) => `${n.x},${n.y}`),
+    (npcCatalog ||[])
+    .filter((n) => n.map === mapId)
+    .map((n) => `${n.x},${n.y}`)
   );
+
   const ambushAt = new Map();
   for (const am of ambushMarkers) {
     if (am && am.map === mapId) ambushAt.set(`${am.x},${am.y}`, am.glyph);
   }
-  const hurtKeys = new Set();
-  if (injuryEvents && Array.isArray(injuryEvents) && injuryEvents.length > 0) {
-    hurtKeys.add(`${player.px},${player.py}`);
-  }
-  const playerKey = player.map_id === mapId ? `${player.px},${player.py}` : "";
 
-  // 更新每个视口内格子
-  for (const btn of cache.tileByKey.values()) {
+  const hurtKeys = new Set();
+  if (injuryEvents?.length) hurtKeys.add(playerKey);
+
+  // Update each cell
+  for (const btn of cells) {
     const x = Number(btn.dataset.x);
     const y = Number(btn.dataset.y);
     const key = `${x},${y}`;
-    const ch = rows[y][x];
+    const ch = rows[y]?.[x] || ",";
     const here = playerKey === key;
     const hasNpc = npcSet.has(key);
     const amb = ambushAt.get(key);
 
+    // Clear dynamic classes
     for (const cls of DYNAMIC_TILE_CLASSES) btn.classList.remove(cls);
+
     if (here) btn.classList.add("tile-player");
     if (hasNpc) btn.classList.add("tile-npc");
     if (routeSet.has(key)) btn.classList.add("tile-route");
@@ -178,63 +200,24 @@ export function renderMap(host, opts, onCellPick) {
 
     btn.disabled = !canStep;
     if (UNWALKABLE_SET.has(ch)) btn.classList.add("tile-unwalkable");
-    btn.title = `${m.name} (${x},${y}) \u00b7 ${LABEL_MAP[ch] || "\u672a\u77e5"}${DANGER_SET.has(ch) ? " \u26a0\u9669" : ""}`;
 
+    // Update glyph
     const main = tileGlyph(ch, here, hasNpc);
-    if (here && amb) {
-      const html = `<span class="tile-stack" title="\u4fa0\u00b7\u9669"><span class="tile-major">\u4fa0</span><span class="tile-minor">${escapeHtml(amb)}</span></span>`;
-      if (btn.innerHTML !== html) btn.innerHTML = html;
-    } else if (amb && !here) {
-      if (main) {
-        const html = `<span class="tile-stack"><span class="tile-major">${escapeHtml(main)}</span><span class="tile-minor">${escapeHtml(amb)}</span></span>`;
-        if (btn.innerHTML !== html) btn.innerHTML = html;
-      } else {
-        if (btn.textContent !== amb) btn.textContent = amb;
-      }
-    } else {
-      if (btn.textContent !== main) btn.textContent = main;
+    const newHtml = here && amb
+      ? `<span class="tile-stack"><span class="tile-major">侠</span><span class="tile-minor">${escapeHtml(amb)}</span></span>`
+      : amb && !here
+        ? `<span class="tile-stack"><span class="tile-major">${hasNpc ? "人" : escapeHtml(main)}</span><span class="tile-minor">${escapeHtml(amb)}</span></span>`
+        : null;
+
+    if (newHtml) {
+      btn.innerHTML = newHtml;
+    } else if (btn.innerHTML && btn.innerHTML !== main) {
+      btn.textContent = main;
     }
   }
-
-  cache.prevDynamic = {
-    playerKey,
-    npcSet: new Set(npcSet),
-    routeSet: new Set(routeSet),
-    routeEndKey,
-    ambushKeys: new Set(ambushAt.keys()),
-    hurtKeys: new Set(hurtKeys),
-    canStep,
-  };
 }
 
-function buildViewportGrid(host, viewKey, mapInfo, rows, vx, vy, viewW, viewH) {
-  host.innerHTML = "";
-  const frag = document.createDocumentFragment();
-  const tileByKey = new Map();
-
-  for (let dy = 0; dy < viewH; dy++) {
-    for (let dx = 0; dx < viewW; dx++) {
-      const x = vx + dx;
-      const y = vy + dy;
-      const ch = rows[y][x];
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "tile";
-      btn.dataset.x = String(x);
-      btn.dataset.y = String(y);
-      btn.classList.add(TERRAIN_CLASS_MAP[ch] || "tile-grass");
-      btn.title = `${mapInfo.name} (${x},${y}) \u00b7 ${LABEL_MAP[ch] || "\u672a\u77e5"}${DANGER_SET.has(ch) ? " \u26a0\u9669" : ""}`;
-      // 初始设置字形，避免后续动态循环全量 textContent 赋值
-      btn.textContent = tileGlyph(ch, false, false);
-      frag.appendChild(btn);
-      tileByKey.set(`${x},${y}`, btn);
-    }
-  }
-  host.appendChild(frag);
-  return { viewKey, tileByKey, prevDynamic: null, onCellPick: null, delegated: false };
-}
-
-// === 工具函数 ===
+// ─── Helpers ───
 
 function clamp(v, lo, hi) {
   return v < lo ? lo : v > hi ? hi : v;
@@ -242,28 +225,31 @@ function clamp(v, lo, hi) {
 
 function escapeHtml(s) {
   const d = document.createElement("div");
-  d.textContent = s;
+  d.textContent = String(s);
   return d.innerHTML;
 }
 
 function tileGlyph(ch, playerHere, npcHere) {
-  if (playerHere) return "\u4fa0";
-  if (npcHere) return "\u4eba";
+  if (playerHere) return "侠";
+  if (npcHere) return "人";
   const g = {
-    "#": "", "^": "", "~": "", "=": "\u2248", "!": "\u88c2",
-    "@": "\u589f", "&": "", ",": "", ".": "", F: "", ";": "",
-    "/": "\u5f84", m: "\u5cad", T: "\u6808", I: "\u6808",
-    M: "\u5e02", Y: "\u8859", B: "\u6865",
+    "#": "", "^": "", "~": "", "=": "≈", "!": "裂",
+    "@": "墟", "&": "", ",": "", ".": "", F: "",
+    ";": "", "/": "径", m: "岭", T: "栈", I: "栈",
+    M: "市", Y: "衙", B: "桥"
   };
   return g[ch] || "";
 }
 
-const TERRAIN_CN = {
-  "#": "\u5899", "^": "\u60ac\u5d16", "~": "\u9669\u6c34", ",": "\u8349\u5730", ".": "\u571f\u8def",
-  "F": "\u6797\u5b50", ";": "\u6ce5\u5730", "/": "\u5c71\u9053", "m": "\u5c71\u5cad",
-  "T": "\u5ba2\u6808", "I": "\u5ba2\u6808", "M": "\u5e02\u96c6", "Y": "\u8859\u524d", "B": "\u6865",
-  "=": "\u6cb3\u9053", "!": "\u88c2\u9699", "@": "\u5e9f\u589f", "&": "\u5bc6\u6797",
-};
+function tileLabel(ch) {
+  const labels = {
+    "#": "墙", "^": "悬崖", "~": "险水", ",": "草地", ".": "土路",
+    "F": "林子", ";": "泥地", "/": "山道", m: "山岭",
+    "T": "客栈", I: "客栈", M: "市集", Y: "衙前", B: "桥",
+    "=": "河道", "!": "裂隙", "@": "废墟", "&": "密林"
+  };
+  return labels[ch] || "未知";
+}
 
 export function getLocationInfo(mapId, maps, tx, ty) {
   const m = maps[mapId];
@@ -271,13 +257,9 @@ export function getLocationInfo(mapId, maps, tx, ty) {
   const row = m.rows[ty];
   if (tx < 0 || tx >= row.length) return null;
   const ch = row[tx];
-  const walkable = !UNWALKABLE_SET.has(ch);
   return {
-    mapId, mapName: m.name,
-    x: tx, y: ty,
-    glyph: ch,
-    terrain: TERRAIN_CN[ch] || "\u672a\u77e5",
-    walkable,
-    dangerous: DANGER_SET.has(ch),
+    mapId, mapName: m.name, x: tx, y: ty, glyph: ch,
+    terrain: tileLabel(ch), walkable: !UNWALKABLE_SET.has(ch),
+    dangerous: DANGER_SET.has(ch)
   };
 }
