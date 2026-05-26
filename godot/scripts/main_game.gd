@@ -253,16 +253,12 @@ func _build_game_ui() -> void:
 	top_hb.add_child(quit_btn)
 
 	# ═══ Main Area: 2-column HSplitContainer ═══
-	var main_mc := MarginContainer.new()
-	main_mc.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
-	main_mc.add_theme_constant_override("margin_top", 40)
-	_game_ui.add_child(main_mc)
-
 	var hsplit := HSplitContainer.new()
-	hsplit.set_anchors_preset(PRESET_FULL_RECT)
-	hsplit.dragger_visibility = HSplitContainer.DRAGGER_HIDDEN
-	hsplit.split_offset = -360  # negative → right child gets ~360px
-	main_mc.add_child(hsplit)
+	hsplit.set_anchors_and_offsets_preset(PRESET_FULL_RECT, PRESET_MODE_MINSIZE, 0)
+	hsplit.offset_top = 40  # below top bar
+	hsplit.dragger_visibility = HSplitContainer.DRAGGER_VISIBLE_COLLAPSED
+	hsplit.split_offset = -340  # negative → right child gets ~340px
+	_game_ui.add_child(hsplit)
 
 	# ═══ LEFT: Map Panel (flex:1, fills available space) ═══
 	var map_panel := VBoxContainer.new()
