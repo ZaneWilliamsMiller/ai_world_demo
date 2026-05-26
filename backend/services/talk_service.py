@@ -399,7 +399,8 @@ def apply_npc_reply(
     from backend.api.routes import _player_public, _npcs_here
     
     return ({
-        "reply": visible,
+        "visible_text": visible,
+        "reply": visible,  # 向后兼容旧前端
         "flags": dict(p.flags),
         "favor": dict(p.favor),
         "rumors": list(p.rumors),

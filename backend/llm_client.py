@@ -30,14 +30,14 @@ async def _get_client() -> httpx.AsyncClient:
             # 二次检查（double-check）
             if _client is None or _client.is_closed:
                 timeout = httpx.Timeout(
-                    connect=10.0,    # 连接建立超时
-                    read=settings.llm_timeout_s,
+                    connect=settings.llm_pool_connect_timeout,
+                    read=settings.llm_pool_read_timeout,
                     write=10.0,
                     pool=5.0,
                 )
                 limits = httpx.Limits(
-                    max_connections=100,    # 最大并发连接
-                    max_keepalive_connections=20,  # 保活连接数
+                    max_connections=settings.llm_pool_max_connections,
+                    max_keepalive_connections=settings.llm_pool_max_keepalive,
                 )
                 _client = httpx.AsyncClient(
                     timeout=timeout,
@@ -73,17 +73,33 @@ def _get_semaphore() -> asyncio.Semaphore:
 
 
 def cached_system(content: str) -> list[dict[str, Any]]:
-    """生成带 cache_control 标记的 system content 数组。"""
-    return [{
-        "type": "text",
-        "text": content,
-        "cache_control": {"type": "ephemeral"},
-    }]
+    """生成 system content。
+    
+    llm_enable_prompt_cache=True  → 带 cache_control 标记的 content 数组（OpenAI 兼容）。
+    llm_enable_prompt_cache=False → 纯文本字符串（兼容非 OpenAI API）。
+    """
+    from backend.config import settings
+    if settings.llm_enable_prompt_cache:
+        return [{
+            "type": "text",
+            "text": content,
+            "cache_control": {"type": "ephemeral"},
+        }]
+    else:
+        # 非 OpenAI 兼容模式：返回纯文本字符串（大多数 API 只接受 str 类型的 content）
+        return content
 
 
-def uncached(content: str) -> list[dict[str, Any]]:
-    """生成不带缓存的 content 数组（动态上下文块）。"""
-    return [{"type": "text", "text": content}]
+def uncached(content: str) -> str | list[dict[str, Any]]:
+    """生成不带缓存的 content。
+    
+    当 prompt cache 启用时返回数组格式，关闭时返回纯文本。
+    """
+    from backend.config import settings
+    if settings.llm_enable_prompt_cache:
+        return [{"type": "text", "text": content}]
+    else:
+        return content
 
 
 async def chat_completion(

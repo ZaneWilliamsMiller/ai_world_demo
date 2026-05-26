@@ -44,6 +44,64 @@ app.include_router(api_router)
 if STATIC.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
 
+
+import logging
+import asyncio
+_log = logging.getLogger("app.shutdown")
+from backend.session.store import room
+from backend.systems.save_system import save_game
+from backend.config import settings
+
+# 定期自动存档（后台任务）
+_auto_save_task = None
+
+@app.on_event("startup")
+async def _startup():
+    """启动后台定期存档任务。"""
+    global _auto_save_task
+    _auto_save_task = asyncio.create_task(_auto_save_loop())
+
+async def _auto_save_loop():
+    """每 5 分钟自动存档所有活跃玩家。"""
+    _log = logging.getLogger("auto_save")
+    while True:
+        await asyncio.sleep(300)  # 5 分钟
+        saved = 0
+        for pid, p in list(room.players.items()):
+            if p.dead or p.ended:
+                continue
+            try:
+                save_game(p)
+                saved += 1
+            except Exception as e:
+                _log.error("auto-save failed %s: %s", pid, e)
+        if saved:
+            _log.info("auto-saved %d player(s)", saved)
+
+@app.on_event("shutdown")
+async def _shutdown():
+    """优雅关闭：取消自动存档任务 + 自动存档所有活跃玩家 + 释放 httpx 连接池。"""
+    # 取消定期存档任务
+    global _auto_save_task
+    if _auto_save_task and not _auto_save_task.done():
+        _auto_save_task.cancel()
+
+    saved = 0
+    for pid, p in list(room.players.items()):
+        if p.dead or p.ended:
+            continue
+        try:
+            save_game(p)
+            saved += 1
+        except Exception as e:
+            _log.error("auto-save failed %s: %s", pid, e)
+    if saved:
+        _log.info("shutdown auto-saved %d active player(s)", saved)
+
+    from backend.llm_client import _close_client
+    await _close_client()
+
+
 @app.get("/")
 async def index() -> FileResponse:
     index_path = STATIC / "index.html"

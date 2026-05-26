@@ -1,8 +1,16 @@
+from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# 相对于项目根目录（config.py 在 backend/ 下，.env 在项目根）
+_ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=str(_ENV_PATH) if _ENV_PATH.is_file() else ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     # ── LLM 基础配置 ──
     llm_base_url: str = "http://127.0.0.1:11434/v1"
@@ -26,6 +34,10 @@ class Settings(BaseSettings):
     llm_cache_enabled: bool = True             # 是否启用 LLM 响应缓存
     llm_cache_size: int = 128                  # 缓存条目上限
     llm_cache_ttl_s: float = 300.0             # 缓存 TTL（秒）
+
+    # ── Prompt Cache（OpenAI 兼容）──
+    llm_enable_prompt_cache: bool = True      # 是否启用 prompt_cache（cache_control 标记）
+                                     # 非 OpenAI API（如 Paratera）不支持时设为 False
 
     # ── 智能重试（2026 优化）──
     llm_max_retries: int = 3                   # 最大重试次数

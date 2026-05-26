@@ -1,0 +1,10 @@
+ea4bc82a6ad023ab7ee23ee620429895
+::res://::1779816302
+README.md::TextFile::-1::1779815712::0::1::::<><>::
+::res://fonts/::1779815330
+::res://scenes/::1779815657
+game.tscn::PackedScene::6481755077382664988::1779815967::0::1::::<><>::uid://nkakqvqhe4vf::::res://scripts/main_game.gd
+::res://scripts/::1779815994
+api_client.gd::GDScript::-1::1779816031::0::1::::<>Node<>::
+game_manager.gd::GDScript::-1::1779815453::0::1::::<>Node<>::
+main_game.gd::GDScript::-1::1779815906::0::1::::<>Control<>::

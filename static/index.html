@@ -1,261 +1,783 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#1a1208" />
-    <meta name="description" content="活纸 · Living Paper - AI-NPC 社会推演，时辰天气，钱物声望，风闻事件" />
-    <title>活纸 · Living Paper</title>
-    <link rel="stylesheet" href="/static/game.css" />
-  </head>
-  <body class="game-ancient">
-    <!-- 页头加载遮罩 -->
-    <div id="loadingOverlay" class="loading-overlay">
-      <div class="loading-spinner"></div>
-      <span class="loading-text">载入江湖……</span>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>活纸 · 江湖行纪</title>
+<style>
+:root {
+  --bg-dark: #1a1a2e;
+  --bg-panel: #16213e;
+  --bg-card: #1e2a4a;
+  --border: #2a3a5a;
+  --text: #e0e0e0;
+  --text-dim: #8888aa;
+  --accent: #4fc3f7;
+  --accent2: #ff7043;
+  --green: #66bb6a;
+  --yellow: #fdd835;
+  --red: #ef5350;
+  --gold: #ffd700;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  background: var(--bg-dark);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+}
+#app { display: flex; flex-direction: column; height: 100vh; }
+
+/* ── 顶栏 ── */
+.topbar {
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+.topbar h1 { font-size: 18px; color: var(--accent); letter-spacing: 2px; }
+.topbar .subtitle { font-size: 12px; color: var(--text-dim); }
+.topbar .spacer { flex: 1; }
+.topbar button {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 6px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.topbar button:hover { border-color: var(--accent); }
+.topbar button.primary { background: var(--accent); color: #111; font-weight: bold; }
+
+/* ── 主体三栏 ── */
+.main { display: flex; flex: 1; overflow: hidden; }
+
+/* ── 左栏：地图 ── */
+.left-panel {
+  width: 340px;
+  flex-shrink: 0;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.panel-title {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--accent);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.map-container {
+  flex: 1;
+  overflow: auto;
+  padding: 8px;
+}
+.map-grid {
+  display: grid;
+  gap: 0;
+  font-family: "Courier New", monospace;
+  font-size: 11px;
+  line-height: 1.1;
+  white-space: pre;
+}
+.map-cell {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+.map-cell:hover { background: rgba(79,195,247,0.2); }
+.map-cell.player { background: var(--accent); color: #111; font-weight: bold; border-radius: 3px; }
+.map-cell.npc { background: var(--accent2); color: #fff; border-radius: 3px; }
+.map-cell.portal { animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+.legend {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.legend span { margin-right: 10px; }
+
+/* ── 中栏：对话 ── */
+.center-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+.dialogue-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.msg {
+  max-width: 80%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  line-height: 1.6;
+  font-size: 14px;
+}
+.msg.npc {
+  align-self: flex-start;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+.msg.npc .speaker {
+  font-size: 12px;
+  color: var(--accent2);
+  margin-bottom: 4px;
+}
+.msg.player {
+  align-self: flex-end;
+  background: var(--accent);
+  color: #111;
+}
+.msg.system {
+  align-self: center;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-style: italic;
+}
+.input-bar {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.input-bar select {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+.input-bar input {
+  flex: 1;
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+.input-bar input:focus { outline: none; border-color: var(--accent); }
+.input-bar button {
+  background: var(--accent);
+  color: #111;
+  border: none;
+  padding: 6px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+.input-bar button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── 右栏：状态 ── */
+.right-panel {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.stat-block {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.stat-block h3 {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+  letter-spacing: 1px;
+}
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  padding: 2px 0;
+}
+.bar-bg {
+  width: 100%;
+  height: 8px;
+  background: #2a3a5a;
+  border-radius: 4px;
+  margin-top: 4px;
+  overflow: hidden;
+}
+.bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+.bar-fill.vigor { background: var(--green); }
+.bar-fill.spirit { background: var(--accent); }
+.bar-fill.coins { background: var(--gold); }
+.npc-list { list-style: none; }
+.npc-list li {
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.npc-list li:hover { background: var(--bg-card); }
+.npc-list li.selected { background: var(--bg-card); border: 1px solid var(--accent); }
+.npc-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent2);
+  flex-shrink: 0;
+}
+.inv-list { font-size: 12px; color: var(--text-dim); }
+.inv-list span { display: inline-block; background: var(--bg-card); padding: 2px 6px; border-radius: 3px; margin: 2px; }
+
+/* ── 登录界面 ── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.login-box {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 32px;
+  width: 360px;
+}
+.login-box h2 { text-align: center; color: var(--accent); margin-bottom: 20px; letter-spacing: 3px; }
+.login-box label { display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 4px; }
+.login-box input, .login-box select {
+  width: 100%;
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+.login-box button {
+  width: 100%;
+  background: var(--accent);
+  color: #111;
+  border: none;
+  padding: 10px;
+  border-radius: 4px;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+  margin-top: 8px;
+}
+.saves-list { max-height: 160px; overflow-y: auto; margin-bottom: 12px; }
+.saves-list div {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.saves-list div:hover { border-color: var(--accent); }
+.saves-list div.selected { border-color: var(--accent); background: var(--bg-card); }
+
+/* ── 加载动画 ── */
+.loading { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-dim); }
+.streaming-cursor { animation: blink 0.8s infinite; }
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+
+/* ── 天气/时辰徽章 ── */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  margin-left: 6px;
+}
+.badge.night { background: #2a3a5a; color: var(--accent); }
+.badge.day { background: #4a3a1a; color: var(--yellow); }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- 登录界面 -->
+  <div class="overlay" id="loginOverlay">
+    <div class="login-box">
+      <h2>🏮 江湖行纪</h2>
+      <div id="loginForm">
+        <label>江湖名号</label>
+        <input type="text" id="inpName" placeholder="输入你的名号..." maxlength="24">
+        <label>性别</label>
+        <select id="inpGender">
+          <option value="男">男</option>
+          <option value="女">女</option>
+          <option value="未言">不透露</option>
+        </select>
+        <label><input type="checkbox" id="inpPermadeath"> 真实江湖（永久死亡）</label>
+        <button onclick="doHello()">踏入江湖</button>
+      </div>
+      <div id="loadForm" style="display:none;">
+        <label>选择存档</label>
+        <div class="saves-list" id="savesList"></div>
+        <button onclick="doLoad()">继续江湖</button>
+        <button onclick="showLogin()" style="background:transparent; color:var(--text-dim); margin-top:4px;">返回新建</button>
+      </div>
+      <div style="text-align:center;margin-top:12px;">
+        <button onclick="showLoad()" style="background:transparent;color:var(--accent);">载入旧档 →</button>
+      </div>
     </div>
+  </div>
 
-    <div id="game" class="game">
-      <header class="topbar">
-        <div class="brand">
-          <span class="brand-title" id="worldTitle">活纸</span>
-          <span class="brand-sub">AI-NPC 社会推演 · 时辰天气 · 钱物声望 · 风闻事件</span>
-        </div>
-        <div class="top-actions" id="topActions">
-          <div id="characterSheet" class="character-sheet">
-            <label class="field"
-              >名号
-              <input id="displayName" maxlength="24" placeholder="须先填名号" autocomplete="off" />
-            </label>
-            <fieldset class="gender-field">
-              <legend>性别</legend>
-              <label><input type="radio" name="gender" value="男" checked /> 男</label>
-              <label><input type="radio" name="gender" value="女" /> 女</label>
-              <label><input type="radio" name="gender" value="未言" /> 未言</label>
-            </fieldset>
-            <label class="field perm-field">
-              <input type="checkbox" id="permadeath" />
-              真实江湖（意外可死·<b>损毁本机存档</b>）
-            </label>
-          </div>
-          <button type="button" id="btnStart" class="btn primary">踏入江湖</button>
-          <button type="button" id="btnNew" class="btn ghost" title="清除存档并刷新">新开卷</button>
-          <button type="button" id="btnJournal" class="btn ghost" title="翻阅过往对谈与世事" disabled>史册</button>
-        </div>
-        <div class="top-meta">
-          <span id="modePill" class="pill mode-pill" title="按 M 键切换移动模式">点击</span>
-          <span id="clockPill" class="pill clock-pill" title="第几日·时辰·天气">江湖纪：—</span>
-          <span id="modelPill" class="pill">模型：…</span>
-          <span id="savePill" class="pill muted">存档：未载入</span>
-        </div>
-      </header>
+  <!-- 游戏主界面 -->
+  <div class="topbar" id="topbar" style="display:none;">
+    <h1>🏮 活纸 · 江湖行纪</h1>
+    <span class="subtitle" id="topbarInfo"></span>
+    <span class="spacer"></span>
+    <button onclick="doSave()">💾 存档</button>
+    <button onclick="doLogout()">🚪 退出</button>
+  </div>
 
-      <div class="playfield">
-        <aside class="sidebar left" id="panel-sidebar-left">
-          <details class="sidebar-group" open>
-            <summary class="panel-title">行迹</summary>
-            <div class="stat-block">
-              <div>地图 <b id="statMap">—</b></div>
-              <div>坐标 <b id="statPos">—</b></div>
-              <div>制钱 <b id="statCoins">—</b> 文 <span id="statCoinsDelta" class="delta-tip"></span></div>
-              <div>性别 <b id="statGender">—</b></div>
-              <div>真实江湖 <b id="statHard">关</b></div>
-              <div>本格人物好感 <b id="statFavor">—</b></div>
-              <div class="favor-track" title="好感大致倾向（-100 冷 … +100 热）">
-                <span id="favorFill" class="favor-fill"></span>
-              </div>
-            </div>
-          </details>
-
-          <details class="sidebar-group">
-            <summary class="panel-title">身心</summary>
-            <div class="stat-block">
-              <div>体力 <b id="statVigor">—</b><span class="muted" id="statVigorMax"></span></div>
-              <div class="resource-track" title="体力：奔走、力斗会减；歇脚、温食、安寝可补。归零会被擒为奴。">
-                <span id="vigorFill" class="resource-fill resource-vigor"></span>
-              </div>
-              <div id="lifeBurnWrap" class="is-hidden">
-                <div class="muted">生命燃烧</div>
-                <div class="resource-track" title="体力归零后倒计时，结束前不进食将饿死。">
-                  <span id="lifeBurnFill" class="resource-fill resource-burn"></span>
-                </div>
-              </div>
-              <div>心气 <b id="statSpirit">—</b><span class="muted" id="statSpiritMax"></span></div>
-              <div class="resource-track" title="心气：恐惧、屈辱会减；得手、温言、雅事可补。归零会神志失守。">
-                <span id="spiritFill" class="resource-fill resource-spirit"></span>
-              </div>
-            </div>
-          </details>
-
-          <details class="sidebar-group">
-            <summary class="panel-title">随身（信物·线索）</summary>
-            <ul id="invList" class="inv-list" aria-label="随身信物与线索"></ul>
-          </details>
-
-          <details class="sidebar-group">
-            <summary class="panel-title">声望</summary>
-            <ul id="repList" class="rep-list" aria-label="五势力声望"></ul>
-          </details>
-
-          <details class="sidebar-group">
-            <summary class="panel-title">坊间风闻</summary>
-            <ul id="rumorList" class="rumor-list" aria-label="风闻子处积攒的短讯"></ul>
-          </details>
-
-          <details class="sidebar-group">
-            <summary class="panel-title">江湖事件流</summary>
-            <ul id="eventList" class="event-list" aria-label="LLM 推动的世界事件"></ul>
-          </details>
-
-          <details class="sidebar-group">
-            <summary class="panel-title">本格人物</summary>
-            <ul id="npcsHereList" class="inv-list" aria-label="本格可见人物"></ul>
-          </details>
-
-          <details class="sidebar-group">
-            <summary class="panel-title">图例</summary>
-            <p class="legend muted">
-              <strong>侠</strong>=你；<strong>人</strong>=可交谈 NPC（同格）；<strong>栈</strong>客栈／<strong>市</strong>市集／<strong>衙</strong>衙前／<strong>桥</strong>／<strong>门</strong>界门／<strong>径</strong>山道／<strong>岭</strong>山岭。
-              地貌：草地（淡绿）、林子（深绿）、泥地（褐黄，雨日加成）、悬崖（不可越过）、险水（可勉强涉，慢且险）。<br />
-              注意：<strong>有些"客栈"是黑店</strong>，<strong>林中有匪徒藏身</strong>——外形与寻常无异，须踏入方知。
-            </p>
-          </details>
-
-          <details class="sidebar-group">
-            <summary class="panel-title">档案</summary>
-            <div id="introScroll" class="intro-scroll">
-              <pre id="intro" class="intro-pre"></pre>
-            </div>
-          </details>
-        </aside>
-
-        <main class="stage">
-          <section class="map-panel" aria-label="地图">
-            <div class="map-head">
-              <span id="mapName" class="map-name">—</span>
-              <span id="sceneLine" class="scene-line-mini muted">点击地格移动。贴近 NPC 后可切换「本格人物」交谈。</span>
-            </div>
-            <div id="atmosphereText" class="atmosphere-text is-hidden" aria-label="氛围描写"></div>
-            <div class="map-edge-legend" aria-label="地形颜色标注">
-              <span class="edge-chip"><i class="edge-swatch tile-grass"></i>草地</span>
-              <span class="edge-chip"><i class="edge-swatch tile-forest"></i>林地</span>
-              <span class="edge-chip"><i class="edge-swatch tile-mud"></i>泥地</span>
-              <span class="edge-chip"><i class="edge-swatch tile-water"></i>水域</span>
-              <span class="edge-chip"><i class="edge-swatch tile-mountainpath"></i>山道</span>
-              <span class="edge-chip"><i class="edge-swatch tile-mountain"></i>山岭</span>
-              <span class="edge-chip"><i class="edge-swatch tile-cliff"></i>绝壁</span>
-              <span class="edge-chip"><i class="edge-swatch tile-river"></i>河道</span>
-              <span class="edge-chip"><i class="edge-swatch tile-chasm"></i>裂隙</span>
-              <span class="edge-chip"><i class="edge-swatch tile-ruins"></i>废墟</span>
-              <span class="edge-chip"><i class="edge-swatch tile-danger"></i>险地可通行但有重伤风险</span>
-            </div>
-            <div class="map-viewport">
-            <div id="mapHost" class="map-host-wrap">
-              <div class="map-placeholder muted">请先「踏入江湖」载入地图。</div>
-            </div>
-            </div>
-          </section>
-
-          <section class="hud-strip" aria-label="气质">
-            <div class="stat"><span>秩序</span><b id="fOrder">0</b></div>
-            <div class="stat"><span>求真</span><b id="fTruth">0</b></div>
-            <div class="stat"><span>希望</span><b id="fHope">0</b></div>
-            <div class="stat"><span>混乱</span><b id="fChaos">0</b></div>
-          </section>
-
-          <section class="dialogue" aria-label="对话">
-            <div class="dialogue-head">
-              <span class="dialogue-label">本格人物</span>
-              <div class="tabs" id="npcTabs"></div>
-            </div>
-            <div id="log" class="log" role="log"></div>
-
-            <div class="action-bar" id="actionBar" aria-label="快捷动作">
-              <div class="action-group">
-                <span class="action-hint">身法 / 处境</span>
-                <span class="action-route">→ 风闻子（纪事）</span>
-                <div class="action-row">
-                  <button type="button" class="action-chip" data-kind="world" data-act="explore" disabled>探路</button>
-                  <button type="button" class="action-chip" data-kind="world" data-act="observe" disabled>察局</button>
-                  <button type="button" class="action-chip" data-kind="world" data-act="stealth" disabled>潜踪</button>
-                  <button type="button" class="action-chip" data-kind="world" data-act="rest" disabled>歇脚</button>
-                  <button type="button" class="action-chip" data-kind="world" data-act="loot" disabled>摸货</button>
-                  <button type="button" class="action-chip" data-kind="world" data-act="leave" disabled>抽身</button>
-                  <button type="button" class="action-chip" data-kind="world" data-act="sprint" disabled>疾行</button>
-                </div>
-              </div>
-              <div class="action-group">
-                <span class="action-hint">人情 / 生意</span>
-                <span class="action-route">→ 当前人物</span>
-                <div class="action-row">
-                  <button type="button" class="action-chip" data-kind="social" data-act="probe" disabled>试探</button>
-                  <button type="button" class="action-chip" data-kind="social" data-act="deal" disabled>议价</button>
-                  <button type="button" class="action-chip" data-kind="social" data-act="bribe" disabled>行贿</button>
-                  <button type="button" class="action-chip" data-kind="social" data-act="pressure" disabled>施压</button>
-                  <button type="button" class="action-chip" data-kind="social" data-act="help" disabled>卖好</button>
-                  <button type="button" class="action-chip" data-kind="social" data-act="refuse" disabled>推却</button>
-                  <button type="button" class="action-chip" data-kind="social" data-act="goodbye" disabled>作别</button>
-                  <button type="button" class="action-chip" data-kind="social" data-act="woo" disabled>献殷勤</button>
-                </div>
-              </div>
-            </div>
-
-            <form id="talkForm" class="talk">
-              <div class="talk-main">
-                <label class="talk-stream-opt muted"
-                  ><input type="checkbox" id="useNpcStream" checked /> 流式出字（逐段显示，需模型支持 stream）</label
-                >
-                <textarea
-                  id="msg"
-                  rows="3"
-                  maxlength="2000"
-                  placeholder="打字细说……（Enter 发送，Shift+Enter 换行）"
-                  disabled
-                ></textarea>
-              </div>
-              <button type="submit" id="btnSend" class="btn primary" disabled>发送</button>
-            </form>
-          </section>
-        </main>
-
-        <aside class="sidebar right" id="panel-sidebar-right">
-          <div class="sb-right-head">
-            <div class="panel-title">收卷</div>
-            <button type="button" id="btnToggleRight" class="btn ghost sb-toggle" title="折叠/展开">◀</button>
-          </div>
-          <div class="sb-right-body" id="sbRightBody">
-          <p class="hint">结局仍由模型通读全文即兴写就。</p>
-          <label class="field block">倾向</label>
-          <textarea id="closingNote" rows="3" maxlength="600" placeholder="可选：希望留白、某人活命……" disabled></textarea>
-          <button type="button" id="btnFinale" class="btn danger full" disabled>写下结局</button>
-          <div id="ending" class="ending"></div>
-        </div>
-      </aside>
+  <div class="main" id="mainUI" style="display:none;">
+    <!-- 左栏：地图 -->
+    <div class="left-panel">
+      <div class="panel-title" id="mapTitle">🗺️ 地图</div>
+      <div class="map-container" id="mapContainer"></div>
+      <div class="legend">
+        <div>图例：<span style="color:#4fc3f7;">■</span>你 <span style="color:#ff7043;">■</span>NPC <span style="color:#ffd700;">↗</span>界门</div>
       </div>
     </div>
 
-    <!-- 史册抽屉：所有 NPC 的对话与事件回溯 -->
-    <div id="journalDrawer" class="drawer is-hidden" role="dialog" aria-modal="true" aria-label="史册">
-      <div class="drawer-mask" data-close></div>
-      <div class="drawer-panel">
-        <div class="drawer-head">
-          <span class="drawer-title">史册 · 江湖行纪</span>
-          <div class="drawer-tabs" id="journalTabs"></div>
-          <button type="button" class="btn ghost drawer-close" data-close aria-label="关闭史册">合上</button>
-        </div>
-        <div class="drawer-body" id="journalBody"></div>
+    <!-- 中栏：对话 -->
+    <div class="center-panel">
+      <div class="dialogue-area" id="dialogueArea">
+        <div class="msg system" id="introMsg"></div>
+      </div>
+      <div class="input-bar">
+        <select id="npcSelect"></select>
+        <input type="text" id="msgInput" placeholder="对 TA 说些什么..." onkeydown="if(event.key==='Enter')doTalk()">
+        <button onclick="doTalk()" id="talkBtn">发送</button>
       </div>
     </div>
 
-    <div class="shortcuts-hint" aria-label="键盘快捷键">
-      <span><kbd>J</kbd> 史册</span>
-      <span><kbd>T</kbd> 对话焦点</span>
-      <span><kbd>M</kbd> 切换移动模式</span>
-      <span><kbd>Esc</kbd> 关闭菜单/史册</span>
-      <span><kbd>W/A/S/D</kbd> 步行（需切换模式）</span>
+    <!-- 右栏：状态 -->
+    <div class="right-panel">
+      <div class="stat-block">
+        <h3>🧭 时辰气象</h3>
+        <div class="stat-row"><span id="statTime">--</span><span id="statWeather">--</span></div>
+      </div>
+      <div class="stat-block">
+        <h3>💪 身心状态</h3>
+        <div class="stat-row"><span>体力</span><span id="statVigor">--/--</span></div>
+        <div class="bar-bg"><div class="bar-fill vigor" id="barVigor"></div></div>
+        <div class="stat-row" style="margin-top:6px;"><span>心气</span><span id="statSpirit">--/--</span></div>
+        <div class="bar-bg"><div class="bar-fill spirit" id="barSpirit"></div></div>
+      </div>
+      <div class="stat-block">
+        <h3>💰 钱银货物</h3>
+        <div class="stat-row"><span>制钱</span><span id="statCoins">--</span></div>
+        <div class="inv-list" id="statInv"></div>
+      </div>
+      <div class="stat-block">
+        <h3>🧑🤝🧑 此地图人物</h3>
+        <ul class="npc-list" id="npcList"></ul>
+      </div>
+      <div class="stat-block">
+        <h3>🏘️ 地图切换</h3>
+        <div id="portalList" style="font-size:12px;color:var(--text-dim);"></div>
+      </div>
     </div>
+  </div>
+</div>
 
-    <script src="/static/effects.js" type="module"></script>
-    <script src="/static/main.js" type="module"></script>
-  </body>
+<script>
+// ═══════════════════════════════════════════════════════
+//  全局状态
+// ═══════════════════════════════════════════════════════
+const API = "/api";
+let playerId = null;
+let displayName = null;
+let mapsData = {};
+let currentMapId = null;
+let npcsHere = [];
+let selectedNpcId = null;
+let isStreaming = false;
+
+// ═══════════════════════════════════════════════════════
+//  登录流程
+// ═══════════════════════════════════════════════════════
+async function doHello() {
+  const name = document.getElementById("inpName").value.trim() || "江湖客";
+  const gender = document.getElementById("inpGender").value;
+  const permadeath = document.getElementById("inpPermadeath").checked;
+  const pid = "web_" + Date.now();
+  const res = await fetch(`${API}/hello`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({player_id: pid, display_name: name, gender, permadeath})
+  });
+  const data = await res.json();
+  onGameReady(data, pid);
+}
+
+async function showLoad() {
+  document.getElementById("loginForm").style.display = "none";
+  document.getElementById("loadForm").style.display = "block";
+  const res = await fetch(`${API}/saves`);
+  const data = await res.json();
+  const list = document.getElementById("savesList");
+  list.innerHTML = "";
+  (data.saves || []).forEach(s => {
+    const div = document.createElement("div");
+    div.textContent = `${s.display_name}  (${s.map_id}, 第${s.world_day}日) ${s.dead ? "【亡】" : ""}`;
+    div.onclick = () => { 
+      document.querySelectorAll(".saves-list div").forEach(d => d.classList.remove("selected"));
+      div.classList.add("selected");
+      div._pid = s.player_id;
+    };
+    list.appendChild(div);
+  });
+}
+
+function showLogin() {
+  document.getElementById("loadForm").style.display = "none";
+  document.getElementById("loginForm").style.display = "block";
+}
+
+async function doLoad() {
+  const sel = document.querySelector(".saves-list div.selected");
+  if (!sel) return alert("请先选择一个存档");
+  const pid = sel._pid;
+  const res = await fetch(`${API}/load`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({player_id: pid})
+  });
+  const data = await res.json();
+  onGameReady(data, pid);
+}
+
+function onGameReady(data, pid) {
+  playerId = pid;
+  displayName = data.display_name;
+  mapsData = data.maps || {};
+  document.getElementById("loginOverlay").style.display = "none";
+  document.getElementById("topbar").style.display = "flex";
+  document.getElementById("mainUI").style.display = "flex";
+  document.getElementById("introMsg").innerHTML = `<b>欢迎，${displayName}！</b><br>${data.intro || "江湖路远，珍重。"}`;
+  updateUI(data);
+}
+
+function doLogout() {
+  if (!confirm("确定退出？未存档的进度将丢失。")) return;
+  playerId = null;
+  document.getElementById("mainUI").style.display = "none";
+  document.getElementById("topbar").style.display = "none";
+  document.getElementById("loginOverlay").style.display = "flex";
+}
+
+// ═══════════════════════════════════════════════════════
+//  UI 更新
+// ═══════════════════════════════════════════════════════
+function updateUI(data) {
+  const p = data.player || {};
+  currentMapId = p.map_id;
+
+  // 顶栏
+  const isNight = p.world_is_night;
+  const badge = isNight 
+    ? `<span class="badge night">${p.world_shichen}·夜</span>`
+    : `<span class="badge day">${p.world_shichen}</span>`;
+  document.getElementById("topbarInfo").innerHTML = 
+    `${p.map_id || ''} ${badge} ${p.weather || ''}`;
+
+  // 地图
+  renderMap(p);
+
+  // NPC 列表
+  npcsHere = data.npcs_here || [];
+  renderNpcList();
+
+  // 对话 NPC 下拉
+  renderNpcSelect();
+
+  // 状态栏
+  document.getElementById("statTime").textContent = `${p.world_shichen || ''}  ${p.weather || ''}`;
+  document.getElementById("statWeather").textContent = `第${p.world_day || 1}日`;
+
+  const vigor = p.vigor || 0, vigorMax = p.vigor_max || 100;
+  const spirit = p.spirit || 0, spiritMax = p.spirit_max || 100;
+  document.getElementById("statVigor").textContent = `${vigor}/${vigorMax}`;
+  document.getElementById("barVigor").style.width = `${(vigor/vigorMax*100).toFixed(0)}%`;
+  document.getElementById("statSpirit").textContent = `${spirit}/${spiritMax}`;
+  document.getElementById("barSpirit").style.width = `${(spirit/spiritMax*100).toFixed(0)}%`;
+
+  document.getElementById("statCoins").textContent = `${p.coins || 0} 文`;
+  const inv = p.inventory || {};
+  document.getElementById("statInv").innerHTML = Object.entries(inv).map(([k,v]) => 
+    `<span>${k}×${v}</span>`).join("") || "<span style='color:#555;'>身无长物</span>";
+
+  // 地图切换（界门）
+  renderPortals(p);
+}
+
+// ═══════════════════════════════════════════════════════
+//  地图渲染
+// ═══════════════════════════════════════════════════════
+function renderMap(p) {
+  const mapInfo = mapsData[currentMapId];
+  if (!mapInfo) return;
+  const rows = mapInfo.rows;
+  const portals = mapInfo.portals || [];
+  const px = p.px, py = p.py;
+
+  document.getElementById("mapTitle").textContent = `🗺️ ${mapInfo.name || currentMapId}`;
+
+  const container = document.getElementById("mapContainer");
+  const cols = rows[0] ? rows[0].length : 72;
+  const rowsCount = rows.length;
+  container.innerHTML = "";
+
+  const grid = document.createElement("div");
+  grid.className = "map-grid";
+  grid.style.gridTemplateColumns = `repeat(${cols}, 16px)`;
+
+  // 收集此地图 NPC 位置
+  const npcPositions = {};
+  const states = p.npc_states || {};
+  Object.entries(states).forEach(([npcId, n]) => {
+    if (n.map_id === currentMapId) npcPositions[npcId] = true;
+  });
+
+  for (let y = 0; y < rowsCount; y++) {
+    const row = rows[y] || "";
+    for (let x = 0; x < cols; x++) {
+      const ch = x < row.length ? row[x] : " ";
+      const cell = document.createElement("div");
+      cell.className = "map-cell";
+      cell.dataset.x = x;
+      cell.dataset.y = y;
+      cell.innerHTML = terrainChar(ch);
+      if (x === px && y === py) cell.classList.add("player");
+      // 检查是否有 NPC 在此格（简化处理：只标 npcs_here 中的 NPC）
+      cell.title = `(${x},${y}) ${ch}`;
+      cell.onclick = () => doMove(x, y);
+      grid.appendChild(cell);
+    }
+  }
+  container.appendChild(grid);
+}
+
+function terrainChar(ch) {
+  const m = {"#":"⬛",".":"·","~":"〜","=":"＝","F":"🌲","m":"▲",";":"✦","/":"╱",
+    "T":"🏠","Y":"📮","I":"🏚","M":"🏪","B":"⚔","C":"🏯","G":"⛩",
+    "f":"🐟","w":"🚢","s":"⛵","E":"🏛","*":"💰"};
+  return m[ch] || (ch === " " ? "&nbsp;" : ch);
+}
+
+// ═══════════════════════════════════════════════════════
+//  移动
+// ═══════════════════════════════════════════════════════
+async function doMove(tx, ty) {
+  if (!playerId) return;
+  const res = await fetch(`${API}/move`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({player_id: playerId, to_x: tx, to_y: ty})
+  });
+  const data = await res.json();
+  addMsg("system", `移动到 (${tx},${ty})`);
+  updateUI(data);
+}
+
+// ═══════════════════════════════════════════════════════
+//  NPC 列表
+// ═══════════════════════════════════════════════════════
+function renderNpcList() {
+  const ul = document.getElementById("npcList");
+  ul.innerHTML = "";
+  npcsHere.forEach(n => {
+    const li = document.createElement("li");
+    li.innerHTML = `<span class="npc-dot"></span>${n.name}`;
+    li.onclick = () => {
+      selectedNpcId = n.id;
+      renderNpcList();
+      renderNpcSelect();
+      document.getElementById("msgInput").focus();
+    };
+    if (n.id === selectedNpcId) li.classList.add("selected");
+    ul.appendChild(li);
+  });
+}
+
+function renderNpcSelect() {
+  const sel = document.getElementById("npcSelect");
+  sel.innerHTML = "";
+  npcsHere.forEach(n => {
+    const opt = document.createElement("option");
+    opt.value = n.id;
+    opt.textContent = n.name;
+    if (n.id === selectedNpcId) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.onchange = () => { selectedNpcId = sel.value; renderNpcList(); };
+  if (!selectedNpcId && npcsHere.length > 0) selectedNpcId = npcsHere[0].id;
+}
+
+// ═══════════════════════════════════════════════════════
+//  对话
+// ═══════════════════════════════════════════════════════
+async function doTalk() {
+  if (isStreaming) return;
+  const input = document.getElementById("msgInput");
+  const msg = input.value.trim();
+  if (!msg || !selectedNpcId || !playerId) return;
+  input.value = "";
+  addMsg("player", msg);
+
+  // 使用流式接口
+  isStreaming = true;
+  document.getElementById("talkBtn").disabled = true;
+  const npcName = npcsHere.find(n => n.id === selectedNpcId)?.name || "NPC";
+
+  const msgDiv = addMsg("npc", "...", npcName);
+  let visibleText = "";
+
+  try {
+    const res = await fetch(`${API}/npc/talk_stream`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({player_id: playerId, npc_id: selectedNpcId, message: msg})
+    });
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, {stream: true});
+      const lines = buf.split("\n");
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const d = JSON.parse(line.slice(6));
+        if (d.chunk) {
+          visibleText += d.chunk;
+          msgDiv.querySelector(".msg-text").textContent = visibleText;
+          scrollToBottom();
+        }
+        if (d.done) {
+          // 更新状态
+          if (d.player) {
+            fetchState();
+          }
+          break;
+        }
+      }
+    }
+  } catch(e) {
+    msgDiv.querySelector(".msg-text").textContent = "【对话中断，请重试】";
+  }
+  isStreaming = false;
+  document.getElementById("talkBtn").disabled = false;
+  scrollToBottom();
+}
+
+function addMsg(type, text, speaker) {
+  const area = document.getElementById("dialogueArea");
+  const div = document.createElement("div");
+  div.className = "msg " + type;
+  if (type === "npc" && speaker) {
+    div.innerHTML = `<div class="speaker">${speaker}</div><div class="msg-text">${text}</div>`;
+  } else {
+    div.textContent = text;
+  }
+  area.appendChild(div);
+  scrollToBottom();
+  return div;
+}
+
+function scrollToBottom() {
+  const area = document.getElementById("dialogueArea");
+  area.scrollTop = area.scrollHeight;
+}
+
+// ═══════════════════════════════════════════════════════
+//  状态刷新
+// ═══════════════════════════════════════════════════════
+async function fetchState() {
+  if (!playerId) return;
+  const res = await fetch(`${API}/state/${playerId}`);
+  const data = await res.json();
+  updateUI(data);
+}
+
+// ═══════════════════════════════════════════════════════
+//  存档
+// ═══════════════════════════════════════════════════════
+async function doSave() {
+  if (!playerId) return;
+  const res = await fetch(`${API}/save`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({player_id: playerId})
+  });
+  const data = await res.json();
+  addMsg("system", data.ok ? "💾 存档成功" : "❌ 存档失败");
+}
+
+// ═══════════════════════════════════════════════════════
+//  界门（地图切换）
+// ═══════════════════════════════════════════════════════
+function renderPortals(p) {
+  const mapInfo = mapsData[currentMapId];
+  if (!mapInfo) return;
+  const portals = mapInfo.portals || [];
+  const div = document.getElementById("portalList");
+  if (portals.length === 0) {
+    div.innerHTML = "<span style='color:#555;'>此地图无界门</span>";
+    return;
+  }
+  div.innerHTML = portals.map(pt => {
+    const targetMap = mapsData[pt.target_map_id];
+    return `<div style="cursor:pointer;padding:4px 0;" onclick="doMove(${pt.to_x},${pt.to_y})">
+      ↗ 往【${targetMap ? targetMap.name : pt.target_map_id}】(${pt.to_x},${pt.to_y})
+    </div>`;
+  }).join("");
+}
+
+// ═══════════════════════════════════════════════════════
+//  自动刷新状态（每30秒）
+// ═══════════════════════════════════════════════════════
+setInterval(() => { if (playerId) fetchState(); }, 30000);
+</script>
+</body>
 </html>
