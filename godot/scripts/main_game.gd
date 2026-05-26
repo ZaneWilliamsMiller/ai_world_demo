@@ -256,7 +256,7 @@ func _build_game_ui() -> void:
 	var hsplit := HSplitContainer.new()
 	hsplit.set_anchors_and_offsets_preset(PRESET_FULL_RECT, PRESET_MODE_MINSIZE, 0)
 	hsplit.offset_top = 40  # below top bar
-	hsplit.dragger_visibility = HSplitContainer.DRAGGER_VISIBLE_COLLAPSED
+	split.dragger_visibility = SplitContainer.DRAGGER_HIDDEN
 	hsplit.split_offset = -340  # negative → right child gets ~340px
 	_game_ui.add_child(hsplit)
 
