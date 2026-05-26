@@ -371,7 +371,13 @@ func _mini_panel(parent: VBoxContainer) -> Panel:
 	vb.set_position(Vector2(8,6))
 	vb.set_size(Vector2(254, 40))
 	p.add_child(vb)
-	vb.resized.connect(func(): p.set_size(Vector2(270, vb.size.y + 12)))
+	var _in_resize := false
+	vb.resized.connect(func():
+		if _in_resize: return
+		_in_resize = true
+		p.set_size(Vector2(270, vb.size.y + 12))
+		_in_resize = false
+	)
 	return p
 
 
