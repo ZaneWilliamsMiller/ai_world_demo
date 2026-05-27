@@ -7,7 +7,8 @@ window.App = window.App || {};
   "use strict";
 
   // ── API 配置（可切换后端/独立模式）──
-  App.BACKEND_URL = "http://127.0.0.1:8780";  // 后端服务地址（独立打开时使用）
+  // 默认地址为示例值，请通过配置面板设置正确的后端地址
+  App.BACKEND_URL = "http://127.0.0.1:8765";
   App.LLM_API_URL = "https://llmapi.paratera.com/v1";  // LLM API 直连
   App.LLM_API_KEY = "sk-o5exptybwJAro8OfIqqmjQ";
   App.LLM_MODEL = "DeepSeek-V4-Pro";
