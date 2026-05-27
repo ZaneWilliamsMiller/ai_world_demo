@@ -45,8 +45,8 @@ class HelloBody(BaseModel):
 
 class MoveBody(BaseModel):
     player_id: str
-    to_x: int = Field(..., ge=0, le=256)
-    to_y: int = Field(..., ge=0, le=256)
+    to_x: int = Field(..., ge=0, le=149)
+    to_y: int = Field(..., ge=0, le=99)
 
 
 @router.post("/api/hello")

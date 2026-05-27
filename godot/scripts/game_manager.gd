@@ -175,9 +175,9 @@ func talk_to_npc(npc_id: String, message: String) -> bool:
 		system_message.emit("对话失败")
 		return false
 
-	var visible: String = res.get("visible_text", res.get("reply", ""))
+	var visible_text: String = res.get("visible_text", res.get("reply", ""))
 	var npc_name: String = npc_labels.get(npc_id, npc_id)
-	chat_message.emit(npc_name, visible, npc_id)
+	chat_message.emit(npc_name, visible_text, npc_id)
 
 	var p: Dictionary = res.get("player", {})
 	if not p.is_empty():

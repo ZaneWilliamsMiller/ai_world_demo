@@ -261,6 +261,7 @@ def apply_npc_reply(
     npc_id: str,
     user_message: str,
     parsed: NpcResponseSchema,
+    is_fallback: bool = False,
 ) -> tuple[dict[str, Any], bool]:
     """回写所有效果。第二个返回值表示是否需要触发后台反思。"""
     visible = parsed.visible_text
@@ -391,7 +392,8 @@ def apply_npc_reply(
     needs_reflect = mind.needs_reflect()
 
     # 10) 推进时辰：每次成功对话推进 1 时辰
-    advance_clock(p, 1)
+    if not is_fallback:
+        advance_clock(p, 1)
 
     # ── NPC 情绪自然衰减：对话推时辰时同步所有 NPC 情绪向中性回归 ──
     _decay_all_npc_moods(p)

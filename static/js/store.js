@@ -49,6 +49,9 @@ window.App = window.App || {};
   // ── 流式对话状态 ──
   App.isStreaming = false;
 
+  // ── Shutdown 认证密钥 ──
+  App.SHUTDOWN_SECRET = "";
+
   // ── API 模式切换 ──
   App.setApiMode = function(mode) {
     App.apiMode = mode;

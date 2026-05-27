@@ -390,7 +390,7 @@ func build_game_ui(parent: Control, on_tile_click: Callable, on_npc_map_click: C
 	refs["dialogue_label"].fit_content = true
 	refs["dialogue_label"].selection_enabled = true
 	refs["dialogue_label"].size_flags_horizontal = SIZE_EXPAND
-	refs["dialogue_label"].scroll_active = false
+	refs["dialogue_label"].scroll_following = false
 	refs["dialogue_label"].add_theme_font_size_override("normal_font_size", 13)
 	refs["dialogue_label"].add_theme_color_override("default_color", GameColors.TEXT)
 	refs["chat_scroll"].add_child(refs["dialogue_label"])

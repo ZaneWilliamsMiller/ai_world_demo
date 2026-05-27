@@ -8,7 +8,7 @@ import asyncio
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import settings
@@ -132,11 +132,16 @@ async def _shutdown():
 
 
 @app.post("/api/shutdown")
-async def shutdown_server():
+async def shutdown_server(request: Request):
     """关闭后端服务（仅用于开发环境）"""
     import os
     import threading
     import httpx
+
+    secret = request.headers.get("X-Shutdown-Secret", "")
+    expected = os.environ.get("SHUTDOWN_SECRET", "")
+    if expected and secret != expected:
+        raise HTTPException(403, "无权关闭服务")
 
     frontend_port = os.environ.get("FRONTEND_PORT")
 

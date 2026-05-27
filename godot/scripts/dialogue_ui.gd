@@ -52,7 +52,7 @@ func _build_ui() -> void:
 	_dialogue_label.fit_content = true
 	_dialogue_label.selection_enabled = true
 	_dialogue_label.size_flags_horizontal = SIZE_EXPAND
-	_dialogue_label.scroll_active = false
+	_dialogue_label.scroll_following = false
 	_dialogue_label.add_theme_font_size_override("normal_font_size", 13)
 	_dialogue_label.add_theme_color_override("default_color", TEXT)
 	_chat_scroll.add_child(_dialogue_label)

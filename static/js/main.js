@@ -344,7 +344,10 @@ window.App = window.App || {};
 
               const resp = await fetch(App.BACKEND_URL + "/api/shutdown", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-Shutdown-Secret": App.SHUTDOWN_SECRET || ""
+                },
                 signal: controller.signal
               });
 
@@ -532,7 +535,13 @@ window.App = window.App || {};
 
   _statePollTimer = setInterval(function() {
     if (App.playerId && !App.isStreaming && App.apiMode === "backend") {
-      App.fetchState().then(function(data) { if (data) App.updateUI(data); });
+      App.fetchState().then(function(data) {
+        if (data) App.updateUI(data);
+      }).catch(function(err) {
+        if (err.message && err.message.includes('404')) {
+          App.doLogout();
+        }
+      });
     }
   }, 30000);
 

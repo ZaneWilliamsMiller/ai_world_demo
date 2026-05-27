@@ -209,7 +209,7 @@ async def _execute_with_retry(
     return None
 
 
-async def _handle_llm_response(response_data: dict[str, Any], cache, circuit_breaker, messages) -> str:
+async def _handle_llm_response(response_data: dict[str, Any], cache, circuit_breaker, messages, *, temperature: float = 0.0, model: str = "", max_tokens: int = 0) -> str:
     """处理 LLM 响应并写入缓存（修复 Major #7：提取公共响应解析逻辑）。
 
     Returns:
@@ -223,7 +223,7 @@ async def _handle_llm_response(response_data: dict[str, Any], cache, circuit_bre
 
     content = response_data["choices"][0]["message"]["content"] or ""
 
-    await cache.set(messages, content)
+    await cache.set(messages, content, temperature=temperature, model=model, max_tokens=max_tokens)
     await circuit_breaker.success()
 
     return content
@@ -331,7 +331,7 @@ async def chat_completion(
     sem = _get_semaphore()
 
     # ── 1. 检查缓存 ──
-    cached = await cache.get(messages)
+    cached = await cache.get(messages, temperature=temperature, model=settings.llm_model, max_tokens=max_tokens)
     if cached is not None:
         return cached
 
@@ -359,7 +359,7 @@ async def chat_completion(
             r = await client.post(url, json=body)
             r.raise_for_status()
             data = r.json()
-            return await _handle_llm_response(data, cache, cb, messages)
+            return await _handle_llm_response(data, cache, cb, messages, temperature=temperature, model=settings.llm_model, max_tokens=max_tokens)
 
         result = await _execute_with_retry(_do_request, max_retries, base_delay, cb, "LLM")
         return result or ""

@@ -1,4 +1,5 @@
 from pathlib import Path
+from pydantic import validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # 相对于项目根目录（config.py 在 backend/ 下，.env 在项目根）
@@ -46,6 +47,13 @@ class Settings(BaseSettings):
 
     # ── CORS ──
     cors_allow_origins: str = "*"
+
+    @validator('llm_api_key')
+    def warn_empty_key(cls, v):
+        if not v:
+            import logging
+            logging.getLogger('config').warning('LLM_API_KEY 未配置，NPC 对话功能将不可用')
+        return v
 
 
 settings = Settings()

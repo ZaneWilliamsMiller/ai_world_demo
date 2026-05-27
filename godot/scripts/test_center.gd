@@ -184,7 +184,7 @@ func _run_test(test_name: String, card_vb: VBoxContainer) -> void:
 		if success:
 			output_box.text = "[color=green]✅ 测试成功[/color]\n\n[color=white]%s[/color]" % output
 		else:
-			var exit_str = "" if exit_code == null else " [退出码: %d]" % exit_code
+			var exit_str = "" if exit_code == null else " [退出码: %s]" % str(exit_code)
 			output_box.text = "[color=red]❌ 测试失败%s[/color]\n\n[color=white]%s[/color]" % [exit_str, output]
 
 	_current_running_test = ""

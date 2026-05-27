@@ -174,7 +174,7 @@ async def npc_talk(body: TalkBody, bg: BackgroundTasks) -> dict[str, Any]:
             )
 
         async with p.lock:
-            out, needs_reflect = apply_npc_reply(p, body.npc_id, body.message, parsed)
+            out, needs_reflect = apply_npc_reply(p, body.npc_id, body.message, parsed, is_fallback=is_fallback)
             p.last_talk_npc_id = body.npc_id
             p.last_talk_message = body.message
 
@@ -253,7 +253,7 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
                     await asyncio.sleep(0.01)
             try:
                 async with p.lock:
-                    out, _ = apply_npc_reply(p, body.npc_id, body.message, parsed)
+                    out, _ = apply_npc_reply(p, body.npc_id, body.message, parsed, is_fallback=True)
                     p.last_talk_npc_id = body.npc_id
                     p.last_talk_message = body.message
             except Exception:

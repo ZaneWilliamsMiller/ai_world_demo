@@ -24,6 +24,7 @@ var _req_id: int = 0
 func request(path: String, method: String = "GET", body: Dictionary = {}) -> Dictionary:
 	var http := HTTPRequest.new()
 	add_child(http)
+	http.timeout = timeout_sec
 
 	var full_url := backend_url.rstrip("/") + path
 	var headers := PackedStringArray([
@@ -76,6 +77,7 @@ func request(path: String, method: String = "GET", body: Dictionary = {}) -> Dic
 func llm_chat(messages: Array[Dictionary], temperature: float = 0.7, max_tokens: int = 1024) -> Dictionary:
 	var http := HTTPRequest.new()
 	add_child(http)
+	http.timeout = timeout_sec
 
 	var full_url := llm_api_url.rstrip("/") + "/chat/completions"
 	var headers := PackedStringArray([
@@ -121,6 +123,7 @@ signal stream_done(data: Dictionary)
 func talk_stream(player_id: String, npc_id: String, message: String) -> void:
 	var http := HTTPRequest.new()
 	add_child(http)
+	http.timeout = timeout_sec
 
 	var full_url := backend_url.rstrip("/") + "/api/npc/talk_stream"
 	var headers := PackedStringArray([
@@ -134,7 +137,11 @@ func talk_stream(player_id: String, npc_id: String, message: String) -> void:
 	})
 
 	http.request_completed.connect(_on_stream_complete.bind(http))
-	http.request(full_url, headers, HTTPClient.METHOD_POST, json_body)
+	var err: int = http.request(full_url, headers, HTTPClient.METHOD_POST, json_body)
+	if err != OK:
+		http.queue_free()
+		emit_signal("stream_done", {"error": "request_failed", "done": true})
+		return
 
 
 func _on_stream_complete(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray, http: HTTPRequest) -> void:

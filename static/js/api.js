@@ -33,7 +33,7 @@ window.App = window.App || {};
   function backendGet(url) {
     const path = url.startsWith("/api") ? url.substring(4) : url;
     const fullUrl = App.API + path;
-    return fetch(fullUrl).then(async function(r) {
+    return fetch(fullUrl, { cache: 'no-store' }).then(async function(r) {
       if (!r.ok) {
         let errorMsg = url + " " + r.status;
         try {

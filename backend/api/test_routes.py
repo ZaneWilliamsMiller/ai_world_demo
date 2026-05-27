@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import sys
 from pathlib import Path
 from typing import Optional
@@ -55,9 +56,13 @@ async def list_tests():
 @router.post("/run/{test_name}")
 async def run_test(test_name: str):
     """执行指定的测试脚本"""
+    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', test_name):
+        raise HTTPException(400, "无效的测试名称")
     test_file = TESTS_DIR / f"{test_name}.py"
+    if not test_file.resolve().is_relative_to(TESTS_DIR.resolve()):
+        raise HTTPException(403, "路径越界")
     if not test_file.exists():
-        raise HTTPException(404, f"Test not found: {test_name}")
+        raise HTTPException(404, f"测试 {test_name} 不存在")
 
     try:
         proc = await asyncio.create_subprocess_exec(

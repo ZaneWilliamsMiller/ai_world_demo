@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import fields
+import os
+import tempfile
+from dataclasses import fields as dc_fields
 from pathlib import Path
 from typing import Any
 
@@ -37,7 +39,7 @@ def _serialize_player(p: PlayerState) -> dict[str, Any]:
     minds 中的 AgentMind 转为 dict；
     npc_positions 中的 tuple 转为 list。"""
     data: dict[str, Any] = {}
-    for fld in fields(p):
+    for fld in dc_fields(p):
         key = fld.name
         if key == "lock":
             continue
@@ -84,6 +86,9 @@ def _deserialize_player(data: dict[str, Any]) -> PlayerState:
         rep.setdefault(k, 0)
     data["reputation"] = rep
 
+    valid_keys = {f.name for f in dc_fields(PlayerState) if f.name != 'lock'}
+    data = {k: v for k, v in data.items() if k in valid_keys}
+
     p = PlayerState(**data)
 
     # 还原 minds
@@ -122,10 +127,13 @@ def _deserialize_player(data: dict[str, Any]) -> PlayerState:
         p.minds[nid] = mind
 
     # 还原 npc_positions：list → tuple
-    p.npc_positions = {
-        nid: (str(v[0]), int(v[1]), int(v[2]))
-        for nid, v in npc_pos_raw.items()
-    }
+    p.npc_positions = {}
+    for nid, val in npc_pos_raw.items():
+        if isinstance(val, (list, tuple)) and len(val) >= 3:
+            try:
+                p.npc_positions[nid] = (str(val[0]), int(val[1]), int(val[2]))
+            except (ValueError, TypeError):
+                continue
 
     # 兼容：没有这些字段的老存档
     if not hasattr(p, "vigor_max") or not p.vigor_max:
@@ -137,6 +145,15 @@ def _deserialize_player(data: dict[str, Any]) -> PlayerState:
         p.vigor = 80
     if int(getattr(p, "spirit", 0)) <= 0:
         p.spirit = 80
+
+    from backend.data.maps_data import MAPS
+    if p.map_id not in MAPS:
+        p.map_id = 'world'
+    rows = MAPS[p.map_id]['rows']
+    max_y = len(rows) - 1
+    max_x = max(len(r) for r in rows) - 1 if rows else 0
+    p.px = max(0, min(max_x, p.px))
+    p.py = max(0, min(max_y, p.py))
 
     return p
 
@@ -151,8 +168,17 @@ def save_game(p: PlayerState) -> str:
     data = _serialize_player(p)
     fp = SAVE_DIR / f"{p.player_id}.json"
     try:
-        with open(fp, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix='.json.tmp', dir=str(SAVE_DIR))
+        try:
+            with os.fdopen(tmp_fd, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, fp)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+            raise
         log.info("存档成功: %s (%s, 第%d日, 制钱%d)", p.display_name, p.player_id,
                   p.world_day, p.coins)
         return str(fp)
