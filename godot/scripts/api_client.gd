@@ -8,9 +8,9 @@ extends Node
 
 # ── Config (exported for editor-time override) ──
 @export var backend_url: String = "http://127.0.0.1:8765"
-@export var llm_api_url: String = "https://llmapi.paratera.com/v1"
-@export var llm_api_key: String = "sk-o5exptybwJAro8OfIqqmjQ"
-@export var llm_model: String = "DeepSeek-V4-Pro"
+@export var llm_api_url: String = ""
+@export var llm_api_key: String = ""
+@export var llm_model: String = ""
 @export var timeout_sec: float = 30.0
 
 ## Current API mode: "backend" or "direct"
