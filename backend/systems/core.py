@@ -102,8 +102,12 @@ def npc_ids_for_player(p: PlayerState) -> list[str]:
             out.append(nid)
             continue
         cell = p.npc_positions.get(nid) if getattr(p, "npc_positions", None) else meta.get("cell")
-        if cell and cell[0] == p.map_id and cell[1] == p.px and cell[2] == p.py:
-            out.append(nid)
+        if cell and cell[0] == p.map_id:
+            # 检查NPC是否在同一格子或相邻格子
+            dx = abs(cell[1] - p.px)
+            dy = abs(cell[2] - p.py)
+            if (dx == 0 and dy == 0) or (dx <= 1 and dy <= 1):
+                out.append(nid)
     hidden_here = [x for x in out if NPCS.get(x, {}).get("hidden")]
     normal_here = [x for x in out if not NPCS.get(x, {}).get("hidden")]
     merged: list[str] = []

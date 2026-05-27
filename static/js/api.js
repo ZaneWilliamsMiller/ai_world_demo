@@ -16,8 +16,15 @@ window.App = window.App || {};
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
-    }).then(function(r) {
-      if (!r.ok) throw new Error(url + " " + r.status);
+    }).then(async function(r) {
+      if (!r.ok) {
+        try {
+          var errorJson = await r.json();
+          throw new Error(errorJson.detail || errorJson.message || url + " " + r.status);
+        } catch (e) {
+          throw new Error(url + " " + r.status);
+        }
+      }
       return r.json();
     });
   }
@@ -25,8 +32,15 @@ window.App = window.App || {};
   function backendGet(url) {
     var path = url.startsWith("/api") ? url.substring(4) : url;
     var fullUrl = App.API + path;
-    return fetch(fullUrl).then(function(r) {
-      if (!r.ok) throw new Error(url + " " + r.status);
+    return fetch(fullUrl).then(async function(r) {
+      if (!r.ok) {
+        try {
+          var errorJson = await r.json();
+          throw new Error(errorJson.detail || errorJson.message || url + " " + r.status);
+        } catch (e) {
+          throw new Error(url + " " + r.status);
+        }
+      }
       return r.json();
     });
   }
@@ -124,7 +138,14 @@ window.App = window.App || {};
           message: message
         })
       });
-      if (!res.ok) throw new Error("talk_stream " + res.status);
+      if (!res.ok) {
+        try {
+          var errorJson = await res.json();
+          throw new Error(errorJson.detail || errorJson.message || "talk_stream " + res.status);
+        } catch (e) {
+          throw new Error("talk_stream " + res.status);
+        }
+      }
       return res.body.getReader();
     } else {
       // 独立模式：直接调用 LLM API

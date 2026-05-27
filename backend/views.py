@@ -12,7 +12,7 @@ from backend.data.npcs_data import NPCS
 from backend.data.factions import FACTIONS
 from backend.models.player import PlayerState
 from backend.systems.core import npc_ids_for_player, npc_catalog_for_player
-from backend.systems.time_weather import shichen_name, is_night
+from backend.systems.time_weather import shichen_name, is_night, shichen_phase
 
 
 def player_public(p: PlayerState) -> dict[str, Any]:
@@ -85,19 +85,3 @@ def map_locations_public() -> dict[str, dict[str, list[int]]]:
 def factions_public() -> dict[str, str]:
     """返回公开势力信息。"""
     return dict(FACTIONS)
-
-
-def shichen_phase(idx: int) -> str:
-    """时辰阶段名称。"""
-    i = idx % 12
-    if i in (0, 1):
-        return "深夜"
-    if i in (2, 3):
-        return "凌晨"
-    if i in (4, 5):
-        return "上午"
-    if i in (6, 7):
-        return "正午"
-    if i in (8, 9):
-        return "傍晚"
-    return "夜里"

@@ -13,9 +13,9 @@ class Settings(BaseSettings):
     )
 
     # ── LLM 基础配置 ──
-    llm_base_url: str = "http://127.0.0.1:11434/v1"
-    llm_api_key: str = "ollama"
-    llm_model: str = "qwen2.5:7b"
+    llm_base_url: str = "https://llmapi.paratera.com/v1"
+    llm_api_key: str = "sk-o5exptybwJAro8OfIqqmjQ"
+    llm_model: str = "DeepSeek-V4-Pro"
     llm_timeout_s: float = 120.0
 
     # ── 连接池（2026 优化）──
@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     llm_cache_ttl_s: float = 300.0             # 缓存 TTL（秒）
 
     # ── Prompt Cache（OpenAI 兼容）──
-    llm_enable_prompt_cache: bool = True      # 是否启用 prompt_cache（cache_control 标记）
+    llm_enable_prompt_cache: bool = False      # 是否启用 prompt_cache（cache_control 标记）
                                      # 非 OpenAI API（如 Paratera）不支持时设为 False
 
     # ── 智能重试（2026 优化）──

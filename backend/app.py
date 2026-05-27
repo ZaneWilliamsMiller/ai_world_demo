@@ -47,8 +47,9 @@ app.add_middleware(
 
 app.include_router(api_router)
 
-if STATIC.exists():
-    app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
+# 真正的前后端分离：后端只提供API，不提供静态文件
+# if STATIC.exists():
+#     app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
 
 
 # 定期自动存档（后台任务）
@@ -104,9 +105,10 @@ async def _shutdown():
     await _close_client()
 
 
-@app.get("/")
-async def index() -> FileResponse:
-    index_path = STATIC / "index.html"
-    if not index_path.is_file():
-        raise HTTPException(500, "缺少 static/index.html")
-    return FileResponse(index_path)
+# 真正的前后端分离：后端只提供API，不提供静态文件
+# @app.get("/")
+# async def index() -> FileResponse:
+#     index_path = STATIC / "index.html"
+#     if not index_path.is_file():
+#         raise HTTPException(500, "缺少 static/index.html")
+#     return FileResponse(index_path)

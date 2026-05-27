@@ -43,4 +43,5 @@ async def test():
         assert not llm_fallback, f"FAIL: llm_fallback activated!"
         sys.stdout.write("\n=== ALL FIX VERIFICATIONS PASSED ===\n")
 
-asyncio.run(test())
+if __name__ == "__main__":
+    asyncio.run(test())

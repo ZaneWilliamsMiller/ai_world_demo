@@ -7,7 +7,7 @@ window.App = window.App || {};
   "use strict";
 
   // ── API 配置（可切换后端/独立模式）──
-  App.BACKEND_URL = "http://127.0.0.1:8765";  // 后端服务地址（独立打开时使用）
+  App.BACKEND_URL = "http://127.0.0.1:8780";  // 后端服务地址（独立打开时使用）
   App.LLM_API_URL = "https://llmapi.paratera.com/v1";  // LLM API 直连
   App.LLM_API_KEY = "sk-o5exptybwJAro8OfIqqmjQ";
   App.LLM_MODEL = "DeepSeek-V4-Pro";
@@ -15,8 +15,8 @@ window.App = window.App || {};
   // 当前模式: "backend" | "standalone"
   App.apiMode = "backend";
 
-  // 检测是否由后端 serve（同源），是则使用相对路径
-  var _sameOrigin = (window.location.port === "8765");
+  // 检测是否由后端 serve（同源），是则使用相对路径（前后端分离时永远为false）
+  var _sameOrigin = false;
 
   // 便捷属性：当前 API 基地址
   Object.defineProperty(App, "API", {
@@ -50,7 +50,7 @@ window.App = window.App || {};
     var indicator = document.getElementById("apiModeIndicator");
     if (indicator) {
       indicator.textContent = mode === "backend" ? "后端模式" : "独立模式";
-      indicator.className = "mode-badge " + mode;
+      indicator.className = "api-mode-badge " + mode;
     }
     console.log("[App] API mode →", mode);
   };

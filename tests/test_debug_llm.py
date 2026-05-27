@@ -54,4 +54,5 @@ async def test():
         sys.stdout.write(f"visible_text: {(data.get('visible_text',''))[:100]}\n")
         sys.stdout.write(f"reply: {(data.get('reply',''))[:100]}\n")
 
-asyncio.run(test())
+if __name__ == "__main__":
+    asyncio.run(test())

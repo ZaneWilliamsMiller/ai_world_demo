@@ -27,12 +27,13 @@ window.App = window.App || {};
     var npcName = App.npcsHere.find(function(n) { return n.id === App.selectedNpcId; });
     npcName = npcName ? npcName.name : "NPC";
 
-    var msgDiv = App.addMsg("npc", "...", npcName);
-    var textEl = msgDiv.querySelector(".msg-text");
-    var visibleText = "";
-
     try {
       var reader = await App.talkStream(App.selectedNpcId, msg);
+      
+      var msgDiv = App.addMsg("npc", "...", npcName);
+      var textEl = msgDiv.querySelector(".msg-text");
+      var visibleText = "";
+      
       var decoder = new TextDecoder();
       var buf = "";
 
@@ -60,7 +61,14 @@ window.App = window.App || {};
         }
       }
     } catch (e) {
-      textEl.textContent = "\u3010\u5bf9\u8bdd\u4e2d\u65ad\uff0c\u8bf7\u91cd\u8bd5\u3011";
+      // 游戏内情境提示（如身陷险局）作为系统消息显示
+      var errorMsg = e.message || "对话中断，请重试";
+      // 移除之前创建的空NPC消息
+      var lastMsg = document.querySelector(".msg:last-child");
+      if (lastMsg && lastMsg.classList.contains("npc") && lastMsg.textContent === "...") {
+        lastMsg.remove();
+      }
+      App.addMsg("system", errorMsg);
     }
 
     App.isStreaming = false;

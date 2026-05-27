@@ -6,6 +6,54 @@ window.App = window.App || {};
 (function(App) {
   "use strict";
 
+  // 配置面板开关
+  App.toggleConfigPanel = function() {
+    var overlay = document.getElementById("configOverlay");
+    var panel = document.getElementById("configPanel");
+    if (!overlay || !panel) return;
+    if (panel.style.display === "none" || panel.style.display === "") {
+      panel.style.display = "block";
+      overlay.style.display = "flex";
+      App.fillConfigValues();
+    } else {
+      panel.style.display = "none";
+      overlay.style.display = "none";
+    }
+  };
+
+  App.fillConfigValues = function() {
+    var modeSelect = document.getElementById("cfgApiMode");
+    var backendUrl = document.getElementById("cfgBackendUrl");
+    var llmUrl = document.getElementById("cfgLlmUrl");
+    var llmKey = document.getElementById("cfgLlmKey");
+    var llmModel = document.getElementById("cfgLlmModel");
+    if (modeSelect) modeSelect.value = App.apiMode;
+    if (backendUrl) backendUrl.value = App.BACKEND_URL;
+    if (llmUrl) llmUrl.value = App.LLM_API_URL;
+    if (llmKey) llmKey.value = App.LLM_API_KEY;
+    if (llmModel) llmModel.value = App.LLM_MODEL;
+  };
+
+  App.applyConfig = function() {
+    var modeSelect = document.getElementById("cfgApiMode");
+    var backendUrl = document.getElementById("cfgBackendUrl");
+    var llmUrl = document.getElementById("cfgLlmUrl");
+    var llmKey = document.getElementById("cfgLlmKey");
+    var llmModel = document.getElementById("cfgLlmModel");
+    if (modeSelect) App.apiMode = modeSelect.value;
+    if (backendUrl) App.BACKEND_URL = backendUrl.value.trim();
+    if (llmUrl) App.LLM_API_URL = llmUrl.value.trim();
+    if (llmKey) App.LLM_API_KEY = llmKey.value.trim();
+    if (llmModel) App.LLM_MODEL = llmModel.value.trim();
+    App.saveConfig();
+    var modeIndicator = document.getElementById("apiModeIndicator");
+    if (modeIndicator) {
+      modeIndicator.textContent = App.apiMode === "backend" ? "后端模式" : "独立模式";
+      modeIndicator.className = "api-mode-badge " + App.apiMode;
+    }
+    App.toggleConfigPanel();
+  };
+
   App.showLoadForm = async function() {
     document.getElementById("loginForm").style.display = "none";
     document.getElementById("loadForm").style.display = "block";
@@ -38,7 +86,7 @@ window.App = window.App || {};
     var btn = document.querySelector('#loginForm button[onclick*="startNewGame"]');
     if (btn) { btn.disabled = true; btn.textContent = "⏳ 进入江湖..."; }
 
-    var name  = document.getElementById("inpName").value.trim() || "江湖客";
+    var name   = document.getElementById("inpName").value.trim() || "江湖客";
     var gender = document.getElementById("inpGender").value;
     var permadeath = document.getElementById("inpPermadeath").checked;
     console.log("[App] startNewGame:", { name: name, gender: gender, permadeath: permadeath });
@@ -114,6 +162,12 @@ window.App = window.App || {};
     var modeIndicator = document.getElementById("apiModeIndicator");
     if (modeIndicator) {
       modeIndicator.textContent = App.apiMode === "backend" ? "后端模式" : "独立模式";
+    }
+    var modeSelect = document.getElementById("apiModeQuickToggle");
+    if (modeSelect) {
+      modeSelect.addEventListener("change", function() {
+        App.setApiMode(modeSelect.value);
+      });
     }
     var sel = document.getElementById("npcSelect");
     if (sel) {
