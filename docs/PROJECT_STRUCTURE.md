@@ -1,14 +1,15 @@
 # 活纸江湖 · 项目结构说明
 
-> 最后更新：2026-05-27 (代词消解动态化 + 记忆摘要情感增强)
+> 最后更新：2026-05-27 (项目结构规范化：third-party 归档、冗余清理、迭代文档合并)
 
 ## 顶层
 
 ```
 living-paper/
 ├── backend/              # Python 后端 (FastAPI 游戏引擎)
-├── static/               # Web 前端 (SPA，双模式 API，可独立运行)
-├── godot/                # Godot 前端 (Godot 4，严格类型 + 信号驱动)
+├── static/               # Web 前端 (原生 SPA，双模式 API)
+├── godot/                # Godot 前端 (GDScript 2.0 严格类型 + 信号驱动)
+├── third-party/          # 第三方依赖声明与许可证
 ├── tools/                # 开发辅助脚本
 ├── tests/                # 自动化测试
 ├── docs/                 # 文档与迭代记录
@@ -22,15 +23,16 @@ living-paper/
 | 路径 | 作用 |
 |------|------|
 | `README.md` | 项目说明 |
-| `requirements.txt` | Python 依赖 |
+| `requirements.txt` | Python 依赖（7 个包） |
 | `.env` / `.env.example` | 环境变量（LLM API Key / 模型 / 熔断器 / 缓存等配置） |
 | `.gitignore` | Git 忽略规则 |
 | `backend/` | **Python 后端** — FastAPI 游戏引擎 |
 | `static/` | **Web 前端** — 双 API 模式 SPA（后端 serve / 独立打开均可） |
 | `godot/` | **Godot 前端** — 严格类型 + 信号驱动，双 API 模式 |
+| `third-party/` | **第三方依赖** — 依赖清单、许可证声明、致谢 |
 | `tools/` | 开发辅助脚本（测试、启动、调试、地图工具） |
-| `tests/` | 自动化测试（E2E / 边界 / 综合 / 单元 + 测试报告） |
-| `docs/` | 文档、迭代记录、历史归档 |
+| `tests/` | 自动化测试（E2E / 边界 / 综合 / 单元） |
+| `docs/` | 文档、迭代记录 |
 | `saves/` | 角色存档（运行时生成，JSON 格式，gitignore） |
 
 ---
@@ -139,7 +141,7 @@ static/
 
 **双模式运行**：
 - **后端模式**（默认）：通过后端 `http://127.0.0.1:8765` serve 或独立打开，自动检测同源用相对路径 `/api`
-- **LLM 直连模式**：不依赖后端，直接调用 Paratera LLM API（受 CORS 限制，需后端中转或代理）
+- **LLM 直连模式**：不依赖后端，直接调用 LLM API（受 CORS 限制，需后端中转或代理）
 
 **特性**：API 配置面板（URL/Key/Model 可界面修改） · 连接测试 · 配置持久化 localStorage · SSE 打字机流式对话 · 暗色江湖主题
 
@@ -173,6 +175,16 @@ godot/
 
 ---
 
+## third-party/ — 第三方依赖
+
+| 文件 | 作用 |
+|------|------|
+| `THIRD_PARTY.md` | 第三方依赖清单（7 个 Python 包 + LLM 服务）及许可证声明 |
+
+详见 [third-party/THIRD_PARTY.md](../third-party/THIRD_PARTY.md)。
+
+---
+
 ## tools/ — 开发辅助脚本
 
 | 文件 | 作用 |
@@ -195,8 +207,6 @@ godot/
 | 文件 | 作用 |
 |------|------|
 | `conftest.py` | pytest fixtures |
-| `_test_endpoints.py` | 端到端 API 测试（原有） |
-| `_test_pathfinding.py` | 寻路单元测试（原有） |
 | `test_e2e.py` | 全链路 E2E（Hello→Talk→MultiTalk→State→Move→Mind→Reflect，31 项） |
 | `test_edge.py` | 边界覆盖测试（23 项） |
 | `test_final.py` | 综合回归测试（23 项） |
@@ -204,7 +214,6 @@ godot/
 | `test_backend.py` | 后端基础测试 |
 | `test_debug_llm.py` | LLM 调试测试 |
 | `test_deep.py` | 深度对话测试 |
-| `test_reports/` | 自动化测试报告（JSON，gitignore） |
 
 ---
 
@@ -214,8 +223,8 @@ godot/
 |------|------|
 | `PROJECT_STRUCTURE.md` | 本文件（项目结构总览） |
 | `overview.md` | 项目迭代概述 |
-| `iterations/` | 迭代产物归档（task-artifact-*.md / 2026-*-*.md） |
-| `static_legacy/` | 旧版 Web 前端归档（仅供历史参考） |
+| `iterations/` | 迭代产物归档（近 3 天详细记录 + 早期摘要归档） |
+| `iterations/archive-early.md` | 早期迭代合并归档（05-08 ~ 05-24） |
 
 ---
 

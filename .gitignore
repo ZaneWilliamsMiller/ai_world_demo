@@ -17,8 +17,9 @@ saves/
 # Godot 编辑器缓存
 godot/.godot/
 
-# 测试报告（本地生成）
+# 测试报告（本地生成，不入库）
 tests/test_reports/
+tools/test_reports/
 
 # IDE / 编辑器
 .vscode/
@@ -30,3 +31,8 @@ tests/test_reports/
 .DS_Store
 Thumbs.db
 NVIDIA Corporation/
+
+# Python 发行版
+dist/
+build/
+*.egg-info/
