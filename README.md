@@ -32,25 +32,83 @@
 
 ## 快速开始
 
+### 1. 克隆项目
+
 ```bash
-# 克隆项目
 git clone -b qclaw git@github.com:ZaneWilliamsMiller/living-paper.git
 cd living-paper
+```
 
-# 安装依赖
+### 2. 安装依赖
+
+```bash
 pip install -r requirements.txt
+```
 
-# 配置环境变量
+### 3. 配置环境变量
+
+```bash
 cp .env.example .env
 # 编辑 .env，填入 LLM API Key 和模型名称
+# 例如：
+# LLM_BASE_URL=https://llmapi.paratera.com/v1
+# LLM_API_KEY=sk-xxx
+# LLM_MODEL=DeepSeek-V4-Pro
+```
 
-# 启动后端
+### 4. 启动游戏（推荐：一键启动）
+
+使用统一启动脚本，**自动确保后端运行后再启动前端**：
+
+```bash
+# 启动后端 + Web 前端（默认）
+python start.py
+
+# 启动后端 + Godot 前端
+python start.py godot
+
+# 自定义端口
+python start.py --backend-port 8765 --frontend-port 8766 godot
+```
+
+> ⚠️ **注意**: 启动脚本会自动检测后端是否运行，如果未运行会自动启动。无需手动启动后端。
+
+### 手动启动（可选）
+
+#### 后端
+
+```bash
 python -m uvicorn backend.app:app --host 127.0.0.1 --port 8765
 ```
 
-浏览器访问 [http://127.0.0.1:8765](http://127.0.0.1:8765)（Web 前端由后端自动 serve）。
+#### Web 前端
 
-Godot 桌面端：用 Godot 4.3+ 打开 `godot/project.godot` → F5 运行。
+```bash
+# 仅启动静态服务器（不启动后端）
+python start.py --serve-only [端口号]   # 默认 8766
+# 浏览器访问 http://127.0.0.1:8766
+
+# 方式二：直接打开文件
+# 直接在浏览器中打开 static/index.html，在配置面板设置 API 地址
+```
+
+#### Godot 桌面端
+
+1. 安装 [Godot 4.3+](https://godotengine.org/download)
+2. 打开 Godot 编辑器 → 导入项目 → 选择 `godot/` 目录
+3. 按 `F5` 运行
+
+## 双前端特性
+
+两个前端均支持双 API 模式：
+
+| 模式 | 说明 | 适用场景 |
+|------|------|----------|
+| **后端模式**（推荐） | 通过后端 API 通信，使用后端配置的 LLM Key | 正常游戏 |
+| **自定义 LLM Key 模式** | 仍连接后端，但对话时使用自己的 LLM Key | 使用自己的 LLM Key |
+
+- Web 前端：点击右上角「⚙」按钮配置
+- Godot 前端：点击右上角「⚙」按钮配置
 
 ## 环境配置
 
@@ -121,16 +179,7 @@ living-paper/
 | POST | `/api/bounty/abandon` | 放弃悬赏 |
 | POST | `/api/rest` | 休息/回复 |
 
-## 前端双模式
 
-两个前端均支持双 API 模式：
-
-| 模式 | 说明 | 适用场景 |
-|------|------|----------|
-| **后端模式**（默认） | 通过后端 API 通信，完整游戏系统 | 正常游戏 |
-| **LLM 直连模式** | 直接调用 LLM API，跳过后端 | API 调试 |
-
-Web 前端自动检测同源环境：后端 serve 时用相对路径 `/api`，独立打开时用完整 URL。
 
 ## 项目历史（精选）
 

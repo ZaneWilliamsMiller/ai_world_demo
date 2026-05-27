@@ -368,7 +368,9 @@ def apply_npc_reply(
     obs_text = _summarize_for_memory(p, npc_id, user_message, visible, parsed)
     # 情感记忆加权：情绪激动时记忆更深
     affective_imp = mem.affective_memory_importance(
-        mem.estimate_importance_heuristic(obs_text), mind
+        mem.estimate_importance_heuristic(obs_text),
+        float(getattr(mind, 'affect_valence', 0.0) or 0.0),
+        float(getattr(mind, 'affect_arousal', 5.0) or 5.0),
     )
     agent_brain.record_observation(
         mind, obs_text, world_day=int(p.world_day), world_shichen=sh_now,

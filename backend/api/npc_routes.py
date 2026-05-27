@@ -28,6 +28,9 @@ class TalkBody(BaseModel):
     player_id: str
     npc_id: str = Field(..., min_length=1, max_length=32)
     message: str = Field(..., min_length=1, max_length=2000)
+    llm_base_url: str | None = Field(None, description="自定义LLM API地址")
+    llm_api_key: str | None = Field(None, description="自定义LLM API Key")
+    llm_model: str | None = Field(None, description="自定义LLM模型名称")
 
 class UseItemBody(BaseModel):
     player_id: str
@@ -115,67 +118,82 @@ async def player_rest(body: RestBody) -> dict[str, Any]:
 
 @router.post("/api/npc/talk")
 async def npc_talk(body: TalkBody, bg: BackgroundTasks) -> dict[str, Any]:
-    from backend.session.store import room
-    p = room.players.get(body.player_id)
-    if not p:
-        raise HTTPException(404, "未知 player_id")
-    if p.ended:
-        raise HTTPException(400, "本局已收束")
-    if p.dead:
-        raise HTTPException(400, "角色已身故,无法交谈")
-
-    npc = NPCS.get(body.npc_id)
-    if not npc:
-        raise HTTPException(400, "未知 npc")
-
-    allowed = set(npc_ids_for_player(p))
-    if body.npc_id not in allowed:
-        raise HTTPException(400, "此人不在你当前这一格(或不可交谈)。请先移动贴近。")
-
-    async with p.lock:
-        hist = p.history.setdefault(body.npc_id, [])
-        hist_slice = list(hist[-14:])
-
-    import backend.systems.prompt_compress as _pc
-    if len(hist_slice) >= _pc.COMPRESS_THRESHOLD:
-        hist_slice = await _pc.compress_conversation_history(
-            hist_slice, npc_name=NPCS.get(body.npc_id, {}).get("name", ""))
-
-    messages = build_npc_messages(p, body.npc_id, body.message, hist_slice)
-    t0 = time.perf_counter()
-
-    is_light_inquiry = body.message.startswith("[系统指令·问路")
-    is_fallback = False
+    import traceback
     try:
-        raw = await chat_completion(
-            messages,
-            temperature=0.85,
-            max_tokens=450 if is_light_inquiry else 800,
-            response_format={"type": "json_object"}
-        )
-        parsed = parse_npc_reply_json(raw)
+        from backend.session.store import room
+        p = room.players.get(body.player_id)
+        if not p:
+            raise HTTPException(404, "未知 player_id")
+        if p.ended:
+            raise HTTPException(400, "本局已收束")
+        if p.dead:
+            raise HTTPException(400, "角色已身故,无法交谈")
+
+        npc = NPCS.get(body.npc_id)
+        if not npc:
+            raise HTTPException(400, "未知 npc")
+
+        allowed = set(npc_ids_for_player(p))
+        if body.npc_id not in allowed:
+            raise HTTPException(400, "此人不在你当前这一格(或不可交谈)。请先移动贴近。")
+
+        async with p.lock:
+            hist = p.history.setdefault(body.npc_id, [])
+            hist_slice = list(hist[-14:])
+
+        import backend.systems.prompt_compress as _pc
+        if len(hist_slice) >= _pc.COMPRESS_THRESHOLD:
+            hist_slice = await _pc.compress_conversation_history(
+                hist_slice, npc_name=NPCS.get(body.npc_id, {}).get("name", "")
+            )
+
+        messages = build_npc_messages(p, body.npc_id, body.message, hist_slice)
+        t0 = time.perf_counter()
+
+        is_light_inquiry = body.message.startswith("[系统指令·问路")
+        is_fallback = False
+        try:
+            raw = await chat_completion(
+                messages,
+                temperature=0.85,
+                max_tokens=450 if is_light_inquiry else 800,
+                response_format={"type": "json_object"},
+                llm_base_url=body.llm_base_url,
+                llm_api_key=body.llm_api_key,
+                llm_model=body.llm_model,
+            )
+            parsed = parse_npc_reply_json(raw)
+        except Exception as e:
+            is_fallback = True
+            fallback = build_graceful_fallback(body.npc_id, f"{type(e).__name__}: {e}")
+            parsed = fallback["parsed"]
+            import logging
+            logging.getLogger("api.routes").warning(
+                "LLM fallback for npc=%s player=%s: %s",
+                body.npc_id, body.player_id, str(e)[:120]
+            )
+
+        async with p.lock:
+            out, needs_reflect = apply_npc_reply(p, body.npc_id, body.message, parsed)
+            p.last_talk_npc_id = body.npc_id
+            p.last_talk_message = body.message
+
+        if needs_reflect and not is_light_inquiry and not is_fallback:
+            bg.add_task(bg_reflect, p.player_id, body.npc_id)
+
+        out["server_ms"] = int((time.perf_counter() - t0) * 1000)
+        if is_fallback:
+            out["llm_fallback"] = True
+        return out
+    except HTTPException:
+        raise
     except Exception as e:
-        is_fallback = True
-        fallback = build_graceful_fallback(body.npc_id, f"{type(e).__name__}: {e}")
-        parsed = fallback["parsed"]
         import logging
-        logging.getLogger("api.routes").warning(
-            "LLM fallback for npc=%s player=%s: %s",
-            body.npc_id, body.player_id, str(e)[:120]
+        logging.getLogger("api.routes").error(
+            "npc_talk UNHANDLED ERROR for npc=%s player=%s:\n%s",
+            body.npc_id, body.player_id, traceback.format_exc()
         )
-
-    async with p.lock:
-        out, needs_reflect = apply_npc_reply(p, body.npc_id, body.message, parsed)
-        p.last_talk_npc_id = body.npc_id
-        p.last_talk_message = body.message
-
-    if needs_reflect and not is_light_inquiry and not is_fallback:
-        bg.add_task(bg_reflect, p.player_id, body.npc_id)
-
-    out["server_ms"] = int((time.perf_counter() - t0) * 1000)
-    if is_fallback:
-        out["llm_fallback"] = True
-    return out
+        raise HTTPException(500, f"NPC对话处理失败: {type(e).__name__}: {str(e)[:200]}")
 
 
 @router.post("/api/npc/talk_stream")
@@ -215,6 +233,9 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
                 temperature=0.85,
                 max_tokens=450 if is_light else 800,
                 response_format={"type": "json_object"},
+                llm_base_url=body.llm_base_url,
+                llm_api_key=body.llm_api_key,
+                llm_model=body.llm_model,
             )
             parsed = parse_npc_reply_json(raw)
         except Exception as e:

@@ -107,8 +107,42 @@ async def chat_completion(
     temperature: float = 0.7,
     max_tokens: int = 1024,
     response_format: dict[str, Any] | None = None,
+    llm_base_url: str | None = None,
+    llm_api_key: str | None = None,
+    llm_model: str | None = None,
 ) -> str:
-    """OpenAI 兼容聊天补全（带连接池 + 熔断器 + 缓存 + 智能重试）。"""
+    """OpenAI 兼容聊天补全（带连接池 + 熔断器 + 缓存 + 智能重试）。
+    
+    如果提供了 llm_base_url/llm_api_key/llm_model，则使用自定义配置，否则使用全局配置。
+    """
+    # 判断是否使用自定义配置
+    use_custom = llm_base_url or llm_api_key or llm_model
+    
+    if use_custom:
+        # 使用自定义配置时，不使用缓存、熔断器、连接池，直接发起请求
+        url = f"{(llm_base_url or settings.llm_base_url).rstrip('/')}/chat/completions"
+        body: dict[str, Any] = {
+            "model": llm_model or settings.llm_model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        if response_format:
+            body["response_format"] = response_format
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {llm_api_key or settings.llm_api_key}",
+        }
+
+        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=5.0)) as client:
+            r = await client.post(url, json=body, headers=headers)
+            r.raise_for_status()
+            data = r.json()
+            content = data["choices"][0]["message"]["content"] or ""
+            return content
+    
+    # 使用全局配置的原有逻辑
     cache = get_llm_cache()
     cb = get_circuit_breaker()
     sem = _get_semaphore()
@@ -216,27 +250,75 @@ async def stream_chat_completion(
     messages: list[dict[str, Any]],
     temperature: float = 0.7,
     max_tokens: int = 1024,
+    llm_base_url: str | None = None,
+    llm_api_key: str | None = None,
+    llm_model: str | None = None,
 ) -> AsyncIterator[str]:
-    """OpenAI 兼容流式输出（带连接池 + 熔断器 + 智能重试）。"""
-    cb = get_circuit_breaker()
-    sem = _get_semaphore()
-
-    # 熔断器检查
-    if not await cb.allow():
-        raise RuntimeError(
-            f"LLM API circuit breaker OPEN (state={cb.state.value}); "
-            "streaming request blocked"
-        )
-
-    async with sem:
-        url = f"{settings.llm_base_url.rstrip('/')}/chat/completions"
+    """OpenAI 兼容流式输出（带连接池 + 熔断器 + 智能重试）。
+    
+    如果提供了 llm_base_url/llm_api_key/llm_model，则使用自定义配置，否则使用全局配置。
+    """
+    # 判断是否使用自定义配置
+    use_custom = llm_base_url or llm_api_key or llm_model
+    
+    if use_custom:
+        # 使用自定义配置时，不使用缓存、熔断器、连接池，直接发起请求
+        url = f"{(llm_base_url or settings.llm_base_url).rstrip('/')}/chat/completions"
         body: dict[str, Any] = {
-            "model": settings.llm_model,
+            "model": llm_model or settings.llm_model,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
             "stream": True,
         }
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {llm_api_key or settings.llm_api_key}",
+        }
+
+        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=5.0)) as client:
+            async with client.stream("POST", url, json=body, headers=headers) as r:
+                r.raise_for_status()
+                async for line in r.aiter_lines():
+                    if not line or line.startswith(":"):
+                        continue
+                    if line.startswith("data: "):
+                        payload = line[6:].strip()
+                        if payload == "[DONE]":
+                            break
+                        try:
+                            data = json.loads(payload)
+                        except json.JSONDecodeError:
+                            continue
+                        choice0 = (data.get("choices") or [{}])[0]
+                        delta = choice0.get("delta") or {}
+                        piece = delta.get("content")
+                        if piece:
+                            yield piece
+        return
+    
+    else:
+        # 使用全局配置的原有逻辑
+        cb = get_circuit_breaker()
+        sem = _get_semaphore()
+
+        # 熔断器检查
+        if not await cb.allow():
+            raise RuntimeError(
+                f"LLM API circuit breaker OPEN (state={cb.state.value}); "
+                "streaming request blocked"
+            )
+
+        async with sem:
+            url = f"{settings.llm_base_url.rstrip('/')}/chat/completions"
+            body: dict[str, Any] = {
+                "model": settings.llm_model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "stream": True,
+            }
 
         max_retries = settings.llm_max_retries
         base_delay = settings.llm_retry_base_delay_s

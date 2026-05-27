@@ -128,47 +128,34 @@ window.App = window.App || {};
   // ═══════════════════════════════════════════
 
   App.talkStream = async function(npcId, message) {
-    if (App.apiMode === "backend") {
-      var res = await fetch(App.API + "/npc/talk_stream", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          player_id: App.playerId,
-          npc_id: npcId,
-          message: message
-        })
-      });
-      if (!res.ok) {
-        try {
-          var errorJson = await res.json();
-          throw new Error(errorJson.detail || errorJson.message || "talk_stream " + res.status);
-        } catch (e) {
-          throw new Error("talk_stream " + res.status);
-        }
-      }
-      return res.body.getReader();
-    } else {
-      // 独立模式：直接调用 LLM API
-      var systemPrompt = "你是江湖中的一位人物，以古风对话风格回应。保持简练、有趣、符合武侠世界观。";
-      var res = await fetch(App.LLM_API_URL + "/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer " + App.LLM_API_KEY
-        },
-        body: JSON.stringify({
-          model: App.LLM_MODEL,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: message }
-          ],
-          max_tokens: 512,
-          stream: true
-        })
-      });
-      if (!res.ok) throw new Error("LLM stream " + res.status);
-      return res.body.getReader();
+    // 所有模式都连接后端，自定义LLM Key模式只是传递额外参数
+    var requestBody = {
+      player_id: App.playerId,
+      npc_id: npcId,
+      message: message
+    };
+    
+    // 如果是自定义LLM Key模式，添加自定义配置
+    if (App.apiMode !== "backend") {
+      requestBody.llm_base_url = App.LLM_API_URL;
+      requestBody.llm_api_key = App.LLM_API_KEY;
+      requestBody.llm_model = App.LLM_MODEL;
     }
+    
+    var res = await fetch(App.API + "/npc/talk_stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody)
+    });
+    if (!res.ok) {
+      try {
+        var errorJson = await res.json();
+        throw new Error(errorJson.detail || errorJson.message || "talk_stream " + res.status);
+      } catch (e) {
+        throw new Error("talk_stream " + res.status);
+      }
+    }
+    return res.body.getReader();
   };
 
   // ═══════════════════════════════════════════

@@ -6,6 +6,7 @@ from __future__ import annotations
 """
 import asyncio
 import logging
+import platform
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -103,6 +104,77 @@ async def _shutdown():
 
     from backend.llm_client import _close_client
     await _close_client()
+
+
+@app.post("/api/shutdown")
+async def shutdown_server():
+    """关闭后端服务（仅用于开发环境）"""
+    import os
+    import threading
+    import httpx
+
+    frontend_port = os.environ.get("FRONTEND_PORT")
+
+    shutdown_log = _log.getChild("shutdown")
+    shutdown_log.info("=" * 60)
+    shutdown_log.info("🛑 收到关闭请求")
+    print("\n" + "=" * 60)
+    print("🛑 [SHUTDOWN] 收到关闭请求")
+    print(f"   前端端口: {frontend_port}")
+    print("=" * 60)
+
+    # 通知前端服务器关闭
+    if frontend_port:
+        try:
+            frontend_url = f"http://127.0.0.1:{frontend_port}/__shutdown__"
+            shutdown_log.info(f"通知前端服务器关闭: {frontend_url}")
+            print(f"   📤 准备通知前端: {frontend_url}")
+
+            def notify_frontend():
+                import time
+                time.sleep(0.5)  # 让后端先返回响应给浏览器
+                print(f"   ⏳ 等待500ms后发送通知...")
+                try:
+                    with httpx.Client(timeout=5.0) as client:
+                        resp = client.get(frontend_url)
+                        status_text = resp.text[:150] if resp.text else "(空)"
+                        shutdown_log.info(f"✅ 前端响应: {resp.status_code}")
+                        print(f"   ✅ [SUCCESS] 前端已接收关闭指令!")
+                        print(f"      HTTP状态码: {resp.status_code}")
+                        print(f"      响应内容: {status_text}")
+                        print(f"   ⏳ 前端将在1秒后自动退出 (os._exit)...")
+                except Exception as e:
+                    shutdown_log.warning(f"❌ 通知前端失败: {e}")
+                    print(f"   ❌ [ERROR] 无法连接前端!")
+                    print(f"      错误类型: {type(e).__name__}")
+                    print(f"      错误详情: {str(e)}")
+
+            notifier = threading.Thread(target=notify_frontend, daemon=True)
+            notifier.start()
+        except Exception as e:
+            shutdown_log.warning(f"准备通知前端时出错: {e}")
+            print(f"   ❌ [ERROR] 准备通知时异常: {e}")
+
+    else:
+        print("   ⚠️ 未设置 FRONTEND_PORT 环境变量，跳过前端通知")
+
+    def delayed_shutdown():
+        import time
+        import sys
+        time.sleep(1.0)
+        print(f"\n   💀 后端进程即将退出 (sys.exit)...")
+        sys.exit(0)
+
+    thread = threading.Thread(target=delayed_shutdown, daemon=True)
+    thread.start()
+
+    return {
+        "status": "shutting_down",
+        "message": "服务正在关闭",
+        "frontend_port": frontend_port,
+        "method": "http_notification",
+        "hint": "检查后端终端窗口查看详细日志"
+    }
 
 
 # 真正的前后端分离：后端只提供API，不提供静态文件

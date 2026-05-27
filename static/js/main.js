@@ -135,11 +135,16 @@ window.App = window.App || {};
   };
 
   App.doLogout = function() {
-    if (!confirm("确定退出？未存档的进度将丢失。")) return;
-    App.playerId = null;
-    document.getElementById("mainUI").style.display = "none";
-    document.getElementById("topbar").style.display = "none";
-    document.getElementById("loginOverlay").style.display = "flex";
+    App.showConfirm(
+      "退出游戏",
+      "确定要退出游戏吗？<br><br>⚠️ <b>未存档的进度将丢失</b>",
+      function() {
+        App.playerId = null;
+        document.getElementById("mainUI").style.display = "none";
+        document.getElementById("topbar").style.display = "none";
+        document.getElementById("loginOverlay").style.display = "flex";
+      }
+    );
   };
 
   App.doSaveFlow = async function() {
@@ -150,6 +155,269 @@ window.App = window.App || {};
     } catch (e) {
       App.addMsg("system", "存档失败: " + e.message);
     }
+  };
+
+  App.showConfirm = function(title, message, onConfirm) {
+    var overlay = document.getElementById("confirmOverlay");
+    var titleEl = document.getElementById("confirmTitle");
+    var msgEl = document.getElementById("confirmMessage");
+    var okBtn = document.getElementById("confirmOk");
+    var cancelBtn = document.getElementById("confirmCancel");
+
+    titleEl.textContent = title;
+    msgEl.innerHTML = message;
+
+    overlay.classList.add("show");
+
+    function cleanup() {
+      overlay.classList.remove("show");
+      okBtn.removeEventListener("click", handleOk);
+      cancelBtn.removeEventListener("click", handleCancel);
+    }
+
+    function handleOk(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      cleanup();
+      if (typeof onConfirm === "function") {
+        onConfirm();
+      }
+    }
+
+    function handleCancel(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      cleanup();
+    }
+
+    okBtn.addEventListener("click", handleOk);
+    cancelBtn.addEventListener("click", handleCancel);
+
+    overlay.addEventListener("click", function onOverlayClick(e) {
+      if (e.target === overlay) {
+        cleanup();
+        overlay.removeEventListener("click", onOverlayClick);
+      }
+    });
+
+    document.addEventListener("keydown", function onEsc(e) {
+      if (e.key === "Escape") {
+        cleanup();
+        document.removeEventListener("keydown", onEsc);
+      }
+    });
+  };
+
+  App.shutdownAll = function() {
+    App.showConfirm(
+      "关闭服务",
+      "确定要关闭所有服务吗？<br><br>" +
+      "⚠️ <b>这将同时停止：</b><br>" +
+      "• 🌐 Web前端服务器 (端口 8766)<br>" +
+      "• 🔧 后端API服务 (端口 8765)<br><br>" +
+      "💡 所有未保存的进度将丢失",
+      async function() {
+        try {
+          var overlay = document.getElementById("loginOverlay");
+          if (overlay) {
+            overlay.innerHTML =
+              '<div class="shutdown-screen">' +
+              '<div class="shutdown-icon">⏳</div>' +
+              '<h2>正在关闭所有服务...</h2>' +
+              '<p class="shutdown-step pending" id="shutdownStep1">⏳ 正在连接后端 (第1/3次)...</p>' +
+              '<p class="shutdown-step pending" id="shutdownStep2" style="display:none;">⏳ 验证后端已停止...</p>' +
+              '<p class="shutdown-step pending" id="shutdownStep3" style="display:none;">⏳ 关闭前端服务器...</p>' +
+              '</div>';
+            overlay.style.display = 'flex';
+          }
+
+          var step1 = document.getElementById("shutdownStep1");
+          var step2 = document.getElementById("shutdownStep2");
+          var step3 = document.getElementById("shutdownStep3");
+
+          var backendSuccess = false;
+          var data = null;
+          var lastError = null;
+
+          // ════════════════════════════════════
+          // 第一重保障：多次重试连接后端
+          // ════════════════════════════════════
+          var maxRetries = 3;
+          for (var attempt = 1; attempt <= maxRetries; attempt++) {
+            if (step1) {
+              step1.textContent = "⏳ 正在连接后端 (第" + attempt + "/" + maxRetries + "次)...";
+            }
+
+            try {
+              // 使用AbortController设置更长的超时时间（10秒）
+              var controller = new AbortController();
+              var timeoutId = setTimeout(function() { controller.abort(); }, 10000);
+
+              var resp = await fetch(App.BACKEND_URL + "/api/shutdown", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                signal: controller.signal
+              });
+
+              clearTimeout(timeoutId);
+              data = await resp.json();
+              backendSuccess = true;
+              lastError = null;
+
+              if (step1) {
+                step1.textContent = "✓ 后端已接收关闭指令 (第" + attempt + "次尝试成功)";
+                step1.classList.remove("pending");
+                step1.classList.add("done");
+              }
+              break; // 成功，跳出循环
+
+            } catch (e) {
+              lastError = e;
+              backendSuccess = false;
+
+              if (attempt < maxRetries) {
+                // 还有重试机会，等待后重试
+                if (step1) {
+                  step1.textContent = "⚠️ 第" + attempt + "次失败，2秒后重试...";
+                  step1.classList.remove("pending");
+                  step1.classList.add("error");
+                }
+                await new Promise(function(r) { setTimeout(r, 2000); });
+                
+                if (step1) {
+                  step1.classList.remove("error");
+                  step1.classList.add("pending");
+                }
+              } else {
+                // 所有重试都失败了
+                if (step1) {
+                  step1.textContent = "✗ 无法连接后端 (" + maxRetries + "次尝试均失败)";
+                  step1.classList.add("error");
+                }
+              }
+            }
+          }
+
+          // ════════════════════════════════════
+          // 第二重保障：验证后端确实停止
+          // ════════════════════════════════════
+          if (backendSuccess && step2) {
+            step2.style.display = "block";
+            step2.textContent = "⏳ 验证后端已停止...";
+
+            var backendStopped = false;
+            for (var i = 0; i < 15; i++) {
+              await new Promise(function(r) { setTimeout(r, 500); });
+
+              try {
+                var checkBackendResp = await fetch(App.BACKEND_URL + "/api/health", {
+                  mode: 'no-cors',
+                  cache: 'no-store'
+                });
+              } catch (err) {
+                backendStopped = true;
+                break;
+              }
+            }
+
+            if (backendStopped) {
+              step2.textContent = "✓ 后端服务已确认停止";
+              step2.classList.remove("pending");
+              step2.classList.add("done");
+            } else {
+              step2.textContent = "⚠️ 后端可能仍在运行（超时未停止）";
+              step2.classList.remove("pending");
+              step2.classList.add("error");
+            }
+          }
+
+          await new Promise(function(r) { setTimeout(r, 500); });
+
+          // ════════════════════════════════════
+          // 第三重：关闭前端服务器
+          // ════════════════════════════════════
+          if (step3) {
+            step3.style.display = "block";
+            step3.textContent = "⏳ 关闭前端服务器...";
+          }
+
+          try {
+            var directResp = await fetch(window.location.origin + "/__shutdown__", {
+              method: "GET"
+            });
+
+            if (step3) {
+              step3.textContent = "✓ 前端已接收关闭指令";
+              step3.classList.remove("pending");
+              step3.classList.add("done");
+            }
+          } catch (err) {
+            if (step3) {
+              step3.textContent = "⚠️ 前端关闭指令发送异常";
+              step3.classList.remove("pending");
+              step3.classList.add("error");
+            }
+          }
+
+          // 等待前端实际停止
+          var frontendStopped = false;
+          for (var i = 0; i < 10; i++) {
+            await new Promise(function(r) { setTimeout(r, 400); });
+
+            try {
+              var checkFrontendResp = await fetch(window.location.origin + "/__ping__", {
+                mode: 'no-cors',
+                cache: 'no-store'
+              });
+            } catch (err) {
+              frontendStopped = true;
+              break;
+            }
+          }
+
+          // ════════════════════════════════════
+          // 显示最终结果
+          // ════════════════════════════════════
+          await new Promise(function(r) { setTimeout(r, 600); });
+
+          if (overlay) {
+            var resultIcon = (backendSuccess && frontendStopped) ? "✅" : "🔶";
+            var resultTitle = (backendSuccess && frontendStopped) ? "所有服务已关闭" : "部分服务已关闭";
+
+            var backendStatus = "";
+            if (backendSuccess) {
+              backendStatus = "✅ 后端API服务已停止<br>";
+            } else {
+              backendStatus = "❌ 后端未能自动关闭<br>";
+              if (lastError) {
+                backendStatus += "   错误: " + lastError.message.substring(0, 80) + "<br>";
+              }
+              backendStatus += "   请手动关闭运行后端的终端窗口<br>";
+            }
+
+            var frontendStatus = frontendStopped
+              ? "✅ Web前端服务已强制停止<br>"
+              : "⚠️ Web前端可能仍在运行<br>";
+
+            overlay.innerHTML =
+              '<div class="shutdown-screen">' +
+              '<div class="shutdown-icon">' + resultIcon + '</div>' +
+              '<h2>' + resultTitle + '</h2>' +
+              '<p style="font-size:16px;line-height:1.8;">' +
+              backendStatus +
+              frontendStatus +
+              '<br><span style="color:#a0a0b0;">' +
+              (frontendStopped ? '此页面即将失效<br>' : '') +
+              '可重新运行 <code>python start.py</code> 启动服务</span></p>' +
+              '</div>';
+          }
+
+        } catch (e) {
+          console.error("Shutdown error:", e);
+          alert("关闭过程中出现错误: " + e.message + "\n\n请手动关闭终端窗口。");
+        }
+      }
+    );
   };
 
   setInterval(function() {

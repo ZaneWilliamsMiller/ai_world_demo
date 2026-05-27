@@ -5,21 +5,28 @@ extends Control
 ## 依赖 Autoload: ApiClient, GameManager
 
 # ═══════════════════════════════════════════════════════
-#  Color Theme
+#  Color Theme - 肉鸽游戏风格
 # ═══════════════════════════════════════════════════════
-const BG_DARK  := Color(0.06, 0.06, 0.12)
-const BG_PANEL := Color(0.09, 0.11, 0.20)
-const BG_CARD  := Color(0.11, 0.14, 0.24)
-const BG_CARD_HOVER := Color(0.14, 0.18, 0.30)
-const BORDER   := Color(0.20, 0.24, 0.38)
-const BORDER_SUBTLE := Color(0.15, 0.18, 0.28)
-const TEXT     := Color(0.90, 0.90, 0.92)
-const DIM      := Color(0.50, 0.52, 0.64)
-const ACCENT   := Color(0.35, 0.78, 0.98)
-const ACCENT2  := Color(1.0, 0.45, 0.28)
-const GREEN    := Color(0.38, 0.78, 0.42)
-const GOLD     := Color(1.0, 0.82, 0.08)
-const RED      := Color(0.92, 0.32, 0.30)
+const BG_DARK  := Color(0.04, 0.04, 0.08)
+const BG_PANEL := Color(0.09, 0.09, 0.16)
+const BG_CARD  := Color(0.10, 0.10, 0.18)
+const BG_CARD_HOVER := Color(0.16, 0.16, 0.28)
+const BORDER_GOLD := Color(0.83, 0.63, 0.34)
+const BORDER_SILVER := Color(0.63, 0.63, 0.75)
+const BORDER   := Color(0.63, 0.63, 0.75)
+const BORDER_SUBTLE := Color(0.40, 0.40, 0.50)
+const TEXT     := Color(0.97, 0.97, 1.0)
+const DIM      := Color(0.63, 0.63, 0.78)
+const ACCENT_BLUE := Color(0.38, 0.65, 0.98)
+const ACCENT_RED := Color(0.94, 0.27, 0.27)
+const ACCENT_GREEN := Color(0.13, 0.77, 0.37)
+const ACCENT_YELLOW := Color(0.92, 0.70, 0.03)
+const ACCENT_PURPLE := Color(0.66, 0.33, 0.97)
+const ACCENT   := ACCENT_BLUE
+const ACCENT2  := ACCENT_RED
+const GREEN    := ACCENT_GREEN
+const GOLD     := ACCENT_YELLOW
+const RED      := ACCENT_RED
 
 # ═══════════════════════════════════════════════════════
 #  Node Refs (set in _ready / _build_game_ui)
@@ -48,6 +55,19 @@ var _time_label: Label ; var _weather_label: Label ; var _map_name_label: Label
 var _inventory_flow: HFlowContainer
 var _favor_vbox: VBoxContainer
 var _npc_list_container: VBoxContainer  # NPC list in sidebar
+var _portal_list_container: VBoxContainer  # Portal list in sidebar
+var _api_mode_indicator: Label  # API模式指示器
+
+# Config Panel
+var _config_overlay: Control
+var _config_panel: Control
+var _cfg_api_mode: OptionButton
+var _cfg_backend_url: LineEdit
+var _cfg_llm_url: LineEdit
+var _cfg_llm_key: LineEdit
+var _cfg_llm_model: LineEdit
+var _backend_test_result: Label
+var _llm_test_result: Label
 
 
 func _ready() -> void:
@@ -57,6 +77,7 @@ func _ready() -> void:
 
 	_build_login()
 	_build_game_ui()
+	_build_config_panel()
 
 	# 如果已登录(从 login_screen 转场而来)，跳过登录遮罩
 	if GameManager.player_id != "":
@@ -95,6 +116,7 @@ func _logged_in_deferred() -> void:
 				print("[Game]   child name=%s size=%s cm=%s sf_h=%d sf_v=%d" % [gc.name, str(gc.size), str(gc.custom_minimum_size), gc.size_flags_horizontal, gc.size_flags_vertical])
 	print("[Game] _logged_in_deferred — sizes: game_ui=%s, self=%s" % [str(_game_ui.size), str(size)])
 	print("[Game] _npc_select is null: %s" % str(_npc_select == null))
+	_update_api_mode_indicator()
 	_refresh()
 
 
@@ -112,9 +134,13 @@ func _build_login() -> void:
 	overlay_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_login_overlay.add_child(overlay_bg)
 
+	# 登录面板 - 使用固定大小并手动居中
 	var box := Panel.new()
-	box.set_anchors_preset(PRESET_FULL_RECT)
+	box.custom_minimum_size = Vector2(340, 400)
+	box.size = Vector2(340, 400)
 	_add_panel_style(box)
+	# 关键: 设置 anchors 为 center preset，让面板自动居中
+	box.set_anchors_and_offsets_preset(PRESET_CENTER, PRESET_MODE_KEEP_SIZE, 0)
 	_login_overlay.add_child(box)
 
 	var vb := VBoxContainer.new()
@@ -221,28 +247,43 @@ func _build_game_ui() -> void:
 	_game_ui.set_anchors_preset(PRESET_FULL_RECT)
 	add_child(_game_ui)
 
-	# ═══ Top Bar (fixed height 40px) ═══
+	# ═══ 根容器: VBoxContainer (垂直布局) ═══
+	var root_vb := VBoxContainer.new()
+	root_vb.set_anchors_preset(PRESET_FULL_RECT)
+	root_vb.add_theme_constant_override("separation", 0)
+	_game_ui.add_child(root_vb)
+
+	# ═══ Top Bar (固定高度 36px) ═══
 	var topbar := Panel.new()
-	topbar.set_anchors_and_offsets_preset(PRESET_TOP_WIDE, PRESET_MODE_MINSIZE, 0)
-	topbar.custom_minimum_size = Vector2(0, 40)
+	topbar.custom_minimum_size = Vector2(0, 36)
+	topbar.size_flags_vertical = SIZE_SHRINK_CENTER
 	_add_panel_style(topbar)
-	_game_ui.add_child(topbar)
+	root_vb.add_child(topbar)
 
 	var top_hb := HBoxContainer.new()
 	top_hb.add_theme_constant_override("separation", 16)
 	top_hb.set_anchors_preset(PRESET_FULL_RECT)
 	topbar.add_child(top_hb)
-	top_hb.add_child(_lbl("🏮 活纸 · 江湖行纪", 16, ACCENT))
+	top_hb.add_child(_lbl("🏮 活纸 · 江湖行纪", 15, ACCENT_YELLOW))
 	top_hb.add_child(Control.new())  # spacer
 
-	var save_btn := _btn("💾 存档", Color(0.4,0.6,0.3))
+	# API模式指示器
+	_api_mode_indicator = _lbl("后端模式", 11, DIM)
+	_api_mode_indicator.add_theme_color_override("font_color", BORDER_GOLD)
+	top_hb.add_child(_api_mode_indicator)
+
+	var config_btn := _btn("⚙", BORDER_SILVER)
+	config_btn.pressed.connect(_toggle_config_panel)
+	top_hb.add_child(config_btn)
+
+	var save_btn := _btn("💾 存档", ACCENT_GREEN)
 	save_btn.pressed.connect(func():
 		await GameManager.save_game()
 		_on_sys_msg("💾 存档已落纸")
 	)
 	top_hb.add_child(save_btn)
 
-	var quit_btn := _btn("🚪 退出", Color(0.6,0.3,0.3))
+	var quit_btn := _btn("🚪 退出", ACCENT_RED)
 	quit_btn.pressed.connect(func():
 		await GameManager.save_game()
 		GameManager.player_id = ""
@@ -251,37 +292,40 @@ func _build_game_ui() -> void:
 	)
 	top_hb.add_child(quit_btn)
 
-	# ═══ Main Area: 2-column HSplitContainer ═══
+	# ═══ Main Area: HSplitContainer (填充剩余空间) ═══
 	var hsplit := HSplitContainer.new()
-	hsplit.set_anchors_and_offsets_preset(PRESET_FULL_RECT, PRESET_MODE_MINSIZE, 0)
-	hsplit.offset_top = 40  # below top bar
+	hsplit.size_flags_horizontal = SIZE_EXPAND_FILL
+	hsplit.size_flags_vertical = SIZE_EXPAND_FILL
 	hsplit.dragger_visibility = SplitContainer.DRAGGER_HIDDEN
-	_game_ui.add_child(hsplit)
+	hsplit.split_offset = -340  # 右侧面板固定宽度
+	root_vb.add_child(hsplit)
 
-	# ═══ LEFT: Map Panel (flex:1, fills available space) ═══
+	# ═══ LEFT: Map Panel (填充剩余空间) ═══
 	var map_panel := VBoxContainer.new()
 	map_panel.size_flags_horizontal = SIZE_EXPAND_FILL
 	map_panel.size_flags_vertical = SIZE_EXPAND_FILL
+	map_panel.add_theme_constant_override("separation", 0)
 	hsplit.add_child(map_panel)
 
 	# Map title bar
 	var map_title := Panel.new()
-	map_title.custom_minimum_size = Vector2(0, 28)
+	map_title.custom_minimum_size = Vector2(0, 26)
 	var mt_sb := StyleBoxFlat.new()
 	mt_sb.bg_color = BG_PANEL
-	mt_sb.border_width_bottom = 1.0; mt_sb.border_color = BORDER
-	mt_sb.content_margin_left = 12; mt_sb.content_margin_right = 12
-	mt_sb.content_margin_top = 4; mt_sb.content_margin_bottom = 4
+	mt_sb.border_width_bottom = 1; mt_sb.border_color = BORDER
+	mt_sb.content_margin_left = 10; mt_sb.content_margin_right = 10
+	mt_sb.content_margin_top = 3; mt_sb.content_margin_bottom = 3
 	map_title.add_theme_stylebox_override("panel", mt_sb)
+	map_title.size_flags_vertical = SIZE_SHRINK_CENTER
 	map_panel.add_child(map_title)
 	var mt_hb := HBoxContainer.new()
 	mt_hb.set_anchors_preset(PRESET_FULL_RECT); map_title.add_child(mt_hb)
-	mt_hb.add_child(_lbl("🗺️ 地图", 13, ACCENT, HORIZONTAL_ALIGNMENT_LEFT))
+	mt_hb.add_child(_lbl("🗺️ 地图", 12, ACCENT, HORIZONTAL_ALIGNMENT_LEFT))
 	mt_hb.add_child(Control.new())
 	_map_name_label = _lbl("--", 11, DIM)  # reuse as map name in title bar
 	mt_hb.add_child(_map_name_label)
 
-	# Map SubViewport container (fills remaining space)
+	# Map SubViewport container (填充剩余空间)
 	_map_sub_vp = SubViewportContainer.new()
 	_map_sub_vp.name = "MapSubVPContainer"
 	_map_sub_vp.size_flags_horizontal = SIZE_EXPAND_FILL
@@ -292,12 +336,15 @@ func _build_game_ui() -> void:
 	_map_sub = SubViewport.new()
 	_map_sub.name = "MapSubViewport"
 	_map_sub.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	_map_sub.transparent_bg = true
 	_map_sub_vp.add_child(_map_sub)
 
 	# Map renderer (Node2D with Camera2D)
 	_map_renderer = preload("res://scripts/map_renderer.gd").new()
 	_map_renderer.name = "MapRenderer"
 	_map_sub.add_child(_map_renderer)
+	
+	print("[Game] Map renderer added to SubViewport")
 
 	# Connect map renderer signals
 	_map_renderer.tile_clicked.connect(func(x, y): GameManager.move_player(x, y))
@@ -309,11 +356,11 @@ func _build_game_ui() -> void:
 				return
 	)
 
-	# ═══ RIGHT: Side Panel (card-based sections) ═══
+	# ═══ RIGHT: Side Panel (固定宽度 ~360px) ═══
 	var side_panel := VBoxContainer.new()
-	side_panel.custom_minimum_size = Vector2(340, 0)
+	side_panel.custom_minimum_size = Vector2(330, 0)
 	side_panel.add_theme_constant_override("separation", 6)
-	side_panel.size_flags_horizontal = SIZE_FILL
+	side_panel.size_flags_horizontal = SIZE_SHRINK_BEGIN
 	side_panel.size_flags_vertical = SIZE_EXPAND_FILL
 	side_panel.name = "SidePanel"
 	hsplit.add_child(side_panel)
@@ -373,7 +420,7 @@ func _build_game_ui() -> void:
 	_favor_vbox.add_theme_constant_override("separation", 3)
 
 	# ─── Card 4: NPC List (flexible height) ───
-	var npc_card := _make_card("👥 身边人物")
+	var npc_card := _make_card("👥 此地图人物")
 	npc_card.size_flags_vertical = SIZE_EXPAND_FILL
 	side_panel.add_child(npc_card)
 	var npc_inner := VBoxContainer.new()
@@ -389,13 +436,25 @@ func _build_game_ui() -> void:
 	_npc_list_container.size_flags_horizontal = SIZE_EXPAND
 	npc_scroll.add_child(_npc_list_container)
 
-	# ─── Card 5: Dialogue (bottom, fixed ~240px) ───
+	# ─── Card 5: Portals ───
+	var portal_card := _make_card("🚪 界门")
+	side_panel.add_child(portal_card)
+	var portal_inner := VBoxContainer.new()
+	portal_inner.set_anchors_preset(PRESET_FULL_RECT)
+	portal_card.add_child(portal_inner)
+
+	_portal_list_container = VBoxContainer.new()
+	_portal_list_container.add_theme_constant_override("separation", 4)
+	_portal_list_container.size_flags_horizontal = SIZE_EXPAND
+	portal_inner.add_child(_portal_list_container)
+
+	# ─── Card 6: Dialogue (bottom, fixed ~240px) ───
 	var dlg_card := Panel.new()
 	dlg_card.custom_minimum_size = Vector2(0, 240)
 	dlg_card.size_flags_vertical = SIZE_SHRINK_END
 	var dc_sb := StyleBoxFlat.new(); dc_sb.bg_color = BG_PANEL
 	dc_sb.set_corner_radius_all(6)
-	dc_sb.border_width_all = 1.0; dc_sb.border_color = BORDER
+	dc_sb.border_width_left = 1; dc_sb.border_width_right = 1; dc_sb.border_width_top = 1; dc_sb.border_width_bottom = 1; dc_sb.border_color = BORDER
 	dc_sb.content_margin_left = 10; dc_sb.content_margin_right = 10
 	dc_sb.content_margin_top = 8; dc_sb.content_margin_bottom = 8
 	dlg_card.add_theme_stylebox_override("panel", dc_sb)
@@ -514,12 +573,19 @@ func _refresh() -> void:
 		print("[Game] _refresh() — _game_ui NOT visible, returning")
 		return
 	var gm = GameManager
-	print("[Game] _refresh() — map_id: gm=%s" % gm.player_map_id)
+	print("[Game] _refresh() — map_id: %s, maps_data keys: %s" % [gm.player_map_id, str(gm.maps_data.keys())])
 
-	# Map
-	if gm.player_map_id != _map_renderer.get_current_map_id():
+	# Map - 检测地图变化或首次加载
+	var current_renderer_map: String = _map_renderer.get_current_map_id() if _map_renderer else ""
+	if gm.player_map_id != current_renderer_map:
+		print("[Game] _refresh() — building map (changed from '%s' to '%s')" % [current_renderer_map, gm.player_map_id])
 		_build_map()
 	_update_map_player()
+	elif gm.maps_data.is_empty():
+		print("[Game] _refresh() — maps_data is EMPTY, skipping map build")
+	else:
+		# 即使地图ID相同，也更新玩家位置
+		_update_map_player()
 
 	# NPC select dropdown
 	if _npc_select:
@@ -565,6 +631,25 @@ func _refresh() -> void:
 			_favor_vbox.add_child(_lbl("%s: %+d" % [nm, val], 11,
 				GREEN if val >= 0 else RED))
 
+	# Portals
+	for c in _portal_list_container.get_children(): c.queue_free()
+	var map_info: Dictionary = gm.maps_data.get(gm.player_map_id, {})
+	var portals: Array = map_info.get("portals", [])
+	if portals.is_empty():
+		var empty_label := _lbl("此地图无界门", 11, DIM)
+		_portal_list_container.add_child(empty_label)
+	else:
+		for pt in portals:
+			var target_map_id: String = pt.get("target_map_id", "")
+			var target_map_info: Dictionary = gm.maps_data.get(target_map_id, {})
+			var target_name: String = target_map_info.get("name", target_map_id)
+			var to_x: int = pt.get("to_x", 0)
+			var to_y: int = pt.get("to_y", 0)
+			
+			var portal_btn := _btn("↗ 往【%s】(%d,%d)" % [target_name, to_x, to_y], ACCENT_BLUE)
+			portal_btn.pressed.connect(func(x=to_x, y=to_y): gm.move_player(x, y))
+			_portal_list_container.add_child(portal_btn)
+
 
 # ═══════════════════════════════════════════════════════
 #  Style Helpers
@@ -573,7 +658,7 @@ func _add_panel_style(p: Panel) -> void:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = BG_PANEL
 	sb.set_corner_radius_all(6)
-	sb.border_width_all = 1.0; sb.border_color = BORDER
+	sb.border_width_left = 1; sb.border_width_right = 1; sb.border_width_top = 1; sb.border_width_bottom = 1; sb.border_color = BORDER
 	sb.content_margin_left = 12; sb.content_margin_right = 12
 	sb.content_margin_top = 8; sb.content_margin_bottom = 8
 	p.add_theme_stylebox_override("panel", sb)
@@ -586,7 +671,7 @@ func _make_card(title_text: String) -> Panel:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = BG_CARD
 	sb.set_corner_radius_all(6)
-	sb.border_width_all = 1.0; sb.border_color = BORDER_SUBTLE
+	sb.border_width_left = 1; sb.border_width_right = 1; sb.border_width_top = 1; sb.border_width_bottom = 1; sb.border_color = BORDER_SUBTLE
 	sb.content_margin_left = 10; sb.content_margin_right = 10
 	sb.content_margin_top = 6; sb.content_margin_bottom = 6
 	p.add_theme_stylebox_override("panel", sb)
@@ -664,3 +749,197 @@ func _npc_entry(name: String, _id: String) -> Panel:
 
 	hb.add_child(_lbl(name, 12, TEXT))
 	return p
+
+
+# ═══════════════════════════════════════════════════════
+#  Config Panel
+# ═══════════════════════════════════════════════════════
+func _build_config_panel() -> void:
+	_config_overlay = Control.new()
+	_config_overlay.set_anchors_preset(PRESET_FULL_RECT)
+	_config_overlay.visible = false
+	
+	# Overlay background
+	var overlay_bg := ColorRect.new()
+	overlay_bg.color = Color(0,0,0,0.75)
+	overlay_bg.set_anchors_preset(PRESET_FULL_RECT)
+	overlay_bg.mouse_filter = Control.MOUSE_FILTER_STOP
+	_config_overlay.add_child(overlay_bg)
+
+	# Config panel container
+	var panel_container := CenterContainer.new()
+	panel_container.set_anchors_preset(PRESET_FULL_RECT)
+	_config_overlay.add_child(panel_container)
+
+	var panel := Panel.new()
+	panel.custom_minimum_size = Vector2(400, 500)
+	_add_panel_style(panel)
+	panel_container.add_child(panel)
+
+	var vb := VBoxContainer.new()
+	vb.set_anchors_preset(PRESET_FULL_RECT)
+	vb.add_theme_constant_override("separation", 12)
+	vb.offset_left = 16; vb.offset_top = 16; vb.offset_right = -16; vb.offset_bottom = -16
+	panel.add_child(vb)
+
+	# Title
+	vb.add_child(_lbl("⚙ API 配置", 18, ACCENT_YELLOW, HORIZONTAL_ALIGNMENT_CENTER))
+
+	# API Mode
+	var mode_vb := VBoxContainer.new()
+	mode_vb.add_theme_constant_override("separation", 4)
+	mode_vb.add_child(_lbl("运行模式", 13, DIM))
+	_cfg_api_mode = OptionButton.new()
+	_cfg_api_mode.add_item("服务器模式（连接后端 API）")
+	_cfg_api_mode.add_item("独立模式（直接 LLM API）")
+	_cfg_api_mode.add_theme_font_size_override("font_size", 13)
+	mode_vb.add_child(_cfg_api_mode)
+	vb.add_child(mode_vb)
+
+	# Backend URL
+	var backend_vb := VBoxContainer.new()
+	backend_vb.add_theme_constant_override("separation", 4)
+	backend_vb.add_child(_lbl("后端 API 地址", 13, DIM))
+	_cfg_backend_url = LineEdit.new()
+	_cfg_backend_url.placeholder_text = "http://127.0.0.1:8765"
+	_cfg_backend_url.add_theme_font_size_override("font_size", 13)
+	backend_vb.add_child(_cfg_backend_url)
+	vb.add_child(backend_vb)
+
+	# LLM URL
+	var llm_url_vb := VBoxContainer.new()
+	llm_url_vb.add_theme_constant_override("separation", 4)
+	llm_url_vb.add_child(_lbl("LLM API 地址", 13, DIM))
+	_cfg_llm_url = LineEdit.new()
+	_cfg_llm_url.placeholder_text = "https://llmapi.paratera.com/v1"
+	_cfg_llm_url.add_theme_font_size_override("font_size", 13)
+	llm_url_vb.add_child(_cfg_llm_url)
+	vb.add_child(llm_url_vb)
+
+	# LLM Key
+	var llm_key_vb := VBoxContainer.new()
+	llm_key_vb.add_theme_constant_override("separation", 4)
+	llm_key_vb.add_child(_lbl("LLM API Key", 13, DIM))
+	_cfg_llm_key = LineEdit.new()
+	_cfg_llm_key.placeholder_text = "sk-..."
+	_cfg_llm_key.secret = true
+	_cfg_llm_key.add_theme_font_size_override("font_size", 13)
+	llm_key_vb.add_child(_cfg_llm_key)
+	vb.add_child(llm_key_vb)
+
+	# LLM Model
+	var llm_model_vb := VBoxContainer.new()
+	llm_model_vb.add_theme_constant_override("separation", 4)
+	llm_model_vb.add_child(_lbl("LLM 模型", 13, DIM))
+	_cfg_llm_model = LineEdit.new()
+	_cfg_llm_model.placeholder_text = "DeepSeek-V4-Pro"
+	_cfg_llm_model.add_theme_font_size_override("font_size", 13)
+	llm_model_vb.add_child(_cfg_llm_model)
+	vb.add_child(llm_model_vb)
+
+	# Test section
+	var test_section := VBoxContainer.new()
+	test_section.add_theme_constant_override("separation", 8)
+	test_section.add_child(_lbl("🔌 连接测试", 14, ACCENT))
+	
+	var test_btn_hb := HBoxContainer.new()
+	test_btn_hb.add_theme_constant_override("separation", 8)
+	
+	var test_backend_btn := _btn("测试后端", BORDER_SILVER)
+	test_backend_btn.pressed.connect(_test_backend)
+	test_btn_hb.add_child(test_backend_btn)
+	
+	var test_llm_btn := _btn("测试 LLM", BORDER_SILVER)
+	test_llm_btn.pressed.connect(_test_llm)
+	test_btn_hb.add_child(test_llm_btn)
+	
+	test_section.add_child(test_btn_hb)
+	
+	_backend_test_result = _lbl("", 11, DIM)
+	test_section.add_child(_backend_test_result)
+	
+	_llm_test_result = _lbl("", 11, DIM)
+	test_section.add_child(_llm_test_result)
+	
+	vb.add_child(test_section)
+
+	# Spacer
+	vb.add_child(Control.new())
+
+	# Buttons
+	var btn_hb := HBoxContainer.new()
+	btn_hb.add_theme_constant_override("separation", 8)
+	btn_hb.size_flags_horizontal = SIZE_SHRINK_END
+	
+	var cancel_btn := _btn("取消", BORDER_SILVER)
+	cancel_btn.pressed.connect(_toggle_config_panel)
+	btn_hb.add_child(cancel_btn)
+	
+	var save_btn := _btn("保存配置", ACCENT_YELLOW)
+	save_btn.pressed.connect(_apply_config)
+	btn_hb.add_child(save_btn)
+	
+	vb.add_child(btn_hb)
+
+	add_child(_config_overlay)
+
+
+func _toggle_config_panel() -> void:
+	if _config_overlay.visible:
+		_config_overlay.visible = false
+	else:
+		_fill_config_values()
+		_config_overlay.visible = true
+
+
+func _fill_config_values() -> void:
+	_cfg_api_mode.selected = 0 if ApiClient.api_mode == "backend" else 1
+	_cfg_backend_url.text = ApiClient.backend_url
+	_cfg_llm_url.text = ApiClient.llm_api_url
+	_cfg_llm_key.text = ApiClient.llm_api_key
+	_cfg_llm_model.text = ApiClient.llm_model
+
+
+func _apply_config() -> void:
+	ApiClient.api_mode = "backend" if _cfg_api_mode.selected == 0 else "direct"
+	ApiClient.backend_url = _cfg_backend_url.text.strip_edges()
+	ApiClient.llm_api_url = _cfg_llm_url.text.strip_edges()
+	ApiClient.llm_api_key = _cfg_llm_key.text.strip_edges()
+	ApiClient.llm_model = _cfg_llm_model.text.strip_edges()
+	
+	# Update indicator
+	_api_mode_indicator.text = "后端模式" if ApiClient.api_mode == "backend" else "独立模式"
+	_api_mode_indicator.add_theme_color_override("font_color", BORDER_GOLD if ApiClient.api_mode == "backend" else ACCENT_PURPLE)
+	
+	_toggle_config_panel()
+
+
+func _test_backend() -> void:
+	_backend_test_result.text = "⏳ 测试中..."
+	_backend_test_result.add_theme_color_override("font_color", DIM)
+	
+	var ok: bool = await ApiClient.test_backend()
+	if ok:
+		_backend_test_result.text = "✅ 后端连接成功"
+		_backend_test_result.add_theme_color_override("font_color", ACCENT_GREEN)
+	else:
+		_backend_test_result.text = "❌ 后端连接失败"
+		_backend_test_result.add_theme_color_override("font_color", ACCENT_RED)
+
+
+func _test_llm() -> void:
+	_llm_test_result.text = "⏳ 测试中..."
+	_llm_test_result.add_theme_color_override("font_color", DIM)
+	
+	var ok: bool = await ApiClient.test_llm()
+	if ok:
+		_llm_test_result.text = "✅ LLM连接成功"
+		_llm_test_result.add_theme_color_override("font_color", ACCENT_GREEN)
+	else:
+		_llm_test_result.text = "❌ LLM连接失败"
+		_llm_test_result.add_theme_color_override("font_color", ACCENT_RED)
+
+
+func _update_api_mode_indicator() -> void:
+	_api_mode_indicator.text = "后端模式" if ApiClient.api_mode == "backend" else "独立模式"
+	_api_mode_indicator.add_theme_color_override("font_color", BORDER_GOLD if ApiClient.api_mode == "backend" else ACCENT_PURPLE)

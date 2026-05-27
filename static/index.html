@@ -51,6 +51,17 @@
                 style="background:transparent;color:var(--standalone);">
           ⚙ 配置
         </button>
+        <span style="margin:0 8px;color:var(--border);">|</span>
+        <button onclick="window.location.href='tests.html'"
+                style="background:transparent;color:#e94560;">
+          🧪 测试
+        </button>
+        <span style="margin:0 8px;color:var(--border);">|</span>
+        <button onclick="App.shutdownAll()"
+                style="background:transparent;color:#ef4444;"
+                title="关闭前后端服务">
+          ⏻ 关闭服务
+        </button>
       </div>
     </div>
   </div>
@@ -136,6 +147,19 @@
 
     </div>
 
+  </div>
+</div>
+
+<!-- ========== 确认对话框 ========== -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-dialog" id="confirmDialog">
+    <div class="confirm-icon">⚠️</div>
+    <h3 id="confirmTitle">确认操作</h3>
+    <p id="confirmMessage">确定要执行此操作吗？</p>
+    <div class="confirm-actions">
+      <button class="btn-confirm btn-confirm-cancel" id="confirmCancel">取消</button>
+      <button class="btn-confirm btn-confirm-ok" id="confirmOk">确定</button>
+    </div>
   </div>
 </div>
 

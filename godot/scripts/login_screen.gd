@@ -2,11 +2,12 @@ extends Control
 ## Login screen — standalone Godot client.
 ## Creates character or loads save, then transitions to game scene.
 
-const BG_DARK := Color(0.06, 0.06, 0.12)
-const BG_PANEL := Color(0.09, 0.11, 0.20)
-const TEXT := Color(0.90, 0.90, 0.92)
-const DIM := Color(0.50, 0.52, 0.64)
-const ACCENT := Color(0.35, 0.78, 0.98)
+const BG_DARK := Color(0.04, 0.04, 0.08)
+const BG_PANEL := Color(0.09, 0.09, 0.16)
+const TEXT := Color(0.97, 0.97, 1.0)
+const DIM := Color(0.63, 0.63, 0.78)
+const ACCENT_YELLOW := Color(0.92, 0.70, 0.03)
+const ACCENT := ACCENT_YELLOW
 
 var _name_input: LineEdit
 var _gender_sel: OptionButton
@@ -20,11 +21,14 @@ func _ready() -> void:
 	bg.set_anchors_preset(PRESET_FULL_RECT)
 	add_child(bg)
 
-	# Centered panel
+	# Centered panel - 强制居中方式
 	var box := Panel.new()
-	box.set_anchors_and_offsets_preset(PRESET_CENTER, PRESET_MODE_KEEP_SIZE, 0)
-	box.custom_minimum_size = Vector2(360, 320)
+	box.custom_minimum_size = Vector2(360, 380)
+	box.size = Vector2(360, 380)
 	_add_panel_style(box)
+	# 关键：手动计算居中位置
+	var screen_size := get_viewport().get_visible_rect().size
+	box.position = (screen_size - box.size) / 2.0
 	add_child(box)
 
 	var vb := VBoxContainer.new()
@@ -85,8 +89,12 @@ func _on_start() -> void:
 	var sel: int = _gender_sel.get_selected_id()
 	if sel >= 0 and sel <= 2:
 		g = ["男", "女", "未言"][sel]
-	GameManager.hello(nm, g, _pd_cb.button_pressed)
-	# Transition to game scene after login
+	
+	# 禁用按钮防止重复点击
+	var start_btn: Button = get_node_or_null("")  # 找不到就跳过
+	
+	# 先等待 hello 完成，再切换场景！
+	await GameManager.hello(nm, g, _pd_cb.button_pressed)
 	get_tree().change_scene_to_file("res://scenes/game.tscn")
 
 
@@ -144,7 +152,10 @@ func _add_panel_style(p: Panel) -> void:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = BG_PANEL
 	sb.set_corner_radius_all(6)
-	sb.border_width_all = 1.0
+	sb.border_width_left = 1
+	sb.border_width_right = 1
+	sb.border_width_top = 1
+	sb.border_width_bottom = 1
 	sb.border_color = Color(0.20, 0.24, 0.38)
 	sb.content_margin_left = 12
 	sb.content_margin_right = 12

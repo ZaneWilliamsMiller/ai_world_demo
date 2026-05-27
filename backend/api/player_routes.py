@@ -104,13 +104,35 @@ async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
     if p.dead:
         raise HTTPException(400, "角色已身故")
     if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
-        raise HTTPException(409, "你正昏迷未醒,无法行动。")
+        unconscious_remaining = getattr(p, "unconscious_ticks", 0)
+        raise HTTPException(409, f"⚠️ 你正处于昏迷状态，无法移动。\n   剩余恢复时间: 约{unconscious_remaining}个时辰\n   💡 建议: 在原地等待，或寻找医馆治疗")
+
     if getattr(p, "enslaved", False):
         raise HTTPException(400, "你已沦为囚役,难以再自行迁徙。")
+
     if getattr(p, "move_locked", False):
+        lock_reason = getattr(p, "trap_reason", "未知险情")
+        lock_npc_id = getattr(p, "move_lock_npc_id", None)
+        lock_npc_name = NPCS.get(lock_npc_id, {}).get("name", "眼前之人") if lock_npc_id else "对手"
+        attempts = int(getattr(p, "trap_attempts", 0) or 0)
+        
+        hint = ""
+        if attempts == 0:
+            hint = "💡 先试着和对方交谈，了解对方意图"
+        elif attempts < 3:
+            hint = f"💡 已尝试{attempts}次，继续对话或考虑其他方式（贿赂/求援/硬闯）"
+        else:
+            hint = "💡 多次尝试未果？试试完全不同的策略，或者等待时机变化"
+        
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            "身陷险局,须先与眼前对头周旋几句,再图挪步。",
+            f"🚫 【移动被锁定】\n"
+            f"   原因: {lock_reason}\n"
+            f"   对手: {lock_npc_name}\n"
+            f"   已尝试: {attempts}次\n"
+            f"\n"
+            f"   {hint}\n"
+            f"   ⚔️ 解除方法: 与该NPC对话，选择合适的应对策略"
         )
 
     allow_steep = bool(getattr(p, "allow_steep_next_move", False))

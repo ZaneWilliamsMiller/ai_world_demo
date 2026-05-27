@@ -121,18 +121,32 @@ window.App = window.App || {};
   // ═══════════════════════════════════════════
 
   /** 添加一条消息到对话区，返回 DOM 元素 */
-  App.addMsg = function(type, text, speaker) {
+  App.addMsg = function(type, text, isImportant) {
     var area = document.getElementById("dialogueArea");
     var div  = document.createElement("div");
     div.className = "msg " + type;
-    if (type === "npc" && speaker) {
-      div.innerHTML = '<div class="speaker">' + speaker
-        + '</div><div class="msg-text">' + text + '</div>';
+    
+    if (isImportant) {
+      div.classList.add("important");
+    }
+    
+    if (type === "npc" && text) {
+      div.innerHTML = '<div class="speaker">' + (text.speaker || "")
+        + '</div><div class="msg-text">' + (text.text || text) + '</div>';
+    } else if (type === "system-error") {
+      div.innerHTML = text.replace(/\n/g, "<br>");
     } else {
       div.textContent = text;
     }
+    
     area.appendChild(div);
-    scrollToBottom();
+    
+    if (isImportant) {
+      div.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      scrollToBottom();
+    }
+    
     return div;
   };
 

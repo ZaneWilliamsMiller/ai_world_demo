@@ -157,25 +157,18 @@ func move_player(tx: int, ty: int) -> void:
 
 func talk_to_npc(npc_id: String, message: String) -> bool:
 	"""Send message to NPC. Returns true if LLM fallback was NOT used."""
-	if ApiClient.api_mode == "direct":
-		# Direct LLM mode — bypass backend
-		var messages: Array[Dictionary] = [
-			{"role": "system", "content": "你是江湖中的人物，以古风武侠风格对话。"},
-			{"role": "user", "content": message}
-		]
-		var res: Dictionary = await ApiClient.llm_chat(messages)
-		if res.has("error"):
-			system_message.emit("LLM 对话失败")
-			return false
-		var content: String = ""
-		if res.has("choices") and res["choices"].size() > 0:
-			content = res["choices"][0].get("message", {}).get("content", "")
-		var npc_name: String = npc_labels.get(npc_id, npc_id)
-		chat_message.emit(npc_name, content, npc_id)
-		return true
-
-	# Backend mode
+	# 所有模式都连接后端，自定义LLM Key模式只是传递额外参数
 	var body := {"player_id": player_id, "npc_id": npc_id, "message": message}
+	
+	# 如果是自定义LLM Key模式，添加自定义配置
+	if ApiClient.api_mode == "direct":
+		if not ApiClient.llm_api_url.is_empty():
+			body["llm_base_url"] = ApiClient.llm_api_url
+		if not ApiClient.llm_api_key.is_empty():
+			body["llm_api_key"] = ApiClient.llm_api_key
+		if not ApiClient.llm_model.is_empty():
+			body["llm_model"] = ApiClient.llm_model
+	
 	var res: Dictionary = await ApiClient.request("/api/npc/talk", "POST", body)
 
 	if res.has("error"):

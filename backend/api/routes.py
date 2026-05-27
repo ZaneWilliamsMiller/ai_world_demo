@@ -20,10 +20,12 @@ router = APIRouter()
 from backend.api.player_routes import router as player_router
 from backend.api.npc_routes import router as npc_router
 from backend.api.save_routes import router as save_router
+from backend.api.test_routes import router as test_router
 
 router.include_router(player_router)
 router.include_router(npc_router)
 router.include_router(save_router)
+router.include_router(test_router)
 
 
 @router.get("/api/health")

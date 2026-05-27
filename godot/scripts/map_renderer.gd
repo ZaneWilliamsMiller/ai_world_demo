@@ -1,5 +1,5 @@
 extends Node2D
-## 地图视口渲染器 — Camera2D 跟随 + 视口裁剪 + 小地图
+## 地图视口渲染器 — Camera2D 跟随 + 视口裁剪
 ## 核心原则：
 ##   - 摄像机跟随主角，接近边缘时停住
 ##   - 只渲染可见区域内的瓦片
@@ -37,12 +37,6 @@ var _player_glow: ColorRect
 var _npc_markers: Node2D
 var _location_labels: Node2D
 
-# ── 小地图 ──
-var _minimap: SubViewportContainer
-var _minimap_vp: SubViewport
-var _minimap_canvas: Node2D
-var _minimap_viewport_rect: ColorRect
-
 # ── 状态 ──
 var _current_map_id: String = ""
 var _map_rows: Array = []
@@ -52,11 +46,12 @@ var _visible_range: Dictionary = {"x0": 0, "y0": 0, "x1": 0, "y1": 0}
 var _npc_at: Dictionary = {}
 
 # ── 缓存瓦片 ──
-# 使用二维数组存储所有可见瓦片的 ColorRect 引用
 var _active_tiles: Dictionary = {}  # key = "x,y" -> ColorRect
 
 
 func _ready() -> void:
+	print("[MapRenderer] _ready() called")
+	
 	# 创建节点树
 	_tile_container = Node2D.new()
 	_tile_container.name = "TileContainer"
@@ -84,25 +79,34 @@ func _ready() -> void:
 	_player_glow.z_index = 9
 	add_child(_player_glow)
 
-	# 摄像机
+	# 摄像机 - 必须在Node2D内才能渲染到SubViewport
 	_camera = Camera2D.new()
 	_camera.position_smoothing_enabled = true
 	_camera.position_smoothing_speed = CAMERA_SMOOTHING
 	_camera.zoom = Vector2(1, 1)
 	add_child(_camera)
-	_camera.make_current()
+	
+	# 延迟设置当前摄像机，确保SubViewport已准备好
+	call_deferred("_make_current")
 
-	# 构建小地图
-	_build_minimap()
+
+func _make_current() -> void:
+	if _camera and is_instance_valid(_camera):
+		_camera.make_current()
+		print("[MapRenderer] Camera made current, viewport size: %s" % str(get_viewport().get_visible_rect().size) if get_viewport() else "no viewport")
 
 
 func _process(_delta: float) -> void:
-	if _current_map_id.is_empty() or _map_rows.is_empty():
-		return
-	_update_camera()
-	_update_visible_tiles()
-	_update_player_marker()
-	_update_minimap()
+	# 即使没有地图数据也要更新摄像机位置
+	if not _current_map_id.is_empty() and not _map_rows.is_empty():
+		_update_camera()
+		_update_visible_tiles()
+		_update_player_marker()
+	elif _camera:
+		# 没有地图时，摄像机跟随默认位置
+		var px: float = GameManager.player_px * TILE_SIZE + TILE_SIZE / 2.0
+		var py: float = GameManager.player_py * TILE_SIZE + TILE_SIZE / 2.0
+		_camera.position = Vector2(px, py)
 
 
 # ═══════════════════════════════════════════
@@ -113,49 +117,59 @@ func _update_camera() -> void:
 	var py: float = GameManager.player_py * TILE_SIZE + TILE_SIZE / 2.0
 	_camera.position = Vector2(px, py)
 
-	# 设置摄像机限制，防止看到地图外
-	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	var vp_size: Vector2
+	var vp := get_viewport()
+	if vp and vp.get_visible_rect().size.x > 0:
+		vp_size = vp.get_visible_rect().size
+	else:
+		vp_size = Vector2(640, 480)
+	
 	var map_w: float = _map_cols * TILE_SIZE
 	var map_h: float = _map_rows.size() * TILE_SIZE
 
-	# 如果地图小于视口，居中
 	if map_w < vp_size.x:
-		_camera.limit_left = -(vp_size.x - map_w) / 2.0
-		_camera.limit_right = map_w + (vp_size.x - map_w) / 2.0
+		_camera.limit_left = -int((vp_size.x - map_w) / 2.0)
+		_camera.limit_right = int(map_w + (vp_size.x - map_w) / 2.0)
 	else:
-		_camera.limit_left = vp_size.x / 2.0
-		_camera.limit_right = map_w - vp_size.x / 2.0
+		_camera.limit_left = int(vp_size.x / 2.0)
+		_camera.limit_right = int(map_w - vp_size.x / 2.0)
 
 	if map_h < vp_size.y:
-		_camera.limit_top = -(vp_size.y - map_h) / 2.0
-		_camera.limit_bottom = map_h + (vp_size.y - map_h) / 2.0
+		_camera.limit_top = -int((vp_size.y - map_h) / 2.0)
+		_camera.limit_bottom = int(map_h + (vp_size.y - map_h) / 2.0)
 	else:
-		_camera.limit_top = vp_size.y / 2.0
-		_camera.limit_bottom = map_h - vp_size.y / 2.0
+		_camera.limit_top = int(vp_size.y / 2.0)
+		_camera.limit_bottom = int(map_h - vp_size.y / 2.0)
 
 
 # ═══════════════════════════════════════════
 #  视口裁剪渲染
 # ═══════════════════════════════════════════
 func _update_visible_tiles() -> void:
-	var vp_rect: Rect2 = get_viewport().get_visible_rect()
+	var vp_rect: Rect2
+	var vp := get_viewport()
+	if vp:
+		vp_rect = vp.get_visible_rect()
+	else:
+		return
+	
+	if vp_rect.size.x <= 0 or vp_rect.size.y <= 0:
+		return
+		
 	var cam_pos: Vector2 = _camera.position
 	var vp_half: Vector2 = vp_rect.size / 2.0
 
-	# 计算可见瓦片范围
 	var x0: int = int(max(0, (cam_pos.x - vp_half.x) / TILE_SIZE - 1))
 	var y0: int = int(max(0, (cam_pos.y - vp_half.y) / TILE_SIZE - 1))
 	var x1: int = int(min(_map_cols - 1, (cam_pos.x + vp_half.x) / TILE_SIZE + 1))
 	var y1: int = int(min(_map_rows.size() - 1, (cam_pos.y + vp_half.y) / TILE_SIZE + 1))
 
-	# 范围未变化则跳过
 	if x0 == _visible_range.x0 and y0 == _visible_range.y0 \
 		and x1 == _visible_range.x1 and y1 == _visible_range.y1:
 		return
 
 	_visible_range = {"x0": x0, "y0": y0, "x1": x1, "y1": y1}
 
-	# 回收超出范围的瓦片
 	var keys_to_remove: Array[String] = []
 	for key in _active_tiles:
 		var parts: PackedStringArray = key.split(",")
@@ -169,7 +183,6 @@ func _update_visible_tiles() -> void:
 	for k in keys_to_remove:
 		_active_tiles.erase(k)
 
-	# 创建/显示可见范围内的瓦片
 	for y in range(y0, y1 + 1):
 		if y < 0 or y >= _map_rows.size():
 			continue
@@ -211,36 +224,44 @@ func _update_player_marker() -> void:
 #  构建地图
 # ═══════════════════════════════════════════
 func build_map() -> void:
+	print("[MapRenderer] build_map() called, GameManager.maps_data keys: %s" % str(GameManager.maps_data.keys()))
 	_clear_map()
 
 	_current_map_id = GameManager.player_map_id
 	var info: Dictionary = GameManager.maps_data.get(_current_map_id, {})
 	_map_rows = info.get("rows", [])
+	
 	if _map_rows.is_empty():
+		print("[MapRenderer] build_map: rows is EMPTY for map '%s'! maps_data has %d maps" % [_current_map_id, GameManager.maps_data.size()])
 		return
+	
 	_map_cols = _map_rows[0].length()
+	
+	print("[MapRenderer] build_map: map=%s cols=%d rows=%d" % [_current_map_id, _map_cols, _map_rows.size()])
+	print("[MapRenderer] First row: '%s'" % _map_rows[0])
 
 	# 重置摄像机限制
-	_camera.limit_left = -10000
-	_camera.limit_right = 10000
-	_camera.limit_top = -10000
-	_camera.limit_bottom = 10000
+	_camera.limit_left = -100000
+	_camera.limit_right = 100000
+	_camera.limit_top = -100000
+	_camera.limit_bottom = 100000
 
-	# 重置可见范围，强制刷新
+	# 强制刷新可见范围
 	_visible_range = {"x0": -1, "y0": -1, "x1": -1, "y1": -1}
 
-	# 构建 NPC 标记
+	# 构建 NPC 标记和地点标签
 	_build_npc_markers()
-
-	# 构建地点标签
 	_build_location_labels()
 
-	# 更新小地图
-	_render_minimap_full()
+	# 立即更新一次可见瓦片（不等待_process）
+	_update_visible_tiles()
+	_update_player_marker()
+	
+	var tile_count := _active_tiles.size()
+	print("[MapRenderer] build_map complete, active tiles: %d" % tile_count)
 
 
 func update_player_position() -> void:
-	# 刷新瓦片颜色（玩家位置高亮）
 	_build_npc_index()
 	for key in _active_tiles:
 		var tile: ColorRect = _active_tiles[key]
@@ -302,7 +323,6 @@ func _build_location_labels() -> void:
 		label.add_theme_font_size_override("font_size", 9)
 		label.position = Vector2(pos_arr[0] * TILE_SIZE - 10, pos_arr[1] * TILE_SIZE - 12)
 		label.z_index = 3
-		# 背景
 		var bg := ColorRect.new()
 		bg.color = Color(0, 0, 0, 0.55)
 		bg.position = label.position - Vector2(3, 1)
@@ -334,103 +354,6 @@ func _clear_map() -> void:
 		c.queue_free()
 	for c in _location_labels.get_children():
 		c.queue_free()
-
-
-# ═══════════════════════════════════════════
-#  小地图
-# ═══════════════════════════════════════════
-func _build_minimap() -> void:
-	_minimap = SubViewportContainer.new()
-	_minimap.name = "Minimap"
-	_minimap.position = Vector2(10, 10)  # 相对于 SubViewport 的左上角
-	_minimap.stretch = true
-	# 在 Godot 4 中，SubViewportContainer 需要 SubViewport 作为子节点
-	_minimap_vp = SubViewport.new()
-	_minimap_vp.name = "MinimapViewport"
-	_minimap_vp.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
-	_minimap.add_child(_minimap_vp)
-
-	_minimap_canvas = Node2D.new()
-	_minimap_canvas.name = "MinimapCanvas"
-	_minimap_vp.add_child(_minimap_canvas)
-
-	_minimap_viewport_rect = ColorRect.new()
-	_minimap_viewport_rect.color = Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.4)
-	_minimap_viewport_rect.z_index = 5
-	_minimap_canvas.add_child(_minimap_viewport_rect)
-
-
-func _render_minimap_full() -> void:
-	if _map_rows.is_empty():
-		return
-
-	var mini_tile: float = 2.0
-	var map_w: float = _map_cols * mini_tile
-	var map_h: float = _map_rows.size() * mini_tile
-
-	_minimap_vp.size = Vector2(map_w, map_h)
-	_minimap.custom_minimum_size = Vector2(map_w, map_h)
-	_minimap.size = Vector2(map_w, map_h)
-
-	# 清除旧内容
-	for c in _minimap_canvas.get_children():
-		if c != _minimap_viewport_rect:
-			c.queue_free()
-
-	# 绘制小地图瓦片（用 ColorRect，只画一次）
-	for y: int in _map_rows.size():
-		var row: String = _map_rows[y]
-		for x: int in _map_cols:
-			var ch: String = " " if x >= row.length() else row[x]
-			var cr := ColorRect.new()
-			cr.color = TILE_COLORS.get(ch, DEFAULT_TILE)
-			cr.position = Vector2(x * mini_tile, y * mini_tile)
-			cr.size = Vector2(mini_tile, mini_tile)
-			_minimap_canvas.add_child(cr)
-
-	# NPC 点
-	for n: Dictionary in GameManager.npc_catalog:
-		if n.get("map", "") == _current_map_id:
-			var npc_x: int = n.get("x", -1)
-			var npc_y: int = n.get("y", -1)
-			if npc_x >= 0 and npc_y >= 0:
-				var dot := ColorRect.new()
-				dot.color = ACCENT2
-				dot.position = Vector2(npc_x * mini_tile, npc_y * mini_tile)
-				dot.size = Vector2(mini_tile, mini_tile)
-				dot.z_index = 3
-				_minimap_canvas.add_child(dot)
-
-	# 玩家点
-	var player_dot := ColorRect.new()
-	player_dot.color = ACCENT
-	player_dot.position = Vector2(GameManager.player_px * mini_tile - 1, GameManager.player_py * mini_tile - 1)
-	player_dot.size = Vector2(mini_tile + 2, mini_tile + 2)
-	player_dot.z_index = 4
-	player_dot.name = "PlayerDot"
-	_minimap_canvas.add_child(player_dot)
-
-
-func _update_minimap() -> void:
-	if not _minimap_viewport_rect:
-		return
-	var mini_tile: float = 2.0
-	var vp_rect: Rect2 = get_viewport().get_visible_rect()
-	var cam_pos: Vector2 = _camera.position
-	var vp_half: Vector2 = vp_rect.size / 2.0
-
-	# 视口矩形
-	var vx: float = (cam_pos.x - vp_half.x) / TILE_SIZE * mini_tile
-	var vy: float = (cam_pos.y - vp_half.y) / TILE_SIZE * mini_tile
-	var vw: float = vp_rect.size.x / TILE_SIZE * mini_tile
-	var vh: float = vp_rect.size.y / TILE_SIZE * mini_tile
-	_minimap_viewport_rect.position = Vector2(vx, vy)
-	_minimap_viewport_rect.size = Vector2(vw, vh)
-
-	# 更新玩家点
-	var player_dot: Node = _minimap_canvas.get_node_or_null("PlayerDot")
-	if player_dot:
-		player_dot.position = Vector2(GameManager.player_px * mini_tile - 1, GameManager.player_py * mini_tile - 1)
 
 
 # ═══════════════════════════════════════════

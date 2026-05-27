@@ -508,6 +508,69 @@ html, body {
   text-align: center;
 }
 
+.msg.system-error {
+  align-self: stretch;
+  background: linear-gradient(135deg, #2d1f1f 0%, #1f1515 100%);
+  border: 2px solid var(--accent-red);
+  border-left: 5px solid var(--accent-red);
+  color: #ffcccc;
+  font-size: 14px;
+  line-height: 1.9;
+  padding: 16px 20px;
+  margin: 8px 12px;
+  border-radius: 10px;
+  box-shadow:
+    0 6px 24px rgba(239, 68, 68, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  animation: errorPulse 2s ease-in-out infinite, msgIn 0.3s ease-out;
+  position: relative;
+  overflow: hidden;
+}
+
+.msg.system-error::before {
+  content: "⚠️";
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  font-size: 28px;
+  opacity: 0.15;
+  transform: rotate(15deg);
+}
+
+.msg.system-error.important {
+  animation: errorPulse 1.5s ease-in-out infinite, errorGlow 2s ease-in-out infinite, msgIn 0.4s ease-out;
+  border-width: 3px;
+  box-shadow:
+    0 8px 32px rgba(239, 68, 68, 0.4),
+    0 0 20px rgba(239, 68, 68, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+@keyframes errorPulse {
+  0%, 100% {
+    border-color: var(--accent-red);
+    box-shadow: 0 6px 24px rgba(239, 68, 68, 0.3);
+  }
+  50% {
+    border-color: #ff6b6b;
+    box-shadow: 0 8px 32px rgba(239, 68, 68, 0.5);
+  }
+}
+
+@keyframes errorGlow {
+  0%, 100% {
+    box-shadow:
+      0 8px 32px rgba(239, 68, 68, 0.4),
+      0 0 20px rgba(239, 68, 68, 0.2);
+  }
+  50% {
+    box-shadow:
+      0 8px 40px rgba(239, 68, 68, 0.6),
+      0 0 30px rgba(239, 68, 68, 0.35),
+      0 0 40px rgba(239, 68, 68, 0.15);
+  }
+}
+
 /* 输入栏 */
 .input-bar {
   padding: 16px 20px;
@@ -932,6 +995,217 @@ html, body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #5a5a9a;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   确认对话框
+   ═══════════════════════════════════════════════════════════════════ */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  animation: fadeIn 0.25s ease-out;
+}
+
+.confirm-overlay.show {
+  display: flex;
+}
+
+.confirm-dialog {
+  background: linear-gradient(135deg, #1a1a2e 0%, #151525 100%);
+  border: 3px solid var(--accent-red);
+  border-radius: 16px;
+  padding: 40px 48px;
+  width: 460px;
+  max-width: 90vw;
+  box-shadow:
+    0 20px 80px rgba(239, 68, 68, 0.35),
+    0 0 40px rgba(239, 68, 68, 0.15);
+  text-align: center;
+  position: relative;
+  animation: dialogSlideIn 0.3s ease-out;
+}
+
+.confirm-dialog::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--accent-red), var(--accent-yellow), var(--accent-red));
+  border-radius: 16px 16px 0 0;
+}
+
+.confirm-icon {
+  font-size: 56px;
+  margin-bottom: 20px;
+  animation: iconBounce 1s ease-in-out infinite;
+}
+
+.confirm-dialog h3 {
+  font-size: 24px;
+  color: var(--text-main);
+  margin-bottom: 16px;
+  letter-spacing: 2px;
+  font-weight: 900;
+}
+
+.confirm-dialog p {
+  font-size: 15px;
+  color: var(--text-muted);
+  line-height: 1.7;
+  margin-bottom: 32px;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
+
+.btn-confirm {
+  padding: 14px 36px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+  letter-spacing: 1px;
+  min-width: 120px;
+}
+
+.btn-confirm-cancel {
+  background: linear-gradient(135deg, #2a2a4a 0%, #1a1a3a 100%);
+  color: var(--text-muted);
+  border-color: #3a3a6a;
+}
+
+.btn-confirm-cancel:hover {
+  background: linear-gradient(135deg, #3a3a5a 0%, #2a2a4a 100%);
+  color: var(--text-main);
+  border-color: var(--text-muted);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+}
+
+.btn-confirm-ok {
+  background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+  color: white;
+  border-color: #ef4444;
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
+}
+
+.btn-confirm-ok:hover {
+  background: linear-gradient(135deg, #ef4444 0%, #f87171 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(239, 68, 68, 0.55);
+}
+
+.btn-confirm-ok:active,
+.btn-confirm-cancel:active {
+  transform: translateY(0);
+}
+
+@keyframes dialogSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes iconBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   关闭服务界面
+   ═══════════════════════════════════════════════════════════════════ */
+.shutdown-screen {
+  text-align: center;
+  padding: 60px 40px;
+  animation: fadeIn 0.5s ease-out;
+}
+
+.shutdown-icon {
+  font-size: 80px;
+  margin-bottom: 24px;
+  animation: shutdownPulse 1.5s ease-in-out infinite;
+}
+
+.shutdown-screen h2 {
+  font-size: 28px;
+  color: var(--text-main);
+  margin-bottom: 32px;
+  letter-spacing: 4px;
+  font-weight: 900;
+}
+
+.shutdown-step {
+  font-size: 16px;
+  color: var(--text-muted);
+  margin: 12px 0;
+  padding: 10px 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.shutdown-step.pending {
+  color: var(--accent-yellow);
+  animation: stepGlow 1.5s ease-in-out infinite;
+}
+
+.shutdown-step.done {
+  color: var(--accent-green);
+  background: rgba(34, 197, 94, 0.08);
+  border-left: 3px solid var(--accent-green);
+}
+
+.shutdown-step.error {
+  color: var(--accent-red);
+  background: rgba(239, 68, 68, 0.08);
+  border-left: 3px solid var(--accent-red);
+}
+
+.shutdown-screen code {
+  background: #2a2a4a;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-family: 'Consolas', monospace;
+  font-size: 14px;
+  color: var(--accent-blue);
+}
+
+@keyframes shutdownPulse {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05) rotate(5deg);
+    opacity: 0.85;
+  }
+}
+
+@keyframes stepGlow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(234, 179, 8, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(234, 179, 8, 0.35);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════

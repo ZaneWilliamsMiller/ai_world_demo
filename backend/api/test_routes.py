@@ -1,0 +1,92 @@
+from __future__ import annotations
+
+import asyncio
+import subprocess
+import sys
+from pathlib import Path
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+router = APIRouter(prefix="/api/tests", tags=["tests"])
+
+TESTS_DIR = Path(__file__).resolve().parents[2] / "tests"
+
+
+class TestInfo(BaseModel):
+    name: str
+    description: str
+    file_path: str
+
+
+class TestResult(BaseModel):
+    test_name: str
+    success: bool
+    output: str
+    exit_code: Optional[int] = None
+
+
+def _get_test_description(file_path: Path) -> str:
+    """从测试文件的第一行docstring获取描述"""
+    try:
+        content = file_path.read_text(encoding="utf-8")
+        first_line = content.split("\n")[0].strip()
+        if first_line.startswith('"""') or first_line.startswith("'''"):
+            return first_line.strip('"\'').strip()
+        return file_path.stem.replace("_", " ").replace("test ", "").title()
+    except Exception:
+        return file_path.stem
+
+
+@router.get("/list")
+async def list_tests():
+    """列出所有可用的测试脚本"""
+    tests = []
+    if TESTS_DIR.exists():
+        for f in sorted(TESTS_DIR.glob("test_*.py")):
+            tests.append(TestInfo(
+                name=f.stem,
+                description=_get_test_description(f),
+                file_path=str(f.relative_to(TESTS_DIR.parent))
+            ))
+    return {"count": len(tests), "tests": tests}
+
+
+@router.post("/run/{test_name}")
+async def run_test(test_name: str):
+    """执行指定的测试脚本"""
+    test_file = TESTS_DIR / f"{test_name}.py"
+    if not test_file.exists():
+        raise HTTPException(404, f"Test not found: {test_name}")
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable,
+            str(test_file),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            cwd=str(test_file.parent.parent)
+        )
+
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300)
+
+        output = stdout.decode("utf-8", errors="replace")
+
+        return TestResult(
+            test_name=test_name,
+            success=(proc.returncode == 0),
+            output=output,
+            exit_code=proc.returncode
+        )
+
+    except asyncio.TimeoutError:
+        raise HTTPException(408, f"Test timed out: {test_name}")
+    except Exception as e:
+        raise HTTPException(500, f"Failed to run test: {str(e)}")
+
+
+@router.get("/run/{test_name}")
+async def run_test_get(test_name: str):
+    """GET方式执行测试（方便浏览器直接访问）"""
+    return await run_test(test_name)

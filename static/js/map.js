@@ -577,13 +577,21 @@ window.App = window.App || {};
       App.updateUI(data);
 
     } catch (e) {
-      // 直接显示后端返回的错误消息，它已经是很友好的中文提示了！
       var errorMsg = e.message;
-      // 移除可能的 url 前缀，只显示纯消息
       if (errorMsg.includes("/api/move ")) {
         errorMsg = errorMsg.replace("/api/move ", "");
       }
-      App.addMsg("system", errorMsg);
+      
+      var isLockError = errorMsg.includes("🚫") || errorMsg.includes("⚠️");
+      
+      if (isLockError) {
+        App.addMsg("system-error", errorMsg, true);
+        if (App._playerX !== undefined) {
+          App.updatePlayerMarker(App._playerX, App._playerY, "locked");
+        }
+      } else {
+        App.addMsg("system", errorMsg);
+      }
     }
 
     App._isMoving = false;
