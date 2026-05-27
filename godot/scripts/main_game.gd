@@ -181,6 +181,23 @@ func _build_login() -> void:
 	load_btn.pressed.connect(_show_load_dialog)
 	vb.add_child(load_btn)
 
+	# 底部工具栏：配置 | 测试 | 关闭服务
+	var tools_hb := HBoxContainer.new()
+	tools_hb.add_theme_constant_override("separation", 8)
+	vb.add_child(tools_hb)
+
+	var config_btn := _btn("⚙ 配置", Color(0.5,0.5,0.5))
+	config_btn.pressed.connect(_toggle_config_panel)
+	tools_hb.add_child(config_btn)
+
+	var test_btn := _btn("🧪 测试", Color(0.9,0.27,0.37))
+	test_btn.pressed.connect(_show_test_center)
+	tools_hb.add_child(test_btn)
+
+	var shutdown_btn := _btn("⏻ 关闭服务", Color(0.94,0.27,0.27))
+	shutdown_btn.pressed.connect(_confirm_shutdown)
+	tools_hb.add_child(shutdown_btn)
+
 
 func _show_load_dialog() -> void:
 	var saves: Array = await GameManager.list_saves()
@@ -285,10 +302,15 @@ func _build_game_ui() -> void:
 
 	var quit_btn := _btn("🚪 退出", ACCENT_RED)
 	quit_btn.pressed.connect(func():
-		await GameManager.save_game()
-		GameManager.player_id = ""
-		_game_ui.visible = false
-		_login_overlay.visible = true
+		show_confirm(
+			"退出游戏",
+			"确定要退出游戏吗？\n\n[color=yellow]⚠️ 未存档的进度将丢失[/color]",
+			func():
+				await GameManager.save_game()
+				GameManager.player_id = ""
+				_game_ui.visible = false
+				_login_overlay.visible = true
+		)
 	)
 	top_hb.add_child(quit_btn)
 
@@ -943,3 +965,404 @@ func _test_llm() -> void:
 func _update_api_mode_indicator() -> void:
 	_api_mode_indicator.text = "后端模式" if ApiClient.api_mode == "backend" else "独立模式"
 	_api_mode_indicator.add_theme_color_override("font_color", BORDER_GOLD if ApiClient.api_mode == "backend" else ACCENT_PURPLE)
+
+
+# ════════════════════════════════════════════════
+#  测试中心
+# ════════════════════════════════════════════════
+
+var _test_overlay: Control
+var _test_list_container: VBoxContainer
+var _current_running_test: String = ""
+
+func _show_test_center() -> void:
+	if _test_overlay and is_instance_valid(_test_overlay):
+		_test_overlay.queue_free()
+		return
+
+	_test_overlay = _overlay()
+	var panel := Panel.new()
+	panel.custom_minimum_size = Vector2(700, 550)
+	panel.size = Vector2(700, 550)
+	_add_panel_style(panel, Color(0.15, 0.1, 0.18), Color(0.9, 0.27, 0.37))
+	_test_overlay.add_child(panel)
+	_test_overlay.resized.connect(func():
+		var ps: Vector2 = _test_overlay.size
+		panel.position = (ps - Vector2(700, 550)) / 2.0
+	)
+
+	var main_vb := VBoxContainer.new()
+	main_vb.add_theme_constant_override("separation", 10)
+	main_vb.set_anchors_preset(PRESET_FULL_RECT)
+	main_vb.offset_left = 20; main_vb.offset_top = 20; main_vb.offset_right = -20; main_vb.offset_bottom = -20
+	panel.add_child(main_vb)
+
+	# 标题栏
+	var title_hb := HBoxContainer.new()
+	title_hb.add_child(_lbl("🧪 测试中心", 20, ACCENT_RED))
+	var close_btn := _btn("✕", ACCENT_RED)
+	close_btn.pressed.connect(func(): _test_overlay.queue_free())
+	title_hb.add_child(Control.new()) # spacer
+	title_hb.add_child(close_btn)
+	main_vb.add_child(title_hb)
+
+	# 统计栏
+	var stats_hb := HBoxContainer.new()
+	stats_hb.add_theme_constant_override("separation", 16)
+	stats_hb.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stats_hb.add_child(_lbl("可用测试: --", 14, TEXT))
+	stats_hb.add_child(_lbl("运行中: 0", 14, ACCENT_YELLOW))
+	stats_hb.add_child(_lbl("成功: 0", 14, ACCENT_GREEN))
+	stats_hb.add_child(_lbl("失败: 0", 14, ACCENT_RED))
+	main_vb.add_child(stats_hb)
+
+	# 分隔线
+	var sep := HSeparator.new()
+	sep.modulate = Color(0.3, 0.3, 0.4)
+	main_vb.add_child(sep)
+
+	# 测试列表（可滚动）
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = SIZE_EXPAND
+	main_vb.add_child(scroll)
+
+	_test_list_container = VBoxContainer.new()
+	_test_list_container.add_theme_constant_override("separation", 8)
+	scroll.add_child(_test_list_container)
+
+	# 加载测试列表
+	_load_test_list(stats_hb)
+
+	add_child(_test_overlay)
+
+
+func _load_test_list(stats_hb: HBoxContainer) -> void:
+	for child in _test_list_container.get_children():
+		child.queue_free()
+
+	var result: Dictionary = await ApiClient.list_tests()
+	var tests: Array = result.get("tests", [])
+	var count: int = result.get("count", 0)
+
+	# 更新统计
+	if stats_hb.get_child_count() >= 4:
+		stats_hb.get_child(0).text = "可用测试: %d" % count
+
+	if tests.is_empty():
+		_test_list_container.add_child(_lbl("⚠️ 无法连接后端或没有可用测试", 14, DIM))
+		return
+
+	for test_data in tests:
+		var test_name: String = test_data.get("name", "")
+		var test_desc: String = test_data.get("description", "")
+
+		var card := Panel.new()
+		card.custom_minimum_size = Vector2(0, 70)
+		_add_panel_style(card, Color(0.12, 0.1, 0.15), Color(0.25, 0.2, 0.3))
+
+		var card_vb := VBoxContainer.new()
+		card_vb.add_theme_constant_override("separation", 4)
+		card_vb.set_anchors_preset(PRESET_FULL_RECT)
+		card_vb.offset_left = 12; card_vb.offset_top = 8; card_vb.offset_right = -12; card_vb.offset_bottom = -8
+		card.add_child(card_vb)
+
+		# 标题行
+		var header_hb := HBoxContainer.new()
+		header_hb.add_child(_lbl("📋 %s" % test_name, 14, TEXT))
+		var run_btn := _btn("▶ 运行", ACCENT_RED)
+		run_btn.pressed.connect(_run_test.bind(test_name, card_vb))
+		header_hb.add_child(Control.new())
+		header_hb.add_child(run_btn)
+		card_vb.add_child(header_hb)
+
+		# 描述
+		card_vb.add_child(_lbl(test_desc, 11, DIM))
+
+		# 输出区域（初始隐藏）
+		var output_box := RichTextLabel.new()
+		output_box.name = "output_box"
+		output_box.bbcode_enabled = true
+		output_box.fit_content = true
+		output_box.custom_minimum_size = Vector2(0, 80)
+		output_box.scroll_active = true
+		output_box.visible = false
+		output_box.add_theme_font_size_override("normal_font_size", 11)
+		output_box.add_theme_color_override("default_color", Color(0.8, 0.8, 0.85))
+		_add_panel_style(output_box, Color(0.08, 0.06, 0.1), Color(0.15, 0.15, 0.2))
+		card_vb.add_child(output_box)
+
+		_test_list_container.add_child(card)
+
+
+func _run_test(test_name: String, card_vb: VBoxContainer) -> void:
+	if _current_running_test != "":
+		add_system_msg("⚠️ 请等待当前测试完成")
+		return
+
+	_current_running_test = test_name
+
+	# 找到输出框并显示
+	var output_box: RichTextLabel = null
+	for child in card_vb.get_children():
+		if child.name == "output_box":
+			output_box = child
+			output_box.visible = true
+			output_box.text = "[color=yellow]⏳ 正在执行测试: %s...[/color]" % test_name
+			break
+
+	# 禁用所有运行按钮
+	for card in _test_list_container.get_children():
+		for child in card.get_children():
+			if child is VBoxContainer:
+				for sub in child.get_children():
+					if sub is HBoxContainer:
+						for btn in sub.get_children():
+							if btn is Button and btn.text.begins_with("▶"):
+								btn.disabled = true
+
+	var result: Dictionary = await ApiClient.run_test(test_name)
+
+	# 恢复按钮
+	for card in _test_list_container.get_children():
+		for child in card.get_children():
+			if child is VBoxContainer:
+				for sub in child.get_children():
+					if sub is HBoxContainer:
+						for btn in sub.get_children():
+							if btn is Button and btn.text.begins_with("▶"):
+								btn.disabled = false
+
+	# 显示结果
+	if output_box:
+		var success: bool = result.get("success", false)
+		var output: String = result.get("output", "").strip_edges()
+		var exit_code = result.get("exit_code")
+
+		if success:
+			output_box.text = "[color=green]✅ 测试成功[/color]\n\n[color=white]%s[/color]" % output
+		else:
+			var exit_str = "" if exit_code == null else " [退出码: %d]" % exit_code
+			output_box.text = "[color=red]❌ 测试失败%s[/color]\n\n[color=white]%s[/color]" % [exit_str, output]
+
+	_current_running_test = ""
+
+
+# ════════════════════════════════════════════════
+#  确认对话框（通用）
+# ════════════════════════════════════════════════
+
+func show_confirm(title: String, message: String, on_confirm: Callable) -> void:
+	var popup := _overlay()
+	var panel := Panel.new()
+	panel.custom_minimum_size = Vector2(460, 240)
+	panel.size = Vector2(460, 240)
+	_add_panel_style(panel, Color(0.12, 0.08, 0.12), Color(0.9, 0.27, 0.37), 3.0)
+	popup.add_child(panel)
+	popup.resized.connect(func():
+		var ps: Vector2 = popup.size
+		panel.position = (ps - Vector2(460, 240)) / 2.0
+	)
+
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 16)
+	vb.set_anchors_preset(PRESET_FULL_RECT)
+	vb.offset_left = 32; vb.offset_top = 28; vb.offset_right = -32; vb.offset_bottom = -28
+	panel.add_child(vb)
+
+	vb.add_child(_lbl("⚠️", 40, ACCENT_RED, HORIZONTAL_ALIGNMENT_CENTER))
+	vb.add_child(_lbl(title, 18, TEXT, HORIZONTAL_ALIGNMENT_CENTER))
+
+	var msg_lbl := RichTextLabel.new()
+	msg_lbl.bbcode_enabled = true
+	msg_lbl.fit_content = true
+	msg_lbl.add_theme_font_size_override("normal_font_size", 14)
+	msg_lbl.add_theme_color_override("default_color", Color(0.7, 0.7, 0.75))
+	msg_lbl.text = message
+	vb.add_child(msg_lbl)
+
+	var btn_hb := HBoxContainer.new()
+	btn_hb.add_theme_constant_override("separation", 12)
+	btn_hb.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(btn_hb)
+
+	var cancel_btn := _btn("取消", Color(0.4, 0.4, 0.5))
+	cancel_btn.pressed.connect(func(): popup.queue_free())
+	btn_hb.add_child(cancel_btn)
+
+	var ok_btn := _btn("确定", Color(0.85, 0.2, 0.2))
+	ok_btn.pressed.connect(func():
+		popup.queue_free()
+		on_confirm.call()
+	)
+	btn_hb.add_child(ok_btn)
+
+	add_child(popup)
+
+
+# ════════════════════════════════════════════════
+#  关闭服务功能
+# ════════════════════════════════════════════════
+
+func _confirm_shutdown() -> void:
+	show_confirm(
+		"关闭服务",
+		"确定要关闭所有服务吗？\n\n[color=yellow]⚠️ 这将同时停止：[/color]\n• 🌐 Web/Godot 前端\n• 🔧 后端 API 服务\n\n[color=red]未保存的进度将丢失[/color]",
+		_do_shutdown
+	)
+
+
+func _do_shutdown() -> void:
+	# 显示进度界面
+	var progress_popup := _overlay()
+	var panel := Panel.new()
+	panel.custom_minimum_size = Vector2(500, 400)
+	panel.size = Vector2(500, 400)
+	_add_panel_style(panel, Color(0.08, 0.06, 0.1))
+	progress_popup.add_child(panel)
+	progress_popup.resized.connect(func():
+		var ps: Vector2 = progress_popup.size
+		panel.position = (ps - Vector2(500, 400)) / 2.0
+	)
+
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 12)
+	vb.set_anchors_preset(PRESET_FULL_RECT)
+	vb.offset_left = 30; vb.offset_top = 30; vb.offset_right = -30; vb.offset_bottom = -30
+	panel.add_child(vb)
+
+	vb.add_child(_lbl("⏳", 50, TEXT, HORIZONTAL_ALIGNMENT_CENTER))
+	vb.add_child(_lbl("正在关闭所有服务...", 18, TEXT, HORIZONTAL_ALIGNMENT_CENTER))
+
+	var step1 := _lbl("⏳ 步骤1: 发送关闭指令到后端...", 13, ACCENT_YELLOW)
+	vb.add_child(step1)
+
+	var step2 := _lbl("⏳ 步骤2: 等待后端停止...", 13, DIM)
+	step2.visible = false
+	vb.add_child(step2)
+
+	var step3 := _lbl("⏳ 步骤3: 停止前端...", 13, DIM)
+	step3.visible = false
+	vb.add_child(step3)
+
+	add_child(progress_popup)
+
+	# 步骤1：尝试连接后端（最多3次）
+	var backend_success := false
+	var max_retries := 3
+
+	for attempt in range(1, max_retries + 1):
+		step1.text = "⏳ 连接后端 (第%d/%d次)..." % [attempt, max_retries]
+
+		var result: Dictionary = await ApiClient.shutdown_backend()
+		if result.get("success", false):
+			backend_success = true
+			step1.text = "✅ 后端已接收关闭指令"
+			step1.add_theme_color_override("font_color", ACCENT_GREEN)
+			break
+		else:
+			if attempt < max_retries:
+				step1.text = "⚠️ 第%d次失败，重试中..." % attempt
+				step1.add_theme_color_override("font_color", ACCENT_YELLOW)
+				await get_tree().create_timer(2.0).timeout
+			else:
+				step1.text = "❌ 无法连接后端"
+				step1.add_theme_color_override("font_color", ACCENT_RED)
+
+	await get_tree().create_timer(1.0).timeout
+
+	# 步骤2：验证后端停止
+	if backend_success:
+		step2.visible = true
+		step2.text = "⏳ 验证后端已停止..."
+
+		var backend_stopped := false
+		for i in range(15):
+			await get_tree().create_timer(0.5).timeout
+			var health_ok: bool = await ApiClient.test_backend()
+			if not health_ok:
+				backend_stopped = true
+				break
+
+		if backend_stopped:
+			step2.text = "✅ 后端已确认停止"
+			step2.add_theme_color_override("font_color", ACCENT_GREEN)
+		else:
+			step2.text = "⚠️ 后端可能仍在运行"
+			step2.add_theme_color_override("font_color", ACCENT_YELLOW)
+
+	await get_tree().create_timer(0.5).timeout
+
+	# 步骤3：显示最终结果
+	step3.visible = true
+
+	if backend_success:
+		step3.text = "✅ 所有服务已关闭"
+		step3.add_theme_color_override("font_color", ACCENT_GREEN)
+
+		# 更新主界面
+		await get_tree().create_timer(1.5).timeout
+
+		vb.get_child(0).text = "✅"
+		vb.get_child(0).add_theme_color_override("font_color", ACCENT_GREEN)
+		vb.get_child(1).text = "所有服务已关闭"
+		vb.get_child(1).add_theme_color_override("font_color", ACCENT_GREEN)
+
+		# 清空内容，添加完成信息
+		for i in range(2, vb.get_child_count()):
+			vb.get_child(i).queue_free()
+
+		vb.add_child(_lbl("", 10)) # spacer
+		vb.add_child(_lbl("✅ 后端 API 服务已停止", 14, ACCENT_GREEN))
+		vb.add_child(_lbl("✅ Godot 前端即将退出", 14, ACCENT_GREEN))
+		vb.add_child(_lbl("", 10))
+		vb.add_child(_lbl("可重新运行 python start.py 启动服务", 12, DIM))
+
+		# 延迟退出Godot
+		await get_tree().create_timer(3.0).timeout
+		get_tree().quit()
+	else:
+		step3.text = "⚠️ 部分服务已关闭"
+		step3.add_theme_color_override("font_color", ACCENT_YELLOW)
+
+		vb.get_child(0).text = "🔶"
+		vb.get_child(1).text = "部分服务已关闭"
+
+		for i in range(2, vb.get_child_count()):
+			vb.get_child(i).queue_free()
+
+		vb.add_child(_lbl("", 10))
+		vb.add_child(_lbl("❌ 后端未能自动关闭", 14, ACCENT_RED))
+		vb.add_child(_lbl("请手动关闭运行后端的终端窗口", 12, DIM))
+
+
+# ════════════════════════════════════════════════
+#  改进的消息系统（支持错误高亮）
+# ════════════════════════════════════════════════
+
+var _error_style_applied := false
+
+func add_system_msg(text: String, is_error: bool = false) -> void:
+	if not _dialogue_label: return
+
+	var prefix := ""
+	var suffix := ""
+	
+	if is_error:
+		prefix = "[bgcolor=#2a1515][color=#ffcccc]"
+		suffix = "[/color][/bgcolor]"
+		_error_style_applied = true
+	elif text.begins_with("🚫") or text.begins_with("⚠️") or text.contains("移动被锁定") or text.contains("昏迷"):
+		prefix = "[bgcolor=#2a1515][color=#ffcccc]"
+		suffix = "[/color][/bgcolor]"
+		_error_style_applied = true
+	else:
+		_error_style_applied = false
+
+	_dialogue_label.append_text("\n%s%s%s" % [prefix, text, suffix])
+	_scroll_to_bottom()
+
+	if is_error or _error_style_applied:
+		# 错误消息闪烁效果
+		_dialogue_label.modulate = Color(1.2, 0.9, 0.9)
+		await get_tree().create_timer(0.3).timeout
+		_dialogue_label.modulate = Color.WHITE

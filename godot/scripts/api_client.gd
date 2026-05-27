@@ -176,3 +176,33 @@ func test_llm() -> bool:
 	var messages: Array[Dictionary] = [{"role": "user", "content": "hi"}]
 	var res: Dictionary = await llm_chat(messages, 0.5, 20)
 	return res.get("_status", 0) == 200 and res.has("choices")
+
+
+## List available tests.
+func list_tests() -> Dictionary:
+	var res: Dictionary = await request("/api/tests/list", "GET", {})
+	if res.get("_status", 0) == 200:
+		var json := JSON.new()
+		if json.parse(res.get("_body", "{}")) == OK:
+			return json.data
+	return {"count": 0, "tests": []}
+
+
+## Run a specific test.
+func run_test(test_name: String) -> Dictionary:
+	var res: Dictionary = await request("/api/tests/run/%s" % test_name, "POST", {})
+	if res.get("_status", 0) == 200:
+		var json := JSON.new()
+		if json.parse(res.get("_body", "{}")) == OK:
+			return json.data
+	return {"success": false, "output": "请求失败: HTTP %d" % res.get("_status", 0)}
+
+
+## Shutdown backend server.
+func shutdown_backend() -> Dictionary:
+	var res: Dictionary = await request("/api/shutdown", "POST", {})
+	return {
+		"success": res.get("_status", 0) == 200,
+		"_status": res.get("_status", 0),
+		"_body": res.get("_body", "")
+	}
