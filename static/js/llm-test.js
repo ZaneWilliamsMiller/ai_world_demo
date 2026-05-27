@@ -83,7 +83,7 @@ window.App = window.App || {};
 
     var startTime = Date.now();
     try {
-      var result = await App.checkBackend();
+      var result = await App.testBackend();
       var latency = Date.now() - startTime;
 
       if (result.ok) {

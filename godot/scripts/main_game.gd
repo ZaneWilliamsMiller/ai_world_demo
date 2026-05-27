@@ -506,7 +506,7 @@ func _refresh() -> void:
 		print("[Game] _refresh() — _game_ui NOT visible, returning")
 		return
 	var gm = GameManager
-	print("[Game] _refresh() — map_id: cur=%s gm=%s" % [_current_map_id, gm.player_map_id])
+	print("[Game] _refresh() — map_id: gm=%s" % gm.player_map_id)
 
 	# Map
 	if gm.player_map_id != _map_renderer.get_current_map_id():

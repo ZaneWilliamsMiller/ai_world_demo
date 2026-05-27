@@ -86,6 +86,8 @@ func _on_start() -> void:
 	if sel >= 0 and sel <= 2:
 		g = ["男", "女", "未言"][sel]
 	GameManager.hello(nm, g, _pd_cb.button_pressed)
+	# Transition to game scene after login
+	get_tree().change_scene_to_file("res://scenes/game.tscn")
 
 
 func _toggle_mode() -> void:

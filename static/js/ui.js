@@ -157,8 +157,8 @@ window.App = window.App || {};
     }
     div.innerHTML = mapInfo.portals.map(function(pt) {
       var target = App.mapsData[pt.target_map_id];
-      return '<div class="portal-entry" onclick="App.doMove('
-        + pt.to_x + ',' + pt.to_y + ').then(App.updateUI)">\u2197 \u5f80\u3010'
+      return '<div class="portal-entry" onclick="App.moveTo('
+        + pt.to_x + ',' + pt.to_y + ')">\u2197 \u5f80\u3010'
         + (target ? target.name : pt.target_map_id)
         + '\u3011(' + pt.to_x + ',' + pt.to_y + ')</div>';
     }).join("");
