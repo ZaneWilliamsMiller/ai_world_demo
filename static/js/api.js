@@ -9,7 +9,10 @@ window.App = window.App || {};
   // ── 后端模式 API ──
 
   function backendPost(url, body) {
-    return fetch(App.BACKEND_URL + url, {
+    // 使用 App.API 自动处理同源/跨域 URL
+    var path = url.startsWith("/api") ? url.substring(4) : url;
+    var fullUrl = App.API + path;
+    return fetch(fullUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
@@ -20,7 +23,9 @@ window.App = window.App || {};
   }
 
   function backendGet(url) {
-    return fetch(App.BACKEND_URL + url).then(function(r) {
+    var path = url.startsWith("/api") ? url.substring(4) : url;
+    var fullUrl = App.API + path;
+    return fetch(fullUrl).then(function(r) {
       if (!r.ok) throw new Error(url + " " + r.status);
       return r.json();
     });
@@ -110,7 +115,7 @@ window.App = window.App || {};
 
   App.talkStream = async function(npcId, message) {
     if (App.apiMode === "backend") {
-      var res = await fetch(App.BACKEND_URL + "/api/npc/talk_stream", {
+      var res = await fetch(App.API + "/npc/talk_stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -151,7 +156,7 @@ window.App = window.App || {};
 
   App.testBackend = async function() {
     try {
-      var data = await backendGet("/api/health");
+      var data = await backendGet("/health");
       return { ok: true, detail: "model=" + data.model + " world=" + data.world };
     } catch (e) {
       return { ok: false, detail: e.message };
@@ -175,7 +180,7 @@ window.App = window.App || {};
       });
       var data = await res.json();
       var ids = data.data.map(function(m) { return m.id; });
-      return { ok: App.LLM_MODEL in ids, detail: "models=" + ids.length + " target=" + App.LLM_MODEL };
+      return { ok: ids.includes(App.LLM_MODEL), detail: "models=" + ids.length + " target=" + App.LLM_MODEL };
     } catch (e) {
       return { ok: false, detail: e.message };
     }

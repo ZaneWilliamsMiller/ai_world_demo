@@ -94,7 +94,7 @@ window.App = window.App || {};
         }
         return { ok: true, latency: latency, message: msg };
       } else {
-        var msg2 = "\u540e\u7aef\u8fde\u63a5\u5931\u8d25" + (result.status ? " (" + result.status + ")" : "") + ": " + (result.error || "");
+        var msg2 = "\u540e\u7aef\u8fde\u63a5\u5931\u8d25" + (result.detail || "");
         if (resultEl) {
           resultEl.textContent = msg2;
           resultEl.className = "test-result fail";

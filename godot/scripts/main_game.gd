@@ -57,7 +57,15 @@ func _ready() -> void:
 
 	_build_login()
 	_build_game_ui()
-	_game_ui.visible = false
+
+	# 如果已登录(从 login_screen 转场而来)，跳过登录遮罩
+	if GameManager.player_id != "":
+		_login_overlay.visible = false
+		_game_ui.visible = true
+		call_deferred("_logged_in_deferred")
+	else:
+		_login_overlay.visible = true
+		_game_ui.visible = false
 
 	GameManager.logged_in.connect(func():
 		print("[Game] logged_in signal fired — switching UI")

@@ -46,7 +46,7 @@ window.App = window.App || {};
           var line = lines[i];
           if (line.indexOf("data: ") !== 0) continue;
           try {
-            var d = JSON.parse(line.slice(6));
+            var d = JSON.parse(line.slice(6).trim());
             if (d.chunk) {
               visibleText += d.chunk;
               textEl.textContent = visibleText;
