@@ -13,9 +13,9 @@ class Settings(BaseSettings):
     )
 
     # ── LLM 基础配置 ──
-    llm_base_url: str = "https://llmapi.paratera.com/v1"
-    llm_api_key: str = "sk-o5exptybwJAro8OfIqqmjQ"
-    llm_model: str = "DeepSeek-V4-Pro"
+    llm_base_url: str = ""
+    llm_api_key: str = ""
+    llm_model: str = ""
     llm_timeout_s: float = 120.0
 
     # ── 连接池（2026 优化）──
