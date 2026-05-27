@@ -152,7 +152,7 @@ const GAME_UI_KEYS := [
 	"game_ui", "map_renderer", "map_sub_vp", "map_sub",
 	"dialogue_label", "chat_scroll", "npc_select", "msg_input", "send_btn",
 	"vigor_bar", "vigor_label", "spirit_bar", "spirit_label",
-	"coins_label", "time_label", "weather_label", "map_name_label",
+	"coins_label", "time_label", "weather_label", "map_name_label", "map_title_label",
 	"inventory_flow", "favor_vbox", "npc_list_container", "portal_list_container",
 	"api_mode_indicator",
 ]
@@ -242,8 +242,8 @@ func build_game_ui(parent: Control, on_tile_click: Callable, on_npc_map_click: C
 	mt_hb.set_anchors_preset(PRESET_FULL_RECT); map_title.add_child(mt_hb)
 	mt_hb.add_child(lbl("🗺️ 地图", 12, GameColors.ACCENT, HORIZONTAL_ALIGNMENT_LEFT))
 	mt_hb.add_child(Control.new())
-	refs["map_name_label"] = lbl("--", 11, GameColors.DIM)
-	mt_hb.add_child(refs["map_name_label"])
+	refs["map_title_label"] = lbl("--", 11, GameColors.DIM)
+	mt_hb.add_child(refs["map_title_label"])
 
 	# Map SubViewport container
 	refs["map_sub_vp"] = SubViewportContainer.new()

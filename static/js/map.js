@@ -83,6 +83,11 @@ window.App = window.App || {};
     var container = document.getElementById("mapContainer");
     if (!container) return;
 
+    if (mainCanvas && mainCanvas.parentNode === container) {
+      resizeCanvas();
+      return;
+    }
+
     container.innerHTML = "";
 
     // 主画布
@@ -621,9 +626,7 @@ window.App = window.App || {};
       
       if (isLockError) {
         App.addMsg("system-error", errorMsg, true);
-        if (App._playerX !== undefined) {
-          App.updatePlayerMarker(App._playerX, App._playerY, "locked");
-        }
+        if (App.updatePlayerMarker) App.updatePlayerMarker(App._playerX, App._playerY, "locked");
       } else {
         App.addMsg("system", errorMsg);
       }
@@ -650,6 +653,6 @@ window.App = window.App || {};
     App.moveTo(App._playerX + dx, App._playerY + dy);
   });
 
-  var _zoom = 1.0;
+
 
 })(window.App);

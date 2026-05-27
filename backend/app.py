@@ -6,13 +6,10 @@ from __future__ import annotations
 """
 import asyncio
 import logging
-import platform
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 
 from backend.config import settings
 from backend.data.prompts import WORLD_NAME
@@ -111,7 +108,6 @@ async def _shutdown():
                         f"auto-save transient error for {pid} (attempt {save_attempt + 1}/{max_save_retries}): "
                         f"{type(transient_err).__name__}: {transient_err}"
                     )
-                    import asyncio
                     await asyncio.sleep(0.5 * (save_attempt + 1))
                     continue
                 _log.error(f"auto-save failed after retries for {pid}: {transient_err}")
@@ -189,10 +185,10 @@ async def shutdown_server():
 
     def delayed_shutdown():
         import time
-        import sys
+        import os
         time.sleep(3.0)
-        print(f"\n   💀 后端进程即将退出 (sys.exit)...")
-        sys.exit(0)
+        print(f"\n   💀 后端进程即将退出 (os._exit)...")
+        os._exit(0)
 
     thread = threading.Thread(target=delayed_shutdown, daemon=True)
     thread.start()

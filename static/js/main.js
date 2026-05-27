@@ -6,6 +6,8 @@ window.App = window.App || {};
 (function(App) {
   "use strict";
 
+  var _statePollTimer = null;
+
   // ═══════════════════════════════════════════
   //  DOM 元素缓存 - 避免重复查询，提升性能
   // ═══════════════════════════════════════════
@@ -220,6 +222,7 @@ window.App = window.App || {};
       "退出游戏",
       "确定要退出游戏吗？<br><br>⚠️ <b>未存档的进度将丢失</b>",
       function() {
+        if (_statePollTimer) { clearInterval(_statePollTimer); _statePollTimer = null; }
         App.playerId = null;
         const mainUI = DOM.mainUI || document.getElementById("mainUI");
         const topbar = DOM.topbar || document.getElementById("topbar");
@@ -527,7 +530,7 @@ window.App = window.App || {};
     );
   };
 
-  setInterval(function() {
+  _statePollTimer = setInterval(function() {
     if (App.playerId && !App.isStreaming && App.apiMode === "backend") {
       App.fetchState().then(function(data) { if (data) App.updateUI(data); });
     }

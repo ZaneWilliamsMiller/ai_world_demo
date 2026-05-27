@@ -141,5 +141,10 @@ _cb: CircuitBreaker | None = None
 def get_circuit_breaker() -> CircuitBreaker:
     global _cb
     if _cb is None:
-        _cb = CircuitBreaker()
+        from .config import settings
+        _cb = CircuitBreaker(
+            failure_window_s=settings.llm_cb_failure_window_s,
+            failure_threshold=settings.llm_cb_failure_threshold,
+            cooldown_s=settings.llm_cb_cooldown_s,
+        )
     return _cb

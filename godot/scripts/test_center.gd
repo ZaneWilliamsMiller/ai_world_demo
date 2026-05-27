@@ -82,8 +82,6 @@ func show_test_center(parent: Control, on_system_msg: Callable) -> void:
 
 	_load_test_list(stats_hb)
 
-	parent.add_child(_overlay)
-
 
 ## 从后端加载测试列表并渲染
 ## [param stats_hb] 统计栏 HBoxContainer，用于更新计数
@@ -138,7 +136,12 @@ func _load_test_list(stats_hb: HBoxContainer) -> void:
 		output_box.visible = false
 		output_box.add_theme_font_size_override("normal_font_size", 11)
 		output_box.add_theme_color_override("default_color", Color(0.8, 0.8, 0.85))
-		UIBuilder.add_panel_style(output_box, Color(0.08, 0.06, 0.1), Color(0.15, 0.15, 0.2))
+		var output_bg := StyleBoxFlat.new()
+		output_bg.bg_color = Color(0.08, 0.06, 0.1)
+		output_bg.border_width_left = 1; output_bg.border_width_right = 1
+		output_bg.border_width_top = 1; output_bg.border_width_bottom = 1
+		output_bg.border_color = Color(0.15, 0.15, 0.2)
+		output_box.add_theme_stylebox_override("normal", output_bg)
 		card_vb.add_child(output_box)
 
 		_test_list_container.add_child(card)

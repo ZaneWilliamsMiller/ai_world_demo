@@ -182,9 +182,8 @@ func test_llm() -> bool:
 func list_tests() -> Dictionary:
 	var res: Dictionary = await request("/api/tests/list", "GET", {})
 	if res.get("_status", 0) == 200:
-		var json := JSON.new()
-		if json.parse(res.get("_body", "{}")) == OK:
-			return json.data
+		res.erase("_status")
+		return res
 	return {"count": 0, "tests": []}
 
 
@@ -192,17 +191,12 @@ func list_tests() -> Dictionary:
 func run_test(test_name: String) -> Dictionary:
 	var res: Dictionary = await request("/api/tests/run/%s" % test_name, "POST", {})
 	if res.get("_status", 0) == 200:
-		var json := JSON.new()
-		if json.parse(res.get("_body", "{}")) == OK:
-			return json.data
+		res.erase("_status")
+		return res
 	return {"success": false, "output": "请求失败: HTTP %d" % res.get("_status", 0)}
 
 
 ## Shutdown backend server.
 func shutdown_backend() -> Dictionary:
 	var res: Dictionary = await request("/api/shutdown", "POST", {})
-	return {
-		"success": res.get("_status", 0) == 200,
-		"_status": res.get("_status", 0),
-		"_body": res.get("_body", "")
-	}
+	return {"success": res.get("_status", 0) == 200, "_status": res.get("_status", 0)}

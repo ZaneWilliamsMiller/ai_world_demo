@@ -68,8 +68,6 @@ func _do_shutdown(parent: Control) -> void:
 	step3.visible = false
 	vb.add_child(step3)
 
-	parent.add_child(progress_popup)
-
 	# Step 1: Try to connect to backend (max 3 retries)
 	var backend_success := false
 	var max_retries := 3

@@ -5,7 +5,7 @@ from backend import agent_brain
 from backend.game_state import get_or_init_mind
 from backend.data.npcs_data import NPCS
 from backend.session.store import room
-from backend.systems.time_weather import shichen_name, is_night
+from backend.systems.time_weather import shichen_name
 
 log = logging.getLogger("agent_service")
 

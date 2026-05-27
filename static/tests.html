@@ -178,7 +178,7 @@
     
     .status-running {
       background: rgba(255, 165, 2, 0.2);
-      color:ffa502;
+      color:#ffa502;
     }
     
     pre.output-box {
@@ -273,7 +273,12 @@
 </div>
 
 <script>
-const API_BASE = 'http://127.0.0.1:8765';
+const API_BASE = (function() {
+  try {
+    const cfg = JSON.parse(localStorage.getItem('lp_config') || '{}');
+    return cfg.backendUrl || 'http://127.0.0.1:8765';
+  } catch(e) { return 'http://127.0.0.1:8765'; }
+})();
 let stats = { total: 0, running: 0, success: 0, error: 0 };
 
 async function loadTests() {

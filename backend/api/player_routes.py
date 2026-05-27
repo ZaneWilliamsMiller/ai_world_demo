@@ -1,7 +1,6 @@
 """玩家交互 API 路由：hello, move, state, journal。"""
 from __future__ import annotations
 
-import time
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
@@ -10,15 +9,13 @@ from pydantic import BaseModel, Field
 from backend.data.maps_data import MAPS, MAP_AMBUSH_MARKERS
 from backend.data.npcs_data import NPCS, STORY_ORDER
 from backend.data.factions import FACTIONS
-from backend.data.prompts import WORLD_NAME, FIXED_INTRO, SOCIETY_BIBLE
+from backend.data.prompts import WORLD_NAME, FIXED_INTRO
 from backend.models.player import PlayerState
 from backend.systems.pathfinding import find_path, tile_at, tile_elevation, tile_cost, check_danger_and_injure, is_dangerous
-from backend.systems.time_weather import shichen_name, shichen_phase, is_night, advance_clock
+from backend.systems.time_weather import shichen_name, is_night, advance_clock
 from backend.data.atmosphere import scene_context
 from backend.systems.economy import init_npc_inventories
 from backend.systems.core import (
-    npc_ids_for_player,
-    move_should_fire_encounter,
     tile_forced_encounter,
     enter_trap_state,
     tile_hazard_reason,
@@ -26,14 +23,12 @@ from backend.systems.core import (
     apply_spirit_delta,
     maybe_collapse_from_attrs,
     init_npc_positions,
-    npc_catalog_for_player,
     maybe_wander_npcs,
     perception_scan,
     danger_sense_narrative,
-    world_status_block,
 )
 from backend.systems.reputation import push_event
-from backend.systems.save_system import save_game, respawn_at_supply_point
+from backend.systems.save_system import save_game, respawn_at_supply_point, delete_save
 from backend.services.agent_service import bg_plan_for_npcs
 from backend.views import player_public as _player_public, npcs_here as _npcs_here
 from backend.views import npc_catalog as _npc_catalog, maps_public as _maps_public, factions_public as _factions_public
@@ -255,8 +250,8 @@ async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
                 respawn_msg = respawn_at_supply_point(p)
         try:
             save_game(p)
-        except Exception:
-            pass
+        except Exception as e:
+            logging.getLogger('move').error('save failed for %s: %s', p.player_id, e)
         p.last_move_map_id = p.map_id
         p.last_move_px = p.px
         p.last_move_py = p.py

@@ -128,5 +128,9 @@ _cache: LlmResponseCache | None = None
 def get_llm_cache() -> LlmResponseCache:
     global _cache
     if _cache is None:
-        _cache = LlmResponseCache()
+        from .config import settings
+        _cache = LlmResponseCache(
+            max_size=settings.llm_cache_size,
+            ttl_s=settings.llm_cache_ttl_s,
+        )
     return _cache

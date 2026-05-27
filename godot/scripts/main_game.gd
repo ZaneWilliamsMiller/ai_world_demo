@@ -55,7 +55,7 @@ var _is_streaming: bool = false
 var _vigor_bar: ProgressBar ; var _vigor_label: Label
 var _spirit_bar: ProgressBar ; var _spirit_label: Label
 var _coins_label: Label
-var _time_label: Label ; var _weather_label: Label ; var _map_name_label: Label
+var _time_label: Label ; var _weather_label: Label ; var _map_name_label: Label ; var _map_title_label: Label
 var _inventory_flow: HFlowContainer
 var _favor_vbox: VBoxContainer
 var _npc_list_container: VBoxContainer
@@ -72,7 +72,7 @@ func _ready() -> void:
 
 	_build_login()
 	_build_game_ui()
-	_config_panel.build(self, _on_api_indicator_updated)
+	_config_panel.build(self, _on_api_mode_updated)
 
 	if GameManager.player_id != "":
 		_login_overlay.visible = false
@@ -200,6 +200,7 @@ func _build_game_ui() -> void:
 	_time_label = refs["time_label"]
 	_weather_label = refs["weather_label"]
 	_map_name_label = refs["map_name_label"]
+	_map_title_label = refs["map_title_label"]
 	_inventory_flow = refs["inventory_flow"]
 	_favor_vbox = refs["favor_vbox"]
 	_npc_list_container = refs["npc_list_container"]
@@ -307,6 +308,7 @@ func _refresh() -> void:
 	_weather_label.text = "🌤 %s" % gm.player_weather
 	var mname = gm.maps_data.get(gm.player_map_id,{}).get("name", gm.player_map_id)
 	_map_name_label.text = "📍 %s(%d,%d)" % [mname, gm.player_px, gm.player_py]
+	_map_title_label.text = mname
 
 	# Inventory
 	for c in _inventory_flow.get_children(): c.queue_free()

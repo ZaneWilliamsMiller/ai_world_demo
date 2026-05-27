@@ -257,13 +257,12 @@ def _parse_stream_line(line: str) -> str | None:
 # ══════════════════════════════════════════════════════════════
 
 
-def cached_system(content: str) -> list[dict[str, Any]]:
+def cached_system(content: str) -> str | list[dict[str, Any]]:
     """生成 system content。
-    
+
     llm_enable_prompt_cache=True  → 带 cache_control 标记的 content 数组（OpenAI 兼容）。
     llm_enable_prompt_cache=False → 纯文本字符串（兼容非 OpenAI API）。
     """
-    from backend.config import settings
     if settings.llm_enable_prompt_cache:
         return [{
             "type": "text",
@@ -276,10 +275,9 @@ def cached_system(content: str) -> list[dict[str, Any]]:
 
 def uncached(content: str) -> str | list[dict[str, Any]]:
     """生成不带缓存的 content。
-    
+
     当 prompt cache 启用时返回数组格式，关闭时返回纯文本。
     """
-    from backend.config import settings
     if settings.llm_enable_prompt_cache:
         return [{"type": "text", "text": content}]
     else:
@@ -318,7 +316,7 @@ async def chat_completion(
         }
 
         # 修复 Major #8：使用 try/finally 确保 AsyncClient 关闭，防止内存泄漏
-        client = httpx.AsyncClient(timeout=httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=5.0))
+        client = httpx.AsyncClient(timeout=httpx.Timeout(connect=settings.llm_pool_connect_timeout, read=settings.llm_pool_read_timeout, write=10.0, pool=5.0))
         try:
             r = await client.post(url, json=body, headers=headers)
             r.raise_for_status()
@@ -394,7 +392,7 @@ async def stream_chat_completion(
         }
 
         # 修复 Major #8：使用 try/finally 确保 AsyncClient 关闭
-        client = httpx.AsyncClient(timeout=httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=5.0))
+        client = httpx.AsyncClient(timeout=httpx.Timeout(connect=settings.llm_pool_connect_timeout, read=settings.llm_pool_read_timeout, write=10.0, pool=5.0))
         try:
             # 修复 Major #6：使用 try/finally 确保流在异常时优雅关闭
             async with client.stream("POST", url, json=body, headers=headers) as r:

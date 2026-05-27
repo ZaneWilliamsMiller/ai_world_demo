@@ -17,12 +17,14 @@ window.App = window.App || {};
       body: JSON.stringify(body)
     }).then(async function(r) {
       if (!r.ok) {
+        let errorMsg = url + " " + r.status;
         try {
           const errorJson = await r.json();
-          throw new Error(errorJson.detail || errorJson.message || url + " " + r.status);
+          errorMsg = errorJson.detail || errorJson.message || errorMsg;
         } catch (e) {
-          throw new Error(url + " " + r.status);
+          // JSON 解析失败，保留默认错误信息
         }
+        throw new Error(errorMsg);
       }
       return r.json();
     });
@@ -33,12 +35,14 @@ window.App = window.App || {};
     const fullUrl = App.API + path;
     return fetch(fullUrl).then(async function(r) {
       if (!r.ok) {
+        let errorMsg = url + " " + r.status;
         try {
           const errorJson = await r.json();
-          throw new Error(errorJson.detail || errorJson.message || url + " " + r.status);
+          errorMsg = errorJson.detail || errorJson.message || errorMsg;
         } catch (e) {
-          throw new Error(url + " " + r.status);
+          // JSON 解析失败，保留默认错误信息
         }
+        throw new Error(errorMsg);
       }
       return r.json();
     });
@@ -144,12 +148,14 @@ window.App = window.App || {};
       body: JSON.stringify(requestBody)
     });
     if (!res.ok) {
+      let errorMsg = "talk_stream " + res.status;
       try {
         const errorJson = await res.json();
-        throw new Error(errorJson.detail || errorJson.message || "talk_stream " + res.status);
+        errorMsg = errorJson.detail || errorJson.message || errorMsg;
       } catch (e) {
-        throw new Error("talk_stream " + res.status);
+        // JSON 解析失败，保留默认错误信息
       }
+      throw new Error(errorMsg);
     }
     return res.body.getReader();
   };
