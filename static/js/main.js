@@ -35,14 +35,27 @@ window.App = window.App || {};
   };
 
   App.startNewGame = async function() {
+    var btn = document.querySelector('#loginForm button[onclick*="startNewGame"]');
+    if (btn) { btn.disabled = true; btn.textContent = "⏳ 进入江湖..."; }
+
     var name  = document.getElementById("inpName").value.trim() || "江湖客";
     var gender = document.getElementById("inpGender").value;
     var permadeath = document.getElementById("inpPermadeath").checked;
+    console.log("[App] startNewGame:", { name: name, gender: gender, permadeath: permadeath });
+
     try {
+      console.log("[App] calling createPlayer...");
       var result = await App.createPlayer(name, gender, permadeath);
+      console.log("[App] createPlayer OK:", result);
       App.onGameReady(result.data, result.pid, result.data.display_name);
     } catch (e) {
-      alert("创建角色失败：" + e.message);
+      console.error("[App] createPlayer FAILED:", e);
+      // 用页面内提示代替 alert（避免被浏览器拦截）
+      var errDiv = document.createElement("div");
+      errDiv.style.cssText = "color:#ef5350;margin-top:8px;font-size:13px;";
+      errDiv.textContent = "❌ 创建角色失败：" + e.message;
+      document.getElementById("loginForm").appendChild(errDiv);
+      if (btn) { btn.disabled = false; btn.textContent = "踏入江湖"; }
     }
   };
 

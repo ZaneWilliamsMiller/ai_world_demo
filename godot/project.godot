@@ -38,4 +38,4 @@ renderer/rendering_method="mobile"
 
 [gdscript]
 
-warnings/enable=all
+warnings/enable=true
