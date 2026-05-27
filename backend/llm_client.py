@@ -29,7 +29,6 @@ class LLMClientManager:
     提供统一的客户端获取、关闭接口，确保资源正确释放。
     """
     _instance: LLMClientManager | None = None
-    _lock = asyncio.Lock()
 
     def __init__(self) -> None:
         self._client: httpx.AsyncClient | None = None
@@ -40,9 +39,7 @@ class LLMClientManager:
     async def get_instance(cls) -> LLMClientManager:
         """获取单例实例（线程安全）。"""
         if cls._instance is None:
-            async with cls._lock:
-                if cls._instance is None:
-                    cls._instance = cls()
+            cls._instance = cls()
         return cls._instance
 
     async def get_client(self) -> httpx.AsyncClient:

@@ -417,8 +417,7 @@ window.App = window.App || {};
               await new Promise(function(r) { setTimeout(r, 500); });
 
               try {
-                const checkBackendResp = await fetch(App.BACKEND_URL + "/api/health", {
-                  mode: 'no-cors',
+                await fetch(App.BACKEND_URL + "/api/health", {
                   cache: 'no-store'
                 });
               } catch (err) {
@@ -472,8 +471,7 @@ window.App = window.App || {};
             await new Promise(function(r) { setTimeout(r, 400); });
 
             try {
-              const checkFrontendResp = await fetch(window.location.origin + "/__ping__", {
-                mode: 'no-cors',
+              await fetch(window.location.origin + "/__ping__", {
                 cache: 'no-store'
               });
             } catch (err) {

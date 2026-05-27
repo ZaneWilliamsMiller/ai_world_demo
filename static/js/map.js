@@ -47,10 +47,10 @@ window.App = window.App || {};
   //  摄像机状态 - 优化平滑度
   // ═══════════════════════════════════════════
   var cam = { x: 0, y: 0, targetX: 0, targetY: 0, lerp: 0.25 };
-var mapState = { rows: [], cols: 0, id: "" };
+  var mapState = { rows: [], cols: 0, id: "" };
 
-// 玩家屏幕位置（带插值）- 解决玩家标记与地形割裂问题
-var playerScreen = { x: 0, y: 0 };
+  // 玩家屏幕位置（带插值）- 解决玩家标记与地形割裂问题
+  var playerScreen = { x: -9999, y: -9999, initialized: false };
 
   // ═══════════════════════════════════════════
   //  Canvas 引用
@@ -319,9 +319,16 @@ var playerScreen = { x: 0, y: 0 };
     var targetPlayerSX = (px - cam.x) * TILE + TILE / 2;
     var targetPlayerSY = (py - cam.y) * TILE + TILE / 2;
 
-    // 平滑插值（与摄像机相同的速度），解决玩家飘在地形上的问题
-    playerScreen.x += (targetPlayerSX - playerScreen.x) * cam.lerp;
-    playerScreen.y += (targetPlayerSY - playerScreen.y) * cam.lerp;
+    // 首次渲染时直接跳到目标位置，避免从 (0,0) 滑入的视觉跳跃
+    if (!playerScreen.initialized) {
+      playerScreen.x = targetPlayerSX;
+      playerScreen.y = targetPlayerSY;
+      playerScreen.initialized = true;
+    } else {
+      // 平滑插值（与摄像机相同的速度），解决玩家飘在地形上的问题
+      playerScreen.x += (targetPlayerSX - playerScreen.x) * cam.lerp;
+      playerScreen.y += (targetPlayerSY - playerScreen.y) * cam.lerp;
+    }
 
     var playerScreenX = playerScreen.x;
     var playerScreenY = playerScreen.y;

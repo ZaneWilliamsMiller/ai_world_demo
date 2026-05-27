@@ -9,9 +9,8 @@ window.App = window.App || {};
   // ── 后端模式 API ──
 
   function backendPost(url, body) {
-    // 使用 App.API 自动处理同源/跨域 URL
-    var path = url.startsWith("/api") ? url.substring(4) : url;
-    var fullUrl = App.API + path;
+    const path = url.startsWith("/api") ? url.substring(4) : url;
+    const fullUrl = App.API + path;
     return fetch(fullUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -19,7 +18,7 @@ window.App = window.App || {};
     }).then(async function(r) {
       if (!r.ok) {
         try {
-          var errorJson = await r.json();
+          const errorJson = await r.json();
           throw new Error(errorJson.detail || errorJson.message || url + " " + r.status);
         } catch (e) {
           throw new Error(url + " " + r.status);
@@ -30,12 +29,12 @@ window.App = window.App || {};
   }
 
   function backendGet(url) {
-    var path = url.startsWith("/api") ? url.substring(4) : url;
-    var fullUrl = App.API + path;
+    const path = url.startsWith("/api") ? url.substring(4) : url;
+    const fullUrl = App.API + path;
     return fetch(fullUrl).then(async function(r) {
       if (!r.ok) {
         try {
-          var errorJson = await r.json();
+          const errorJson = await r.json();
           throw new Error(errorJson.detail || errorJson.message || url + " " + r.status);
         } catch (e) {
           throw new Error(url + " " + r.status);
@@ -74,8 +73,8 @@ window.App = window.App || {};
 
   App.createPlayer = async function(name, gender, permadeath) {
     if (App.apiMode === "backend") {
-      var pid = "web_" + Date.now();
-      var data = await backendPost("/api/hello", {
+      const pid = "web_" + Date.now();
+      const data = await backendPost("/api/hello", {
         player_id: pid,
         display_name: name,
         gender: gender,
@@ -83,8 +82,7 @@ window.App = window.App || {};
       });
       return { data: data, pid: pid };
     } else {
-      // 独立模式：仅本地创建状态
-      var pid = "standalone_" + Date.now();
+      const pid = "standalone_" + Date.now();
       return {
         data: { player_id: pid, display_name: name, intro: "独立模式 — 仅 LLM 对话" },
         pid: pid
@@ -128,28 +126,26 @@ window.App = window.App || {};
   // ═══════════════════════════════════════════
 
   App.talkStream = async function(npcId, message) {
-    // 所有模式都连接后端，自定义LLM Key模式只是传递额外参数
-    var requestBody = {
+    const requestBody = {
       player_id: App.playerId,
       npc_id: npcId,
       message: message
     };
-    
-    // 如果是自定义LLM Key模式，添加自定义配置
+
     if (App.apiMode !== "backend") {
       requestBody.llm_base_url = App.LLM_API_URL;
       requestBody.llm_api_key = App.LLM_API_KEY;
       requestBody.llm_model = App.LLM_MODEL;
     }
-    
-    var res = await fetch(App.API + "/npc/talk_stream", {
+
+    const res = await fetch(App.API + "/npc/talk_stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(requestBody)
     });
     if (!res.ok) {
       try {
-        var errorJson = await res.json();
+        const errorJson = await res.json();
         throw new Error(errorJson.detail || errorJson.message || "talk_stream " + res.status);
       } catch (e) {
         throw new Error("talk_stream " + res.status);
@@ -164,7 +160,7 @@ window.App = window.App || {};
 
   App.testBackend = async function() {
     try {
-      var data = await backendGet("/health");
+      const data = await backendGet("/health");
       return { ok: true, detail: "model=" + data.model + " world=" + data.world };
     } catch (e) {
       return { ok: false, detail: e.message };
@@ -173,8 +169,8 @@ window.App = window.App || {};
 
   App.testLLM = async function() {
     try {
-      var data = await llmChat([{ role: "user", content: "你好" }], { maxTokens: 20 });
-      var content = data.choices[0].message.content;
+      const data = await llmChat([{ role: "user", content: "你好" }], { maxTokens: 20 });
+      const content = data.choices[0].message.content;
       return { ok: true, detail: "reply_len=" + content.length };
     } catch (e) {
       return { ok: false, detail: e.message };
@@ -183,11 +179,11 @@ window.App = window.App || {};
 
   App.testModels = async function() {
     try {
-      var res = await fetch(App.LLM_API_URL + "/models", {
+      const res = await fetch(App.LLM_API_URL + "/models", {
         headers: { "Authorization": "Bearer " + App.LLM_API_KEY }
       });
-      var data = await res.json();
-      var ids = data.data.map(function(m) { return m.id; });
+      const data = await res.json();
+      const ids = data.data.map(function(m) { return m.id; });
       return { ok: ids.includes(App.LLM_MODEL), detail: "models=" + ids.length + " target=" + App.LLM_MODEL };
     } catch (e) {
       return { ok: false, detail: e.message };
