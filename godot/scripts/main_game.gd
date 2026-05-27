@@ -1,41 +1,45 @@
 extends Control
-## 活纸 · 江湖行纪 — Godot 桌面版
-## 单文件 UI，程序化构建全部界面元素。
-## 布局对齐 Web 版：两栏（地图主视区 | 侧栏 360px）
-## 依赖 Autoload: ApiClient, GameManager
+## 活纸 · 江湖行纪 — Godot 桌面版 (模块化重构版)
+## Main Game Controller — 核心游戏逻辑、事件处理、状态刷新
+##
+## 已拆分的模块:
+##   - GameColors      → 颜色主题常量 (Autoload)
+##   - UIBuilder       → UI 构建 + 样式辅助
+##   - ConfigPanel     → API 配置面板
+##   - TestCenter      → 测试中心
+##   - ShutdownService → 关闭服务
+##   - DialogManager   → 对话框/确认框
+##   - MessageDisplay  → 消息显示系统
+##
+## 本文件保留:
+##   - 节点引用管理
+##   - _ready() 初始化与信号连接
+##   - 登录/登出状态切换
+##   - 地图渲染调度
+##   - 对话发送/接收
+##   - _refresh() 状态刷新主循环
+##   - 模块间协调
+##
+## 依赖 Autoload: ApiClient, GameManager, GameColors
 
 # ═══════════════════════════════════════════════════════
-#  Color Theme - 肉鸽游戏风格
+#  Module Instances — 模块实例
 # ═══════════════════════════════════════════════════════
-const BG_DARK  := Color(0.04, 0.04, 0.08)
-const BG_PANEL := Color(0.09, 0.09, 0.16)
-const BG_CARD  := Color(0.10, 0.10, 0.18)
-const BG_CARD_HOVER := Color(0.16, 0.16, 0.28)
-const BORDER_GOLD := Color(0.83, 0.63, 0.34)
-const BORDER_SILVER := Color(0.63, 0.63, 0.75)
-const BORDER   := Color(0.63, 0.63, 0.75)
-const BORDER_SUBTLE := Color(0.40, 0.40, 0.50)
-const TEXT     := Color(0.97, 0.97, 1.0)
-const DIM      := Color(0.63, 0.63, 0.78)
-const ACCENT_BLUE := Color(0.38, 0.65, 0.98)
-const ACCENT_RED := Color(0.94, 0.27, 0.27)
-const ACCENT_GREEN := Color(0.13, 0.77, 0.37)
-const ACCENT_YELLOW := Color(0.92, 0.70, 0.03)
-const ACCENT_PURPLE := Color(0.66, 0.33, 0.97)
-const ACCENT   := ACCENT_BLUE
-const ACCENT2  := ACCENT_RED
-const GREEN    := ACCENT_GREEN
-const GOLD     := ACCENT_YELLOW
-const RED      := ACCENT_RED
+var _ui_builder: UIBuilder
+var _config_panel: ConfigPanel
+var _test_center: TestCenter
+var _shutdown_service: ShutdownService
+var _dialog_manager: DialogManager
+var _msg_display: MessageDisplay
 
 # ═══════════════════════════════════════════════════════
-#  Node Refs (set in _ready / _build_game_ui)
+#  Node Refs — 节点引用 (由 UIBuilder.build_game_ui 返回)
 # ═══════════════════════════════════════════════════════
 var _login_overlay: Control
 var _game_ui: Control
 
 # Map
-var _map_renderer: Node2D  # map_renderer.gd instance
+var _map_renderer: Node2D
 var _map_sub_vp: SubViewportContainer
 var _map_sub: SubViewport
 
@@ -47,39 +51,29 @@ var _msg_input: LineEdit
 var _send_btn: Button
 var _is_streaming: bool = false
 
-# HUD — direct Label refs (no more _mini_panel indirection)
+# HUD
 var _vigor_bar: ProgressBar ; var _vigor_label: Label
 var _spirit_bar: ProgressBar ; var _spirit_label: Label
 var _coins_label: Label
 var _time_label: Label ; var _weather_label: Label ; var _map_name_label: Label
 var _inventory_flow: HFlowContainer
 var _favor_vbox: VBoxContainer
-var _npc_list_container: VBoxContainer  # NPC list in sidebar
-var _portal_list_container: VBoxContainer  # Portal list in sidebar
-var _api_mode_indicator: Label  # API模式指示器
-
-# Config Panel
-var _config_overlay: Control
-var _config_panel: Control
-var _cfg_api_mode: OptionButton
-var _cfg_backend_url: LineEdit
-var _cfg_llm_url: LineEdit
-var _cfg_llm_key: LineEdit
-var _cfg_llm_model: LineEdit
-var _backend_test_result: Label
-var _llm_test_result: Label
+var _npc_list_container: VBoxContainer
+var _portal_list_container: VBoxContainer
+var _api_mode_indicator: Label
 
 
 func _ready() -> void:
+	_init_modules()
+
 	# Dark BG
-	var bg := ColorRect.new(); bg.color = BG_DARK
+	var bg := ColorRect.new(); bg.color = GameColors.BG_DARK
 	bg.set_anchors_preset(PRESET_FULL_RECT); add_child(bg)
 
 	_build_login()
 	_build_game_ui()
-	_build_config_panel()
+	_config_panel.build(self, _on_api_indicator_updated)
 
-	# 如果已登录(从 login_screen 转场而来)，跳过登录遮罩
 	if GameManager.player_id != "":
 		_login_overlay.visible = false
 		_game_ui.visible = true
@@ -104,10 +98,23 @@ func _ready() -> void:
 	GameManager.system_message.connect(_on_sys_msg)
 
 
+## 初始化所有子模块
+func _init_modules() -> void:
+	_ui_builder = UIBuilder.new()
+	_config_panel = ConfigPanel.new()
+	_test_center = TestCenter.new()
+	_shutdown_service = ShutdownService.new()
+	_dialog_manager = DialogManager.new()
+	_msg_display = MessageDisplay.new()
+
+	_shutdown_service.init(func(title, msg, on_confirm):
+		_dialog_manager.show_confirm(self, title, msg, on_confirm)
+	)
+
+
 func _logged_in_deferred() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
-	# Apply split_offset after container has a real size
 	for c in _game_ui.get_children():
 		if c is HSplitContainer:
 			c.split_offset = -340
@@ -121,413 +128,90 @@ func _logged_in_deferred() -> void:
 
 
 # ═══════════════════════════════════════════════════════
-#  Login
+#  Login — 登录界面 (委托给 UIBuilder)
 # ═══════════════════════════════════════════════════════
 func _build_login() -> void:
-	_login_overlay = Control.new()
-	_login_overlay.set_anchors_preset(PRESET_FULL_RECT)
-	add_child(_login_overlay)
-
-	var overlay_bg := ColorRect.new()
-	overlay_bg.color = Color(0,0,0,0.85)
-	overlay_bg.set_anchors_preset(PRESET_FULL_RECT)
-	overlay_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_login_overlay.add_child(overlay_bg)
-
-	# 登录面板 - 使用固定大小并手动居中
-	var box := Panel.new()
-	box.custom_minimum_size = Vector2(340, 400)
-	box.size = Vector2(340, 400)
-	_add_panel_style(box)
-	# 关键: 设置 anchors 为 center preset，让面板自动居中
-	box.set_anchors_and_offsets_preset(PRESET_CENTER, PRESET_MODE_KEEP_SIZE, 0)
-	_login_overlay.add_child(box)
-
-	var vb := VBoxContainer.new()
-	vb.set_anchors_preset(PRESET_FULL_RECT)
-	vb.add_theme_constant_override("separation", 12)
-	box.add_child(vb)
-
-	vb.add_child(_lbl("🏮 活纸 · 江湖行纪", 22, ACCENT, HORIZONTAL_ALIGNMENT_CENTER))
-
-	var name_input := _make_input("江湖名号", "输入你的名号...")
-	vb.add_child(name_input)
-
-	var gs_vb := VBoxContainer.new()
-	gs_vb.add_child(_lbl("性别", 13, DIM))
-	var gender_sel := OptionButton.new()
-	for g in ["男","女","不透露"]: gender_sel.add_item(g)
-	gender_sel.add_theme_font_size_override("font_size", 14)
-	gs_vb.add_child(gender_sel)
-	vb.add_child(gs_vb)
-
-	var pd_cb := CheckBox.new()
-	pd_cb.text = " 真实江湖（永久死亡）"
-	pd_cb.add_theme_color_override("font_color", DIM)
-	vb.add_child(pd_cb)
-
-	var start_btn := _btn("踏入江湖", ACCENT)
-	start_btn.pressed.connect(func():
-		var nm: String = name_input.get_child(1).text.strip_edges()
-		if nm == "": nm = "江湖客"
-		var g: String = "未言"
-		var sel: int = gender_sel.get_selected_id()
-		if sel >= 0 and sel <= 2: g = ["男","女","未言"][sel]
-		GameManager.hello(nm, g, pd_cb.button_pressed)
+	_login_overlay = _ui_builder.build_login(
+		self,
+		func(nm, g, pd): GameManager.hello(nm, g, pd),
+		func(): _show_load_dialog(),
+		func(): _config_panel.toggle(),
+		func(): _test_center.show_test_center(self, func(text, err=false): _msg_display.add_system_msg_ex(text, err)),
+		func(): _shutdown_service.confirm_and_execute(self)
 	)
-	vb.add_child(start_btn)
-
-	var load_btn := _btn("载入旧档 →", Color(0.5,0.5,0.5))
-	load_btn.pressed.connect(_show_load_dialog)
-	vb.add_child(load_btn)
-
-	# 底部工具栏：配置 | 测试 | 关闭服务
-	var tools_hb := HBoxContainer.new()
-	tools_hb.add_theme_constant_override("separation", 8)
-	vb.add_child(tools_hb)
-
-	var config_btn := _btn("⚙ 配置", Color(0.5,0.5,0.5))
-	config_btn.pressed.connect(_toggle_config_panel)
-	tools_hb.add_child(config_btn)
-
-	var test_btn := _btn("🧪 测试", Color(0.9,0.27,0.37))
-	test_btn.pressed.connect(_show_test_center)
-	tools_hb.add_child(test_btn)
-
-	var shutdown_btn := _btn("⏻ 关闭服务", Color(0.94,0.27,0.27))
-	shutdown_btn.pressed.connect(_confirm_shutdown)
-	tools_hb.add_child(shutdown_btn)
 
 
 func _show_load_dialog() -> void:
 	var saves: Array = await GameManager.list_saves()
-	var popup := _overlay()
-	var box := Panel.new()
-	box.custom_minimum_size = Vector2(320, 300)
-	box.size = Vector2(320, 300)
-	_add_panel_style(box)
-	popup.add_child(box)
-	popup.resized.connect(func():
-		var ps: Vector2 = popup.size
-		box.position = (ps - Vector2(320, 300)) / 2.0
+	_ui_builder.build_load_dialog(self, saves,
+		func(pid): GameManager.load_player(pid),
+		func(): pass
 	)
-	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 6)
-	vb.set_anchors_preset(PRESET_FULL_RECT); box.add_child(vb)
-
-	vb.add_child(_lbl("选择存档", 16, ACCENT, HORIZONTAL_ALIGNMENT_CENTER))
-	var list_ct := VBoxContainer.new(); list_ct.add_theme_constant_override("separation", 4)
-	vb.add_child(list_ct)
-
-	if saves.is_empty():
-		list_ct.add_child(_lbl("暂无存档", 14, DIM))
-
-	for s in saves:
-		var pid: String = s.get("player_id","")
-		var btn := _btn("%s 第%d日%s" % [
-			s.get("display_name",pid), s.get("world_day",1),
-			" 【亡】" if s.get("dead",false) else ""
-		], BG_CARD)
-		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		btn.pressed.connect(func(p=pid): GameManager.load_player(p); popup.queue_free())
-		list_ct.add_child(btn)
-
-	var close_btn := _btn("返回", Color(0.4,0.4,0.5))
-	close_btn.pressed.connect(func(): popup.queue_free())
-	vb.add_child(close_btn)
-
-
-func _overlay() -> ColorRect:
-	var o := ColorRect.new(); o.color = Color(0,0,0,0.75)
-	o.set_anchors_preset(PRESET_FULL_RECT)
-	o.gui_input.connect(func(ev):
-		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_RIGHT:
-			o.queue_free()
-	)
-	add_child(o); return o
 
 
 # ═══════════════════════════════════════════════════════
-#  Game UI — 两栏布局（对齐 Web 版）
-#  ┌─────────────────────────────────┬──────────┐
-#  │         Top Bar (40px)          │          │
-#  ├─────────────────────────────────┤  Side    │
-#  │                                 │  Panel   │
-#  │       Map Panel (flex:1)        │  (360px) │
-#  │                                 │          │
-#  │                                 ├──────────┤
-#  │                                 │ Dialogue │
-#  └─────────────────────────────────┴──────────┘
+#  Game UI — 游戏主界面 (委托给 UIBuilder)
 # ═══════════════════════════════════════════════════════
 func _build_game_ui() -> void:
-	print("[Game] _build_game_ui() START")
-	_game_ui = Control.new()
-	_game_ui.set_anchors_preset(PRESET_FULL_RECT)
-	add_child(_game_ui)
-
-	# ═══ 根容器: VBoxContainer (垂直布局) ═══
-	var root_vb := VBoxContainer.new()
-	root_vb.set_anchors_preset(PRESET_FULL_RECT)
-	root_vb.add_theme_constant_override("separation", 0)
-	_game_ui.add_child(root_vb)
-
-	# ═══ Top Bar (固定高度 36px) ═══
-	var topbar := Panel.new()
-	topbar.custom_minimum_size = Vector2(0, 36)
-	topbar.size_flags_vertical = SIZE_SHRINK_CENTER
-	_add_panel_style(topbar)
-	root_vb.add_child(topbar)
-
-	var top_hb := HBoxContainer.new()
-	top_hb.add_theme_constant_override("separation", 16)
-	top_hb.set_anchors_preset(PRESET_FULL_RECT)
-	topbar.add_child(top_hb)
-	top_hb.add_child(_lbl("🏮 活纸 · 江湖行纪", 15, ACCENT_YELLOW))
-	top_hb.add_child(Control.new())  # spacer
-
-	# API模式指示器
-	_api_mode_indicator = _lbl("后端模式", 11, DIM)
-	_api_mode_indicator.add_theme_color_override("font_color", BORDER_GOLD)
-	top_hb.add_child(_api_mode_indicator)
-
-	var config_btn := _btn("⚙", BORDER_SILVER)
-	config_btn.pressed.connect(_toggle_config_panel)
-	top_hb.add_child(config_btn)
-
-	var save_btn := _btn("💾 存档", ACCENT_GREEN)
-	save_btn.pressed.connect(func():
-		await GameManager.save_game()
-		_on_sys_msg("💾 存档已落纸")
-	)
-	top_hb.add_child(save_btn)
-
-	var quit_btn := _btn("🚪 退出", ACCENT_RED)
-	quit_btn.pressed.connect(func():
-		show_confirm(
-			"退出游戏",
-			"确定要退出游戏吗？\n\n[color=yellow]⚠️ 未存档的进度将丢失[/color]",
-			func():
-				await GameManager.save_game()
-				GameManager.player_id = ""
-				_game_ui.visible = false
-				_login_overlay.visible = true
-		)
-	)
-	top_hb.add_child(quit_btn)
-
-	# ═══ Main Area: HSplitContainer (填充剩余空间) ═══
-	var hsplit := HSplitContainer.new()
-	hsplit.size_flags_horizontal = SIZE_EXPAND_FILL
-	hsplit.size_flags_vertical = SIZE_EXPAND_FILL
-	hsplit.dragger_visibility = SplitContainer.DRAGGER_HIDDEN
-	hsplit.split_offset = -340  # 右侧面板固定宽度
-	root_vb.add_child(hsplit)
-
-	# ═══ LEFT: Map Panel (填充剩余空间) ═══
-	var map_panel := VBoxContainer.new()
-	map_panel.size_flags_horizontal = SIZE_EXPAND_FILL
-	map_panel.size_flags_vertical = SIZE_EXPAND_FILL
-	map_panel.add_theme_constant_override("separation", 0)
-	hsplit.add_child(map_panel)
-
-	# Map title bar
-	var map_title := Panel.new()
-	map_title.custom_minimum_size = Vector2(0, 26)
-	var mt_sb := StyleBoxFlat.new()
-	mt_sb.bg_color = BG_PANEL
-	mt_sb.border_width_bottom = 1; mt_sb.border_color = BORDER
-	mt_sb.content_margin_left = 10; mt_sb.content_margin_right = 10
-	mt_sb.content_margin_top = 3; mt_sb.content_margin_bottom = 3
-	map_title.add_theme_stylebox_override("panel", mt_sb)
-	map_title.size_flags_vertical = SIZE_SHRINK_CENTER
-	map_panel.add_child(map_title)
-	var mt_hb := HBoxContainer.new()
-	mt_hb.set_anchors_preset(PRESET_FULL_RECT); map_title.add_child(mt_hb)
-	mt_hb.add_child(_lbl("🗺️ 地图", 12, ACCENT, HORIZONTAL_ALIGNMENT_LEFT))
-	mt_hb.add_child(Control.new())
-	_map_name_label = _lbl("--", 11, DIM)  # reuse as map name in title bar
-	mt_hb.add_child(_map_name_label)
-
-	# Map SubViewport container (填充剩余空间)
-	_map_sub_vp = SubViewportContainer.new()
-	_map_sub_vp.name = "MapSubVPContainer"
-	_map_sub_vp.size_flags_horizontal = SIZE_EXPAND_FILL
-	_map_sub_vp.size_flags_vertical = SIZE_EXPAND_FILL
-	_map_sub_vp.stretch = true
-	map_panel.add_child(_map_sub_vp)
-
-	_map_sub = SubViewport.new()
-	_map_sub.name = "MapSubViewport"
-	_map_sub.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	_map_sub.transparent_bg = true
-	_map_sub_vp.add_child(_map_sub)
-
-	# Map renderer (Node2D with Camera2D)
-	_map_renderer = preload("res://scripts/map_renderer.gd").new()
-	_map_renderer.name = "MapRenderer"
-	_map_sub.add_child(_map_renderer)
-	
-	print("[Game] Map renderer added to SubViewport")
-
-	# Connect map renderer signals
-	_map_renderer.tile_clicked.connect(func(x, y): GameManager.move_player(x, y))
-	_map_renderer.npc_clicked.connect(func(nid, nname):
-		for idx in _npc_select.item_count:
-			if _npc_select.get_item_text(idx) == nname:
-				_npc_select.select(idx)
-				_msg_input.grab_focus()
-				return
+	var refs := _ui_builder.build_game_ui(
+		self,
+		func(x, y): GameManager.move_player(x, y),
+		func(nid, nname):
+			for idx in _npc_select.item_count:
+				if _npc_select.get_item_text(idx) == nname:
+					_npc_select.select(idx)
+					_msg_input.grab_focus()
+					return
+		,
+		func(): _on_send(),
+		func():
+			await GameManager.save_game()
+			_msg_display.add_system_msg("💾 存档已落纸")
+		,
+		func():
+			_dialog_manager.show_confirm(self,
+				"退出游戏",
+				"确定要退出游戏吗？\n\n[color=yellow]⚠️ 未存档的进度将丢失[/color]",
+				func():
+					await GameManager.save_game()
+					GameManager.player_id = ""
+					_game_ui.visible = false
+					_login_overlay.visible = true
+			)
+		,
+		func(): _config_panel.toggle()
 	)
 
-	# ═══ RIGHT: Side Panel (固定宽度 ~360px) ═══
-	var side_panel := VBoxContainer.new()
-	side_panel.custom_minimum_size = Vector2(330, 0)
-	side_panel.add_theme_constant_override("separation", 6)
-	side_panel.size_flags_horizontal = SIZE_SHRINK_BEGIN
-	side_panel.size_flags_vertical = SIZE_EXPAND_FILL
-	side_panel.name = "SidePanel"
-	hsplit.add_child(side_panel)
+	# Unpack references from builder
+	_game_ui = refs["game_ui"]
+	_map_renderer = refs["map_renderer"]
+	_map_sub_vp = refs["map_sub_vp"]
+	_map_sub = refs["map_sub"]
+	_dialogue_label = refs["dialogue_label"]
+	_chat_scroll = refs["chat_scroll"]
+	_npc_select = refs["npc_select"]
+	_msg_input = refs["msg_input"]
+	_send_btn = refs["send_btn"]
+	_vigor_bar = refs["vigor_bar"]
+	_vigor_label = refs["vigor_label"]
+	_spirit_bar = refs["spirit_bar"]
+	_spirit_label = refs["spirit_label"]
+	_coins_label = refs["coins_label"]
+	_time_label = refs["time_label"]
+	_weather_label = refs["weather_label"]
+	_map_name_label = refs["map_name_label"]
+	_inventory_flow = refs["inventory_flow"]
+	_favor_vbox = refs["favor_vbox"]
+	_npc_list_container = refs["npc_list_container"]
+	_portal_list_container = refs["portal_list_container"]
+	_api_mode_indicator = refs["api_mode_indicator"]
 
-	# ─── Card 1: Player Status ───
-	var stat_card := _make_card("⚔ 角色状态")
-	side_panel.add_child(stat_card)
-	var stat_vb := _card_content(stat_card)
-	stat_vb.add_theme_constant_override("separation", 6)
-
-	# Vigor bar row
-	_vigor_bar = ProgressBar.new(); _vigor_bar.show_percentage = false
-	_vigor_bar.custom_minimum_size = Vector2(0, 8); _vigor_bar.size_flags_horizontal = SIZE_EXPAND
-	var vg_sb := StyleBoxFlat.new(); vg_sb.bg_color = GREEN
-	vg_sb.set_corner_radius_all(3)
-	_vigor_bar.add_theme_stylebox_override("fill", vg_sb)
-	var vigor_row := HBoxContainer.new(); stat_vb.add_child(vigor_row)
-	vigor_row.add_child(_lbl("💪 体力", 11, DIM)); vigor_row.add_child(Control.new())
-	_vigor_label = _lbl("--/--", 11, TEXT); vigor_row.add_child(_vigor_label)
-	stat_vb.add_child(_vigor_bar)
-
-	# Spirit bar row
-	_spirit_bar = ProgressBar.new(); _spirit_bar.show_percentage = false
-	_spirit_bar.custom_minimum_size = Vector2(0, 8); _spirit_bar.size_flags_horizontal = SIZE_EXPAND
-	var sp_sb := StyleBoxFlat.new(); sp_sb.bg_color = ACCENT
-	sp_sb.set_corner_radius_all(3)
-	_spirit_bar.add_theme_stylebox_override("fill", sp_sb)
-	var spirit_row := HBoxContainer.new(); stat_vb.add_child(spirit_row)
-	spirit_row.add_child(_lbl("🧘 心气", 11, DIM)); spirit_row.add_child(Control.new())
-	_spirit_label = _lbl("--/--", 11, TEXT); spirit_row.add_child(_spirit_label)
-	stat_vb.add_child(_spirit_bar)
-
-	# Info grid (2 columns)
-	var info_grid := GridContainer.new()
-	info_grid.columns = 2
-	info_grid.add_theme_constant_override("h_separation", 12)
-	info_grid.add_theme_constant_override("v_separation", 4)
-	stat_vb.add_child(info_grid)
-	_coins_label = _lbl("💰 0文", 11, TEXT); info_grid.add_child(_coins_label)
-	_time_label = _lbl("🧭 --", 11, TEXT); info_grid.add_child(_time_label)
-	_weather_label = _lbl("🌤 --", 11, TEXT); info_grid.add_child(_weather_label)
-	_map_name_label = _lbl("📍 --", 11, DIM); info_grid.add_child(_map_name_label)
-
-	# ─── Card 2: Inventory ───
-	var inv_card := _make_card("🎒 行囊")
-	side_panel.add_child(inv_card)
-	var inv_vb := _card_content(inv_card)
-	_inventory_flow = HFlowContainer.new()
-	_inventory_flow.add_theme_constant_override("h_separation", 6)
-	_inventory_flow.add_theme_constant_override("v_separation", 3)
-	inv_vb.add_child(_inventory_flow)
-
-	# ─── Card 3: Favor ───
-	var fav_card := _make_card("❤ 好感度")
-	side_panel.add_child(fav_card)
-	_favor_vbox = _card_content(fav_card)
-	_favor_vbox.add_theme_constant_override("separation", 3)
-
-	# ─── Card 4: NPC List (flexible height) ───
-	var npc_card := _make_card("👥 此地图人物")
-	npc_card.size_flags_vertical = SIZE_EXPAND_FILL
-	side_panel.add_child(npc_card)
-	var npc_inner := VBoxContainer.new()
-	npc_inner.set_anchors_preset(PRESET_FULL_RECT)
-	npc_card.add_child(npc_inner)
-
-	var npc_scroll := ScrollContainer.new()
-	npc_scroll.size_flags_vertical = SIZE_EXPAND_FILL
-	npc_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	npc_inner.add_child(npc_scroll)
-	_npc_list_container = VBoxContainer.new()
-	_npc_list_container.add_theme_constant_override("separation", 2)
-	_npc_list_container.size_flags_horizontal = SIZE_EXPAND
-	npc_scroll.add_child(_npc_list_container)
-
-	# ─── Card 5: Portals ───
-	var portal_card := _make_card("🚪 界门")
-	side_panel.add_child(portal_card)
-	var portal_inner := VBoxContainer.new()
-	portal_inner.set_anchors_preset(PRESET_FULL_RECT)
-	portal_card.add_child(portal_inner)
-
-	_portal_list_container = VBoxContainer.new()
-	_portal_list_container.add_theme_constant_override("separation", 4)
-	_portal_list_container.size_flags_horizontal = SIZE_EXPAND
-	portal_inner.add_child(_portal_list_container)
-
-	# ─── Card 6: Dialogue (bottom, fixed ~240px) ───
-	var dlg_card := Panel.new()
-	dlg_card.custom_minimum_size = Vector2(0, 240)
-	dlg_card.size_flags_vertical = SIZE_SHRINK_END
-	var dc_sb := StyleBoxFlat.new(); dc_sb.bg_color = BG_PANEL
-	dc_sb.set_corner_radius_all(6)
-	dc_sb.border_width_left = 1; dc_sb.border_width_right = 1; dc_sb.border_width_top = 1; dc_sb.border_width_bottom = 1; dc_sb.border_color = BORDER
-	dc_sb.content_margin_left = 10; dc_sb.content_margin_right = 10
-	dc_sb.content_margin_top = 8; dc_sb.content_margin_bottom = 8
-	dlg_card.add_theme_stylebox_override("panel", dc_sb)
-	side_panel.add_child(dlg_card)
-
-	var dlg_vb := VBoxContainer.new()
-	dlg_vb.add_theme_constant_override("separation", 6)
-	dlg_vb.set_anchors_preset(PRESET_FULL_RECT)
-	dlg_card.add_child(dlg_vb)
-
-	# Chat scroll area
-	_chat_scroll = ScrollContainer.new()
-	_chat_scroll.size_flags_vertical = SIZE_EXPAND
-	_chat_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	dlg_vb.add_child(_chat_scroll)
-
-	_dialogue_label = RichTextLabel.new()
-	_dialogue_label.bbcode_enabled = true
-	_dialogue_label.fit_content = true
-	_dialogue_label.selection_enabled = true
-	_dialogue_label.size_flags_horizontal = SIZE_EXPAND
-	_dialogue_label.scroll_active = false
-	_dialogue_label.add_theme_font_size_override("normal_font_size", 13)
-	_dialogue_label.add_theme_color_override("default_color", TEXT)
-	_chat_scroll.add_child(_dialogue_label)
-
-	# Input bar
-	var input_bar := HBoxContainer.new()
-	input_bar.custom_minimum_size = Vector2(0, 36)
-	input_bar.add_theme_constant_override("separation", 6)
-	dlg_vb.add_child(input_bar)
-
-	_npc_select = OptionButton.new(); _npc_select.add_theme_font_size_override("font_size", 12)
-	input_bar.add_child(_npc_select)
-
-	_msg_input = LineEdit.new()
-	_msg_input.placeholder_text = "对 TA 说些什么..."
-	_msg_input.size_flags_horizontal = SIZE_EXPAND
-	_msg_input.add_theme_font_size_override("font_size", 13)
-	_msg_input.text_submitted.connect(func(_t): _on_send())
-	input_bar.add_child(_msg_input)
-
-	_send_btn = _btn("发送", ACCENT)
-	_send_btn.pressed.connect(_on_send)
-	input_bar.add_child(_send_btn)
-
-	print("[Game] UI built — card-based sidebar layout")
+	# Initialize message display with dialogue nodes
+	_msg_display.init(_dialogue_label, _chat_scroll)
 
 
 # ═══════════════════════════════════════════════════════
-#  Map Rendering
+#  Map Rendering — 地图渲染
 # ═══════════════════════════════════════════════════════
 func _build_map() -> void:
 	if not _map_renderer:
@@ -542,7 +226,7 @@ func _update_map_player() -> void:
 
 
 # ═══════════════════════════════════════════════════════
-#  Dialogue
+#  Dialogue — 对话系统
 # ═══════════════════════════════════════════════════════
 func _on_send() -> void:
 	if _is_streaming: return
@@ -557,7 +241,7 @@ func _on_send() -> void:
 	var npc_id: String = npcs[idx].get("id","")
 	var npc_name: String = npcs[idx].get("name", npc_id)
 
-	_add_chat(TEXT, "", "[right]%s[/right]" % text)
+	_msg_display.add_chat(GameColors.TEXT, "", "[right]%s[/right]" % text)
 	_msg_input.clear()
 	_is_streaming = true
 	_send_btn.disabled = true
@@ -569,26 +253,15 @@ func _on_send() -> void:
 
 
 func _on_npc_reply(speaker: String, message: String, _npc_id: String) -> void:
-	_add_chat(ACCENT2, speaker, message)
+	_msg_display.add_chat(GameColors.ACCENT2, speaker, message)
 
 
 func _on_sys_msg(text: String) -> void:
-	_add_chat(DIM, "", "[center]%s[/center]" % text)
-
-
-func _add_chat(color: Color, speaker: String, body: String) -> void:
-	if not is_instance_valid(_dialogue_label): return
-	var bb := ""
-	if speaker != "":
-		bb += "[b][color=#%s]%s[/color][/b]\n" % [color.to_html(false), speaker]
-	bb += body.replace("[", "[lb]")
-	_dialogue_label.append_text(bb + "\n\n")
-	await get_tree().process_frame
-	_chat_scroll.get_v_scroll_bar().value = _chat_scroll.get_v_scroll_bar().max_value
+	_msg_display.add_system_msg(text)
 
 
 # ═══════════════════════════════════════════════════════
-#  Refresh
+#  Refresh — 状态刷新主循环
 # ═══════════════════════════════════════════════════════
 func _refresh() -> void:
 	if not _game_ui.visible:
@@ -597,7 +270,7 @@ func _refresh() -> void:
 	var gm = GameManager
 	print("[Game] _refresh() — map_id: %s, maps_data keys: %s" % [gm.player_map_id, str(gm.maps_data.keys())])
 
-	# Map - 检测地图变化或首次加载
+	# Map - detect change or first load
 	var current_renderer_map: String = _map_renderer.get_current_map_id() if _map_renderer else ""
 	if gm.player_map_id != current_renderer_map:
 		print("[Game] _refresh() — building map (changed from '%s' to '%s')" % [current_renderer_map, gm.player_map_id])
@@ -606,7 +279,6 @@ func _refresh() -> void:
 	elif gm.maps_data.is_empty():
 		print("[Game] _refresh() — maps_data is EMPTY, skipping map build")
 	else:
-		# 即使地图ID相同，也更新玩家位置
 		_update_map_player()
 
 	# NPC select dropdown
@@ -622,7 +294,7 @@ func _refresh() -> void:
 	if _npc_list_container:
 		for c in _npc_list_container.get_children(): c.queue_free()
 		for n in gm.npcs_here:
-			var entry := _npc_entry(n.get("name", n.get("id","?")), n.get("id",""))
+			var entry := UIBuilder.npc_entry(n.get("name", n.get("id","?")), n.get("id",""))
 			_npc_list_container.add_child(entry)
 
 	# HUD bars & labels
@@ -639,10 +311,10 @@ func _refresh() -> void:
 	# Inventory
 	for c in _inventory_flow.get_children(): c.queue_free()
 	if gm.player_inventory.is_empty():
-		var l := _lbl("身无长物", 12, Color(0.4,0.4,0.4)); _inventory_flow.add_child(l)
+		var l := UIBuilder.lbl("身无长物", 12, Color(0.4,0.4,0.4)); _inventory_flow.add_child(l)
 	else:
 		for item in gm.player_inventory:
-			_inventory_flow.add_child(_lbl("%s×%d" % [item, gm.player_inventory[item]], 12, GOLD))
+			_inventory_flow.add_child(UIBuilder.lbl("%s×%d" % [item, gm.player_inventory[item]], 12, GameColors.GOLD))
 
 	# Favor
 	for c in _favor_vbox.get_children(): c.queue_free()
@@ -650,15 +322,15 @@ func _refresh() -> void:
 		for nid in gm.player_favor:
 			var val: int = gm.player_favor[nid]
 			var nm: String = gm.npc_labels.get(nid, nid)
-			_favor_vbox.add_child(_lbl("%s: %+d" % [nm, val], 11,
-				GREEN if val >= 0 else RED))
+			_favor_vbox.add_child(UIBuilder.lbl("%s: %+d" % [nm, val], 11,
+				GameColors.GREEN if val >= 0 else GameColors.RED))
 
 	# Portals
 	for c in _portal_list_container.get_children(): c.queue_free()
 	var map_info: Dictionary = gm.maps_data.get(gm.player_map_id, {})
 	var portals: Array = map_info.get("portals", [])
 	if portals.is_empty():
-		var empty_label := _lbl("此地图无界门", 11, DIM)
+		var empty_label := UIBuilder.lbl("此地图无界门", 11, GameColors.DIM)
 		_portal_list_container.add_child(empty_label)
 	else:
 		for pt in portals:
@@ -667,702 +339,35 @@ func _refresh() -> void:
 			var target_name: String = target_map_info.get("name", target_map_id)
 			var to_x: int = pt.get("to_x", 0)
 			var to_y: int = pt.get("to_y", 0)
-			
-			var portal_btn := _btn("↗ 往【%s】(%d,%d)" % [target_name, to_x, to_y], ACCENT_BLUE)
+
+			var portal_btn := UIBuilder.btn("↗ 往【%s】(%d,%d)" % [target_name, to_x, to_y], GameColors.ACCENT_BLUE)
 			portal_btn.pressed.connect(func(x=to_x, y=to_y): gm.move_player(x, y))
 			_portal_list_container.add_child(portal_btn)
 
 
 # ═══════════════════════════════════════════════════════
-#  Style Helpers
+#  API Mode Indicator — API模式指示器更新回调
 # ═══════════════════════════════════════════════════════
-func _add_panel_style(p: Panel) -> void:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = BG_PANEL
-	sb.set_corner_radius_all(6)
-	sb.border_width_left = 1; sb.border_width_right = 1; sb.border_width_top = 1; sb.border_width_bottom = 1; sb.border_color = BORDER
-	sb.content_margin_left = 12; sb.content_margin_right = 12
-	sb.content_margin_top = 8; sb.content_margin_bottom = 8
-	p.add_theme_stylebox_override("panel", sb)
-
-
-func _make_card(title_text: String) -> Panel:
-	"""Create a styled card Panel with a header label and return it.
-	   Caller should use _card_content() to get the inner VBoxContainer."""
-	var p := Panel.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = BG_CARD
-	sb.set_corner_radius_all(6)
-	sb.border_width_left = 1; sb.border_width_right = 1; sb.border_width_top = 1; sb.border_width_bottom = 1; sb.border_color = BORDER_SUBTLE
-	sb.content_margin_left = 10; sb.content_margin_right = 10
-	sb.content_margin_top = 6; sb.content_margin_bottom = 6
-	p.add_theme_stylebox_override("panel", sb)
-
-	# Header row inside the panel
-	var header_hb := HBoxContainer.new()
-	header_hb.set_anchors_preset(PRESET_FULL_RECT)
-	p.add_child(header_hb)
-	header_hb.add_child(_lbl(title_text, 11, ACCENT, HORIZONTAL_ALIGNMENT_LEFT))
-	return p
-
-
-func _card_content(card: Panel) -> VBoxContainer:
-	"""Get or create the content VBoxContainer inside a card Panel."""
-	# The first child is the header HBoxContainer; add a VBox after it
-	var vb := VBoxContainer.new()
-	vb.set_anchors_and_offsets_preset(PRESET_FULL_RECT, PRESET_MODE_MINSIZE, 0)
-	# Offset below the header (~20px for header text)
-	vb.offset_top = 20
-	card.add_child(vb)
-	return vb
-
-
-func _lbl(text: String, size: int, color: Color, align := HORIZONTAL_ALIGNMENT_LEFT) -> Label:
-	var l := Label.new(); l.text = text
-	l.add_theme_color_override("font_color", color)
-	l.add_theme_font_size_override("font_size", size)
-	l.horizontal_alignment = align
-	return l
-
-
-func _make_input(label: String, placeholder: String) -> VBoxContainer:
-	var vb := VBoxContainer.new()
-	vb.add_child(_lbl(label, 13, DIM))
-	var le := LineEdit.new()
-	le.placeholder_text = placeholder; le.max_length = 24
-	le.add_theme_font_size_override("font_size", 14)
-	vb.add_child(le)
-	return vb
-
-
-func _btn(text: String, bg: Color) -> Button:
-	var b := Button.new(); b.text = text
-	b.add_theme_font_size_override("font_size", 13)
-	var sb := StyleBoxFlat.new(); sb.bg_color = bg
-	sb.corner_radius_top_left = 4; sb.corner_radius_top_right = 4
-	sb.corner_radius_bottom_left = 4; sb.corner_radius_bottom_right = 4
-	sb.content_margin_left = 14; sb.content_margin_right = 14
-	sb.content_margin_top = 6; sb.content_margin_bottom = 6
-	b.add_theme_stylebox_override("normal", sb)
-	return b
-
-
-func _npc_entry(name: String, _id: String) -> Panel:
-	"""Create a single NPC list entry for the sidebar."""
-	var p := Panel.new()
-	p.custom_minimum_size = Vector2(0, 30)
-	var esb := StyleBoxFlat.new()
-	esb.bg_color = Color(0,0,0,0)  # transparent
-	esb.set_corner_radius_all(4)
-	esb.content_margin_left = 6; esb.content_margin_right = 6
-	esb.content_margin_top = 4; esb.content_margin_bottom = 4
-	p.add_theme_stylebox_override("panel", esb)
-
-	var hb := HBoxContainer.new()
-	hb.set_anchors_preset(PRESET_FULL_RECT)
-	p.add_child(hb)
-
-	# NPC dot indicator
-	var dot := ColorRect.new()
-	dot.custom_minimum_size = Vector2(7, 7)
-	dot.position.y = 5  # center vertically in 30px height
-	dot.color = ACCENT2
-	hb.add_child(dot)
-
-	hb.add_child(_lbl(name, 12, TEXT))
-	return p
-
-
-# ═══════════════════════════════════════════════════════
-#  Config Panel
-# ═══════════════════════════════════════════════════════
-func _build_config_panel() -> void:
-	_config_overlay = Control.new()
-	_config_overlay.set_anchors_preset(PRESET_FULL_RECT)
-	_config_overlay.visible = false
-	
-	# Overlay background
-	var overlay_bg := ColorRect.new()
-	overlay_bg.color = Color(0,0,0,0.75)
-	overlay_bg.set_anchors_preset(PRESET_FULL_RECT)
-	overlay_bg.mouse_filter = Control.MOUSE_FILTER_STOP
-	_config_overlay.add_child(overlay_bg)
-
-	# Config panel container
-	var panel_container := CenterContainer.new()
-	panel_container.set_anchors_preset(PRESET_FULL_RECT)
-	_config_overlay.add_child(panel_container)
-
-	var panel := Panel.new()
-	panel.custom_minimum_size = Vector2(400, 500)
-	_add_panel_style(panel)
-	panel_container.add_child(panel)
-
-	var vb := VBoxContainer.new()
-	vb.set_anchors_preset(PRESET_FULL_RECT)
-	vb.add_theme_constant_override("separation", 12)
-	vb.offset_left = 16; vb.offset_top = 16; vb.offset_right = -16; vb.offset_bottom = -16
-	panel.add_child(vb)
-
-	# Title
-	vb.add_child(_lbl("⚙ API 配置", 18, ACCENT_YELLOW, HORIZONTAL_ALIGNMENT_CENTER))
-
-	# API Mode
-	var mode_vb := VBoxContainer.new()
-	mode_vb.add_theme_constant_override("separation", 4)
-	mode_vb.add_child(_lbl("运行模式", 13, DIM))
-	_cfg_api_mode = OptionButton.new()
-	_cfg_api_mode.add_item("服务器模式（连接后端 API）")
-	_cfg_api_mode.add_item("独立模式（直接 LLM API）")
-	_cfg_api_mode.add_theme_font_size_override("font_size", 13)
-	mode_vb.add_child(_cfg_api_mode)
-	vb.add_child(mode_vb)
-
-	# Backend URL
-	var backend_vb := VBoxContainer.new()
-	backend_vb.add_theme_constant_override("separation", 4)
-	backend_vb.add_child(_lbl("后端 API 地址", 13, DIM))
-	_cfg_backend_url = LineEdit.new()
-	_cfg_backend_url.placeholder_text = "http://127.0.0.1:8765"
-	_cfg_backend_url.add_theme_font_size_override("font_size", 13)
-	backend_vb.add_child(_cfg_backend_url)
-	vb.add_child(backend_vb)
-
-	# LLM URL
-	var llm_url_vb := VBoxContainer.new()
-	llm_url_vb.add_theme_constant_override("separation", 4)
-	llm_url_vb.add_child(_lbl("LLM API 地址", 13, DIM))
-	_cfg_llm_url = LineEdit.new()
-	_cfg_llm_url.placeholder_text = "https://llmapi.paratera.com/v1"
-	_cfg_llm_url.add_theme_font_size_override("font_size", 13)
-	llm_url_vb.add_child(_cfg_llm_url)
-	vb.add_child(llm_url_vb)
-
-	# LLM Key
-	var llm_key_vb := VBoxContainer.new()
-	llm_key_vb.add_theme_constant_override("separation", 4)
-	llm_key_vb.add_child(_lbl("LLM API Key", 13, DIM))
-	_cfg_llm_key = LineEdit.new()
-	_cfg_llm_key.placeholder_text = "sk-..."
-	_cfg_llm_key.secret = true
-	_cfg_llm_key.add_theme_font_size_override("font_size", 13)
-	llm_key_vb.add_child(_cfg_llm_key)
-	vb.add_child(llm_key_vb)
-
-	# LLM Model
-	var llm_model_vb := VBoxContainer.new()
-	llm_model_vb.add_theme_constant_override("separation", 4)
-	llm_model_vb.add_child(_lbl("LLM 模型", 13, DIM))
-	_cfg_llm_model = LineEdit.new()
-	_cfg_llm_model.placeholder_text = "DeepSeek-V4-Pro"
-	_cfg_llm_model.add_theme_font_size_override("font_size", 13)
-	llm_model_vb.add_child(_cfg_llm_model)
-	vb.add_child(llm_model_vb)
-
-	# Test section
-	var test_section := VBoxContainer.new()
-	test_section.add_theme_constant_override("separation", 8)
-	test_section.add_child(_lbl("🔌 连接测试", 14, ACCENT))
-	
-	var test_btn_hb := HBoxContainer.new()
-	test_btn_hb.add_theme_constant_override("separation", 8)
-	
-	var test_backend_btn := _btn("测试后端", BORDER_SILVER)
-	test_backend_btn.pressed.connect(_test_backend)
-	test_btn_hb.add_child(test_backend_btn)
-	
-	var test_llm_btn := _btn("测试 LLM", BORDER_SILVER)
-	test_llm_btn.pressed.connect(_test_llm)
-	test_btn_hb.add_child(test_llm_btn)
-	
-	test_section.add_child(test_btn_hb)
-	
-	_backend_test_result = _lbl("", 11, DIM)
-	test_section.add_child(_backend_test_result)
-	
-	_llm_test_result = _lbl("", 11, DIM)
-	test_section.add_child(_llm_test_result)
-	
-	vb.add_child(test_section)
-
-	# Spacer
-	vb.add_child(Control.new())
-
-	# Buttons
-	var btn_hb := HBoxContainer.new()
-	btn_hb.add_theme_constant_override("separation", 8)
-	btn_hb.size_flags_horizontal = SIZE_SHRINK_END
-	
-	var cancel_btn := _btn("取消", BORDER_SILVER)
-	cancel_btn.pressed.connect(_toggle_config_panel)
-	btn_hb.add_child(cancel_btn)
-	
-	var save_btn := _btn("保存配置", ACCENT_YELLOW)
-	save_btn.pressed.connect(_apply_config)
-	btn_hb.add_child(save_btn)
-	
-	vb.add_child(btn_hb)
-
-	add_child(_config_overlay)
-
-
-func _toggle_config_panel() -> void:
-	if _config_overlay.visible:
-		_config_overlay.visible = false
-	else:
-		_fill_config_values()
-		_config_overlay.visible = true
-
-
-func _fill_config_values() -> void:
-	_cfg_api_mode.selected = 0 if ApiClient.api_mode == "backend" else 1
-	_cfg_backend_url.text = ApiClient.backend_url
-	_cfg_llm_url.text = ApiClient.llm_api_url
-	_cfg_llm_key.text = ApiClient.llm_api_key
-	_cfg_llm_model.text = ApiClient.llm_model
-
-
-func _apply_config() -> void:
-	ApiClient.api_mode = "backend" if _cfg_api_mode.selected == 0 else "direct"
-	ApiClient.backend_url = _cfg_backend_url.text.strip_edges()
-	ApiClient.llm_api_url = _cfg_llm_url.text.strip_edges()
-	ApiClient.llm_api_key = _cfg_llm_key.text.strip_edges()
-	ApiClient.llm_model = _cfg_llm_model.text.strip_edges()
-	
-	# Update indicator
-	_api_mode_indicator.text = "后端模式" if ApiClient.api_mode == "backend" else "独立模式"
-	_api_mode_indicator.add_theme_color_override("font_color", BORDER_GOLD if ApiClient.api_mode == "backend" else ACCENT_PURPLE)
-	
-	_toggle_config_panel()
-
-
-func _test_backend() -> void:
-	_backend_test_result.text = "⏳ 测试中..."
-	_backend_test_result.add_theme_color_override("font_color", DIM)
-	
-	var ok: bool = await ApiClient.test_backend()
-	if ok:
-		_backend_test_result.text = "✅ 后端连接成功"
-		_backend_test_result.add_theme_color_override("font_color", ACCENT_GREEN)
-	else:
-		_backend_test_result.text = "❌ 后端连接失败"
-		_backend_test_result.add_theme_color_override("font_color", ACCENT_RED)
-
-
-func _test_llm() -> void:
-	_llm_test_result.text = "⏳ 测试中..."
-	_llm_test_result.add_theme_color_override("font_color", DIM)
-	
-	var ok: bool = await ApiClient.test_llm()
-	if ok:
-		_llm_test_result.text = "✅ LLM连接成功"
-		_llm_test_result.add_theme_color_override("font_color", ACCENT_GREEN)
-	else:
-		_llm_test_result.text = "❌ LLM连接失败"
-		_llm_test_result.add_theme_color_override("font_color", ACCENT_RED)
+func _on_api_mode_updated(new_text: String, new_color: Color) -> void:
+	_api_mode_indicator.text = new_text
+	_api_mode_indicator.add_theme_color_override("font_color", new_color)
 
 
 func _update_api_mode_indicator() -> void:
 	_api_mode_indicator.text = "后端模式" if ApiClient.api_mode == "backend" else "独立模式"
-	_api_mode_indicator.add_theme_color_override("font_color", BORDER_GOLD if ApiClient.api_mode == "backend" else ACCENT_PURPLE)
+	_api_mode_indicator.add_theme_color_override("font_color",
+		GameColors.BORDER_GOLD if ApiClient.api_mode == "backend" else GameColors.ACCENT_PURPLE)
 
 
-# ════════════════════════════════════════════════
-#  测试中心
-# ════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════
+#  Public API — 供外部模块调用的接口
+# ═══════════════════════════════════════════════════════
 
-var _test_overlay: Control
-var _test_list_container: VBoxContainer
-var _current_running_test: String = ""
-
-func _show_test_center() -> void:
-	if _test_overlay and is_instance_valid(_test_overlay):
-		_test_overlay.queue_free()
-		return
-
-	_test_overlay = _overlay()
-	var panel := Panel.new()
-	panel.custom_minimum_size = Vector2(700, 550)
-	panel.size = Vector2(700, 550)
-	_add_panel_style(panel, Color(0.15, 0.1, 0.18), Color(0.9, 0.27, 0.37))
-	_test_overlay.add_child(panel)
-	_test_overlay.resized.connect(func():
-		var ps: Vector2 = _test_overlay.size
-		panel.position = (ps - Vector2(700, 550)) / 2.0
-	)
-
-	var main_vb := VBoxContainer.new()
-	main_vb.add_theme_constant_override("separation", 10)
-	main_vb.set_anchors_preset(PRESET_FULL_RECT)
-	main_vb.offset_left = 20; main_vb.offset_top = 20; main_vb.offset_right = -20; main_vb.offset_bottom = -20
-	panel.add_child(main_vb)
-
-	# 标题栏
-	var title_hb := HBoxContainer.new()
-	title_hb.add_child(_lbl("🧪 测试中心", 20, ACCENT_RED))
-	var close_btn := _btn("✕", ACCENT_RED)
-	close_btn.pressed.connect(func(): _test_overlay.queue_free())
-	title_hb.add_child(Control.new()) # spacer
-	title_hb.add_child(close_btn)
-	main_vb.add_child(title_hb)
-
-	# 统计栏
-	var stats_hb := HBoxContainer.new()
-	stats_hb.add_theme_constant_override("separation", 16)
-	stats_hb.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	stats_hb.add_child(_lbl("可用测试: --", 14, TEXT))
-	stats_hb.add_child(_lbl("运行中: 0", 14, ACCENT_YELLOW))
-	stats_hb.add_child(_lbl("成功: 0", 14, ACCENT_GREEN))
-	stats_hb.add_child(_lbl("失败: 0", 14, ACCENT_RED))
-	main_vb.add_child(stats_hb)
-
-	# 分隔线
-	var sep := HSeparator.new()
-	sep.modulate = Color(0.3, 0.3, 0.4)
-	main_vb.add_child(sep)
-
-	# 测试列表（可滚动）
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = SIZE_EXPAND
-	main_vb.add_child(scroll)
-
-	_test_list_container = VBoxContainer.new()
-	_test_list_container.add_theme_constant_override("separation", 8)
-	scroll.add_child(_test_list_container)
-
-	# 加载测试列表
-	_load_test_list(stats_hb)
-
-	add_child(_test_overlay)
-
-
-func _load_test_list(stats_hb: HBoxContainer) -> void:
-	for child in _test_list_container.get_children():
-		child.queue_free()
-
-	var result: Dictionary = await ApiClient.list_tests()
-	var tests: Array = result.get("tests", [])
-	var count: int = result.get("count", 0)
-
-	# 更新统计
-	if stats_hb.get_child_count() >= 4:
-		stats_hb.get_child(0).text = "可用测试: %d" % count
-
-	if tests.is_empty():
-		_test_list_container.add_child(_lbl("⚠️ 无法连接后端或没有可用测试", 14, DIM))
-		return
-
-	for test_data in tests:
-		var test_name: String = test_data.get("name", "")
-		var test_desc: String = test_data.get("description", "")
-
-		var card := Panel.new()
-		card.custom_minimum_size = Vector2(0, 70)
-		_add_panel_style(card, Color(0.12, 0.1, 0.15), Color(0.25, 0.2, 0.3))
-
-		var card_vb := VBoxContainer.new()
-		card_vb.add_theme_constant_override("separation", 4)
-		card_vb.set_anchors_preset(PRESET_FULL_RECT)
-		card_vb.offset_left = 12; card_vb.offset_top = 8; card_vb.offset_right = -12; card_vb.offset_bottom = -8
-		card.add_child(card_vb)
-
-		# 标题行
-		var header_hb := HBoxContainer.new()
-		header_hb.add_child(_lbl("📋 %s" % test_name, 14, TEXT))
-		var run_btn := _btn("▶ 运行", ACCENT_RED)
-		run_btn.pressed.connect(_run_test.bind(test_name, card_vb))
-		header_hb.add_child(Control.new())
-		header_hb.add_child(run_btn)
-		card_vb.add_child(header_hb)
-
-		# 描述
-		card_vb.add_child(_lbl(test_desc, 11, DIM))
-
-		# 输出区域（初始隐藏）
-		var output_box := RichTextLabel.new()
-		output_box.name = "output_box"
-		output_box.bbcode_enabled = true
-		output_box.fit_content = true
-		output_box.custom_minimum_size = Vector2(0, 80)
-		output_box.scroll_active = true
-		output_box.visible = false
-		output_box.add_theme_font_size_override("normal_font_size", 11)
-		output_box.add_theme_color_override("default_color", Color(0.8, 0.8, 0.85))
-		_add_panel_style(output_box, Color(0.08, 0.06, 0.1), Color(0.15, 0.15, 0.2))
-		card_vb.add_child(output_box)
-
-		_test_list_container.add_child(card)
-
-
-func _run_test(test_name: String, card_vb: VBoxContainer) -> void:
-	if _current_running_test != "":
-		add_system_msg("⚠️ 请等待当前测试完成")
-		return
-
-	_current_running_test = test_name
-
-	# 找到输出框并显示
-	var output_box: RichTextLabel = null
-	for child in card_vb.get_children():
-		if child.name == "output_box":
-			output_box = child
-			output_box.visible = true
-			output_box.text = "[color=yellow]⏳ 正在执行测试: %s...[/color]" % test_name
-			break
-
-	# 禁用所有运行按钮
-	for card in _test_list_container.get_children():
-		for child in card.get_children():
-			if child is VBoxContainer:
-				for sub in child.get_children():
-					if sub is HBoxContainer:
-						for btn in sub.get_children():
-							if btn is Button and btn.text.begins_with("▶"):
-								btn.disabled = true
-
-	var result: Dictionary = await ApiClient.run_test(test_name)
-
-	# 恢复按钮
-	for card in _test_list_container.get_children():
-		for child in card.get_children():
-			if child is VBoxContainer:
-				for sub in child.get_children():
-					if sub is HBoxContainer:
-						for btn in sub.get_children():
-							if btn is Button and btn.text.begins_with("▶"):
-								btn.disabled = false
-
-	# 显示结果
-	if output_box:
-		var success: bool = result.get("success", false)
-		var output: String = result.get("output", "").strip_edges()
-		var exit_code = result.get("exit_code")
-
-		if success:
-			output_box.text = "[color=green]✅ 测试成功[/color]\n\n[color=white]%s[/color]" % output
-		else:
-			var exit_str = "" if exit_code == null else " [退出码: %d]" % exit_code
-			output_box.text = "[color=red]❌ 测试失败%s[/color]\n\n[color=white]%s[/color]" % [exit_str, output]
-
-	_current_running_test = ""
-
-
-# ════════════════════════════════════════════════
-#  确认对话框（通用）
-# ════════════════════════════════════════════════
-
+## 兼容旧接口：显示确认对话框 (委托给 DialogManager)
 func show_confirm(title: String, message: String, on_confirm: Callable) -> void:
-	var popup := _overlay()
-	var panel := Panel.new()
-	panel.custom_minimum_size = Vector2(460, 240)
-	panel.size = Vector2(460, 240)
-	_add_panel_style(panel, Color(0.12, 0.08, 0.12), Color(0.9, 0.27, 0.37), 3.0)
-	popup.add_child(panel)
-	popup.resized.connect(func():
-		var ps: Vector2 = popup.size
-		panel.position = (ps - Vector2(460, 240)) / 2.0
-	)
-
-	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 16)
-	vb.set_anchors_preset(PRESET_FULL_RECT)
-	vb.offset_left = 32; vb.offset_top = 28; vb.offset_right = -32; vb.offset_bottom = -28
-	panel.add_child(vb)
-
-	vb.add_child(_lbl("⚠️", 40, ACCENT_RED, HORIZONTAL_ALIGNMENT_CENTER))
-	vb.add_child(_lbl(title, 18, TEXT, HORIZONTAL_ALIGNMENT_CENTER))
-
-	var msg_lbl := RichTextLabel.new()
-	msg_lbl.bbcode_enabled = true
-	msg_lbl.fit_content = true
-	msg_lbl.add_theme_font_size_override("normal_font_size", 14)
-	msg_lbl.add_theme_color_override("default_color", Color(0.7, 0.7, 0.75))
-	msg_lbl.text = message
-	vb.add_child(msg_lbl)
-
-	var btn_hb := HBoxContainer.new()
-	btn_hb.add_theme_constant_override("separation", 12)
-	btn_hb.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vb.add_child(btn_hb)
-
-	var cancel_btn := _btn("取消", Color(0.4, 0.4, 0.5))
-	cancel_btn.pressed.connect(func(): popup.queue_free())
-	btn_hb.add_child(cancel_btn)
-
-	var ok_btn := _btn("确定", Color(0.85, 0.2, 0.2))
-	ok_btn.pressed.connect(func():
-		popup.queue_free()
-		on_confirm.call()
-	)
-	btn_hb.add_child(ok_btn)
-
-	add_child(popup)
+	_dialog_manager.show_confirm(self, title, message, on_confirm)
 
 
-# ════════════════════════════════════════════════
-#  关闭服务功能
-# ════════════════════════════════════════════════
-
-func _confirm_shutdown() -> void:
-	show_confirm(
-		"关闭服务",
-		"确定要关闭所有服务吗？\n\n[color=yellow]⚠️ 这将同时停止：[/color]\n• 🌐 Web/Godot 前端\n• 🔧 后端 API 服务\n\n[color=red]未保存的进度将丢失[/color]",
-		_do_shutdown
-	)
-
-
-func _do_shutdown() -> void:
-	# 显示进度界面
-	var progress_popup := _overlay()
-	var panel := Panel.new()
-	panel.custom_minimum_size = Vector2(500, 400)
-	panel.size = Vector2(500, 400)
-	_add_panel_style(panel, Color(0.08, 0.06, 0.1))
-	progress_popup.add_child(panel)
-	progress_popup.resized.connect(func():
-		var ps: Vector2 = progress_popup.size
-		panel.position = (ps - Vector2(500, 400)) / 2.0
-	)
-
-	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 12)
-	vb.set_anchors_preset(PRESET_FULL_RECT)
-	vb.offset_left = 30; vb.offset_top = 30; vb.offset_right = -30; vb.offset_bottom = -30
-	panel.add_child(vb)
-
-	vb.add_child(_lbl("⏳", 50, TEXT, HORIZONTAL_ALIGNMENT_CENTER))
-	vb.add_child(_lbl("正在关闭所有服务...", 18, TEXT, HORIZONTAL_ALIGNMENT_CENTER))
-
-	var step1 := _lbl("⏳ 步骤1: 发送关闭指令到后端...", 13, ACCENT_YELLOW)
-	vb.add_child(step1)
-
-	var step2 := _lbl("⏳ 步骤2: 等待后端停止...", 13, DIM)
-	step2.visible = false
-	vb.add_child(step2)
-
-	var step3 := _lbl("⏳ 步骤3: 停止前端...", 13, DIM)
-	step3.visible = false
-	vb.add_child(step3)
-
-	add_child(progress_popup)
-
-	# 步骤1：尝试连接后端（最多3次）
-	var backend_success := false
-	var max_retries := 3
-
-	for attempt in range(1, max_retries + 1):
-		step1.text = "⏳ 连接后端 (第%d/%d次)..." % [attempt, max_retries]
-
-		var result: Dictionary = await ApiClient.shutdown_backend()
-		if result.get("success", false):
-			backend_success = true
-			step1.text = "✅ 后端已接收关闭指令"
-			step1.add_theme_color_override("font_color", ACCENT_GREEN)
-			break
-		else:
-			if attempt < max_retries:
-				step1.text = "⚠️ 第%d次失败，重试中..." % attempt
-				step1.add_theme_color_override("font_color", ACCENT_YELLOW)
-				await get_tree().create_timer(2.0).timeout
-			else:
-				step1.text = "❌ 无法连接后端"
-				step1.add_theme_color_override("font_color", ACCENT_RED)
-
-	await get_tree().create_timer(1.0).timeout
-
-	# 步骤2：验证后端停止
-	if backend_success:
-		step2.visible = true
-		step2.text = "⏳ 验证后端已停止..."
-
-		var backend_stopped := false
-		for i in range(15):
-			await get_tree().create_timer(0.5).timeout
-			var health_ok: bool = await ApiClient.test_backend()
-			if not health_ok:
-				backend_stopped = true
-				break
-
-		if backend_stopped:
-			step2.text = "✅ 后端已确认停止"
-			step2.add_theme_color_override("font_color", ACCENT_GREEN)
-		else:
-			step2.text = "⚠️ 后端可能仍在运行"
-			step2.add_theme_color_override("font_color", ACCENT_YELLOW)
-
-	await get_tree().create_timer(0.5).timeout
-
-	# 步骤3：显示最终结果
-	step3.visible = true
-
-	if backend_success:
-		step3.text = "✅ 所有服务已关闭"
-		step3.add_theme_color_override("font_color", ACCENT_GREEN)
-
-		# 更新主界面
-		await get_tree().create_timer(1.5).timeout
-
-		vb.get_child(0).text = "✅"
-		vb.get_child(0).add_theme_color_override("font_color", ACCENT_GREEN)
-		vb.get_child(1).text = "所有服务已关闭"
-		vb.get_child(1).add_theme_color_override("font_color", ACCENT_GREEN)
-
-		# 清空内容，添加完成信息
-		for i in range(2, vb.get_child_count()):
-			vb.get_child(i).queue_free()
-
-		vb.add_child(_lbl("", 10)) # spacer
-		vb.add_child(_lbl("✅ 后端 API 服务已停止", 14, ACCENT_GREEN))
-		vb.add_child(_lbl("✅ Godot 前端即将退出", 14, ACCENT_GREEN))
-		vb.add_child(_lbl("", 10))
-		vb.add_child(_lbl("可重新运行 python start.py 启动服务", 12, DIM))
-
-		# 延迟退出Godot
-		await get_tree().create_timer(3.0).timeout
-		get_tree().quit()
-	else:
-		step3.text = "⚠️ 部分服务已关闭"
-		step3.add_theme_color_override("font_color", ACCENT_YELLOW)
-
-		vb.get_child(0).text = "🔶"
-		vb.get_child(1).text = "部分服务已关闭"
-
-		for i in range(2, vb.get_child_count()):
-			vb.get_child(i).queue_free()
-
-		vb.add_child(_lbl("", 10))
-		vb.add_child(_lbl("❌ 后端未能自动关闭", 14, ACCENT_RED))
-		vb.add_child(_lbl("请手动关闭运行后端的终端窗口", 12, DIM))
-
-
-# ════════════════════════════════════════════════
-#  改进的消息系统（支持错误高亮）
-# ════════════════════════════════════════════════
-
-var _error_style_applied := false
-
+## 兼容旧接口：添加系统消息 (委托给 MessageDisplay)
 func add_system_msg(text: String, is_error: bool = false) -> void:
-	if not _dialogue_label: return
-
-	var prefix := ""
-	var suffix := ""
-	
-	if is_error:
-		prefix = "[bgcolor=#2a1515][color=#ffcccc]"
-		suffix = "[/color][/bgcolor]"
-		_error_style_applied = true
-	elif text.begins_with("🚫") or text.begins_with("⚠️") or text.contains("移动被锁定") or text.contains("昏迷"):
-		prefix = "[bgcolor=#2a1515][color=#ffcccc]"
-		suffix = "[/color][/bgcolor]"
-		_error_style_applied = true
-	else:
-		_error_style_applied = false
-
-	_dialogue_label.append_text("\n%s%s%s" % [prefix, text, suffix])
-	_scroll_to_bottom()
-
-	if is_error or _error_style_applied:
-		# 错误消息闪烁效果
-		_dialogue_label.modulate = Color(1.2, 0.9, 0.9)
-		await get_tree().create_timer(0.3).timeout
-		_dialogue_label.modulate = Color.WHITE
+	_msg_display.add_system_msg_ex(text, is_error)

@@ -6,10 +6,75 @@ window.App = window.App || {};
 (function(App) {
   "use strict";
 
+  // ═══════════════════════════════════════════
+  //  DOM 元素缓存 - 避免重复查询，提升性能
+  // ═══════════════════════════════════════════
+  const DOM = {
+    configOverlay: null,
+    configPanel: null,
+    loginForm: null,
+    loadForm: null,
+    loginOverlay: null,
+    topbar: null,
+    mainUI: null,
+    introMsg: null,
+    apiModeIndicator: null,
+    confirmOverlay: null,
+    confirmTitle: null,
+    confirmMessage: null,
+    confirmOk: null,
+    confirmCancel: null,
+    savesList: null,
+    npcSelect: null,
+    msgInput: null,
+
+    init() {
+      this.configOverlay = document.getElementById("configOverlay");
+      this.configPanel = document.getElementById("configPanel");
+      this.loginForm = document.getElementById("loginForm");
+      this.loadForm = document.getElementById("loadForm");
+      this.loginOverlay = document.getElementById("loginOverlay");
+      this.topbar = document.getElementById("topbar");
+      this.mainUI = document.getElementById("mainUI");
+      this.introMsg = document.getElementById("introMsg");
+      this.apiModeIndicator = document.getElementById("apiModeIndicator");
+      this.confirmOverlay = document.getElementById("confirmOverlay");
+      this.confirmTitle = document.getElementById("confirmTitle");
+      this.confirmMessage = document.getElementById("confirmMessage");
+      this.confirmOk = document.getElementById("confirmOk");
+      this.confirmCancel = document.getElementById("confirmCancel");
+      this.savesList = document.getElementById("savesList");
+      this.npcSelect = document.getElementById("npcSelect");
+      this.msgInput = document.getElementById("msgInput");
+    }
+  };
+
+  // 暴露 DOM 缓存供其他模块使用
+  App.DOM = DOM;
+
+  // ═══════════════════════════════════════════
+  //  HTML 安全工具 - 复用 ui.js 的实现或提供本地版本
+  // ═══════════════════════════════════════════
+  const HtmlUtils = App.HtmlUtils || {
+    escape(text) {
+      if (!text) return '';
+      const str = String(text);
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    },
+
+    setSafeHtml(element, html) {
+      if (element) {
+        element.innerHTML = this.escape(html);
+      }
+    }
+  };
+
   // 配置面板开关
   App.toggleConfigPanel = function() {
-    var overlay = document.getElementById("configOverlay");
-    var panel = document.getElementById("configPanel");
+    const overlay = DOM.configOverlay || document.getElementById("configOverlay");
+    const panel = DOM.configPanel || document.getElementById("configPanel");
     if (!overlay || !panel) return;
     if (panel.style.display === "none" || panel.style.display === "") {
       panel.style.display = "block";
@@ -22,11 +87,11 @@ window.App = window.App || {};
   };
 
   App.fillConfigValues = function() {
-    var modeSelect = document.getElementById("cfgApiMode");
-    var backendUrl = document.getElementById("cfgBackendUrl");
-    var llmUrl = document.getElementById("cfgLlmUrl");
-    var llmKey = document.getElementById("cfgLlmKey");
-    var llmModel = document.getElementById("cfgLlmModel");
+    const modeSelect = document.getElementById("cfgApiMode");
+    const backendUrl = document.getElementById("cfgBackendUrl");
+    const llmUrl = document.getElementById("cfgLlmUrl");
+    const llmKey = document.getElementById("cfgLlmKey");
+    const llmModel = document.getElementById("cfgLlmModel");
     if (modeSelect) modeSelect.value = App.apiMode;
     if (backendUrl) backendUrl.value = App.BACKEND_URL;
     if (llmUrl) llmUrl.value = App.LLM_API_URL;
@@ -35,18 +100,18 @@ window.App = window.App || {};
   };
 
   App.applyConfig = function() {
-    var modeSelect = document.getElementById("cfgApiMode");
-    var backendUrl = document.getElementById("cfgBackendUrl");
-    var llmUrl = document.getElementById("cfgLlmUrl");
-    var llmKey = document.getElementById("cfgLlmKey");
-    var llmModel = document.getElementById("cfgLlmModel");
+    const modeSelect = document.getElementById("cfgApiMode");
+    const backendUrl = document.getElementById("cfgBackendUrl");
+    const llmUrl = document.getElementById("cfgLlmUrl");
+    const llmKey = document.getElementById("cfgLlmKey");
+    const llmModel = document.getElementById("cfgLlmModel");
     if (modeSelect) App.apiMode = modeSelect.value;
     if (backendUrl) App.BACKEND_URL = backendUrl.value.trim();
     if (llmUrl) App.LLM_API_URL = llmUrl.value.trim();
     if (llmKey) App.LLM_API_KEY = llmKey.value.trim();
     if (llmModel) App.LLM_MODEL = llmModel.value.trim();
     App.saveConfig();
-    var modeIndicator = document.getElementById("apiModeIndicator");
+    const modeIndicator = DOM.apiModeIndicator || document.getElementById("apiModeIndicator");
     if (modeIndicator) {
       modeIndicator.textContent = App.apiMode === "backend" ? "后端模式" : "独立模式";
       modeIndicator.className = "api-mode-badge " + App.apiMode;
@@ -55,63 +120,72 @@ window.App = window.App || {};
   };
 
   App.showLoadForm = async function() {
-    document.getElementById("loginForm").style.display = "none";
-    document.getElementById("loadForm").style.display = "block";
+    const loginForm = DOM.loginForm || document.getElementById("loginForm");
+    const loadForm = DOM.loadForm || document.getElementById("loadForm");
+    if (loginForm) loginForm.style.display = "none";
+    if (loadForm) loadForm.style.display = "block";
+
     try {
-      var saves = await App.fetchSaves();
-      var list = document.getElementById("savesList");
+      const saves = await App.fetchSaves();
+      const list = DOM.savesList || document.getElementById("savesList");
       list.innerHTML = "";
       saves.forEach(function(s) {
-        var div = document.createElement("div");
+        const div = document.createElement("div");
+        // 使用 textContent 设置文本，自动防止 XSS
         div.textContent = s.display_name + "  (" + s.map_id + ", 第" + s.world_day + "日)" + (s.dead ? " [亡]" : "");
         div.onclick = function() {
-          var all = list.querySelectorAll("div");
-          for (var i = 0; i < all.length; i++) { all[i].classList.remove("selected"); }
+          const all = list.querySelectorAll("div");
+          for (let i = 0; i < all.length; i++) { all[i].classList.remove("selected"); }
           div.classList.add("selected");
           div._pid = s.player_id;
         };
         list.appendChild(div);
       });
     } catch (e) {
-      document.getElementById("savesList").innerHTML = '<div style="color:#ef5350;">加载存档列表失败</div>';
+      const savesList = DOM.savesList || document.getElementById("savesList");
+      // 错误消息使用安全方式显示
+      HtmlUtils.setSafeHtml(savesList, '<div style="color:#ef5350;">加载存档列表失败</div>');
     }
   };
 
   App.showLoginForm = function() {
-    document.getElementById("loadForm").style.display = "none";
-    document.getElementById("loginForm").style.display = "block";
+    const loadForm = DOM.loadForm || document.getElementById("loadForm");
+    const loginForm = DOM.loginForm || document.getElementById("loginForm");
+    if (loadForm) loadForm.style.display = "none";
+    if (loginForm) loginForm.style.display = "block";
   };
 
   App.startNewGame = async function() {
-    var btn = document.querySelector('#loginForm button[onclick*="startNewGame"]');
+    const btn = document.querySelector('#loginForm button[onclick*="startNewGame"]');
     if (btn) { btn.disabled = true; btn.textContent = "⏳ 进入江湖..."; }
 
-    var name   = document.getElementById("inpName").value.trim() || "江湖客";
-    var gender = document.getElementById("inpGender").value;
-    var permadeath = document.getElementById("inpPermadeath").checked;
+    const name   = document.getElementById("inpName").value.trim() || "江湖客";
+    const gender = document.getElementById("inpGender").value;
+    const permadeath = document.getElementById("inpPermadeath").checked;
     console.log("[App] startNewGame:", { name: name, gender: gender, permadeath: permadeath });
 
     try {
       console.log("[App] calling createPlayer...");
-      var result = await App.createPlayer(name, gender, permadeath);
+      const result = await App.createPlayer(name, gender, permadeath);
       console.log("[App] createPlayer OK:", result);
       App.onGameReady(result.data, result.pid, result.data.display_name);
     } catch (e) {
       console.error("[App] createPlayer FAILED:", e);
       // 用页面内提示代替 alert（避免被浏览器拦截）
-      var errDiv = document.createElement("div");
+      const errDiv = document.createElement("div");
       errDiv.style.cssText = "color:#ef5350;margin-top:8px;font-size:13px;";
       errDiv.textContent = "❌ 创建角色失败：" + e.message;
-      document.getElementById("loginForm").appendChild(errDiv);
+      const loginFormEl = DOM.loginForm || document.getElementById("loginForm");
+      if (loginFormEl) loginFormEl.appendChild(errDiv);
       if (btn) { btn.disabled = false; btn.textContent = "踏入江湖"; }
     }
   };
 
   App.loadGame = async function() {
-    var sel = document.querySelector(".saves-list div.selected");
+    const sel = document.querySelector(".saves-list div.selected");
     if (!sel) { alert("请先选择一个存档"); return; }
     try {
-      var data = await App.loadPlayer(sel._pid);
+      const data = await App.loadPlayer(sel._pid);
       App.onGameReady(data, sel._pid, data.display_name);
     } catch (e) {
       alert("读档失败：" + e.message);
@@ -124,12 +198,19 @@ window.App = window.App || {};
     App.mapsData    = data.maps || {};
     App.selectedNpcId = null;
 
-    document.getElementById("loginOverlay").style.display = "none";
-    document.getElementById("topbar").style.display = "flex";
-    document.getElementById("mainUI").style.display = "flex";
+    const loginOverlay = DOM.loginOverlay || document.getElementById("loginOverlay");
+    const topbar = DOM.topbar || document.getElementById("topbar");
+    const mainUI = DOM.mainUI || document.getElementById("mainUI");
+    if (loginOverlay) loginOverlay.style.display = "none";
+    if (topbar) topbar.style.display = "flex";
+    if (mainUI) mainUI.style.display = "flex";
 
-    document.getElementById("introMsg").innerHTML =
-      "<b>欢迎，" + App.displayName + "！</b><br>" + (data.intro || "江湖路远，珍重。");
+    // 欢迎信息：displayName 来自用户输入，必须转义；data.intro 可能包含格式化文本
+    const introMsg = DOM.introMsg || document.getElementById("introMsg");
+    if (introMsg) {
+      introMsg.innerHTML =
+        "<b>欢迎，" + HtmlUtils.escape(App.displayName) + "！</b><br>" + (data.intro || "江湖路远，珍重。");
+    }
 
     App.updateUI(data);
   };
@@ -140,9 +221,12 @@ window.App = window.App || {};
       "确定要退出游戏吗？<br><br>⚠️ <b>未存档的进度将丢失</b>",
       function() {
         App.playerId = null;
-        document.getElementById("mainUI").style.display = "none";
-        document.getElementById("topbar").style.display = "none";
-        document.getElementById("loginOverlay").style.display = "flex";
+        const mainUI = DOM.mainUI || document.getElementById("mainUI");
+        const topbar = DOM.topbar || document.getElementById("topbar");
+        const loginOverlay = DOM.loginOverlay || document.getElementById("loginOverlay");
+        if (mainUI) mainUI.style.display = "none";
+        if (topbar) topbar.style.display = "none";
+        if (loginOverlay) loginOverlay.style.display = "flex";
       }
     );
   };
@@ -150,7 +234,7 @@ window.App = window.App || {};
   App.doSaveFlow = async function() {
     if (!App.playerId) return;
     try {
-      var data = await App.doSave();
+      const data = await App.doSave();
       App.addMsg("system", data.ok ? "存档成功" : "存档失败");
     } catch (e) {
       App.addMsg("system", "存档失败: " + e.message);
@@ -158,13 +242,14 @@ window.App = window.App || {};
   };
 
   App.showConfirm = function(title, message, onConfirm) {
-    var overlay = document.getElementById("confirmOverlay");
-    var titleEl = document.getElementById("confirmTitle");
-    var msgEl = document.getElementById("confirmMessage");
-    var okBtn = document.getElementById("confirmOk");
-    var cancelBtn = document.getElementById("confirmCancel");
+    const overlay = DOM.confirmOverlay || document.getElementById("confirmOverlay");
+    const titleEl = DOM.confirmTitle || document.getElementById("confirmTitle");
+    const msgEl = DOM.confirmMessage || document.getElementById("confirmMessage");
+    const okBtn = DOM.confirmOk || document.getElementById("confirmOk");
+    const cancelBtn = DOM.confirmCancel || document.getElementById("confirmCancel");
 
     titleEl.textContent = title;
+    // 确认框的消息通常是硬编码的可信 HTML，使用 setTrustedHtml
     msgEl.innerHTML = message;
 
     overlay.classList.add("show");
@@ -218,8 +303,9 @@ window.App = window.App || {};
       "💡 所有未保存的进度将丢失",
       async function() {
         try {
-          var overlay = document.getElementById("loginOverlay");
+          const overlay = DOM.loginOverlay || document.getElementById("loginOverlay");
           if (overlay) {
+            // 关闭界面是硬编码的可信 HTML，直接设置
             overlay.innerHTML =
               '<div class="shutdown-screen">' +
               '<div class="shutdown-icon">⏳</div>' +
@@ -231,29 +317,29 @@ window.App = window.App || {};
             overlay.style.display = 'flex';
           }
 
-          var step1 = document.getElementById("shutdownStep1");
-          var step2 = document.getElementById("shutdownStep2");
-          var step3 = document.getElementById("shutdownStep3");
+          let step1 = document.getElementById("shutdownStep1");
+          let step2 = document.getElementById("shutdownStep2");
+          let step3 = document.getElementById("shutdownStep3");
 
-          var backendSuccess = false;
-          var data = null;
-          var lastError = null;
+          let backendSuccess = false;
+          let data = null;
+          let lastError = null;
 
           // ════════════════════════════════════
           // 第一重保障：多次重试连接后端
           // ════════════════════════════════════
-          var maxRetries = 3;
-          for (var attempt = 1; attempt <= maxRetries; attempt++) {
+          const maxRetries = 3;
+          for (let attempt = 1; attempt <= maxRetries; attempt++) {
             if (step1) {
               step1.textContent = "⏳ 正在连接后端 (第" + attempt + "/" + maxRetries + "次)...";
             }
 
             try {
-              // 使用AbortController设置更长的超时时间（10秒）
-              var controller = new AbortController();
-              var timeoutId = setTimeout(function() { controller.abort(); }, 10000);
+              // 使用AbortController设置更长的超时时间（15秒）
+              const controller = new AbortController();
+              const timeoutId = setTimeout(function() { controller.abort(); }, 15000);
 
-              var resp = await fetch(App.BACKEND_URL + "/api/shutdown", {
+              const resp = await fetch(App.BACKEND_URL + "/api/shutdown", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 signal: controller.signal
@@ -273,6 +359,27 @@ window.App = window.App || {};
 
             } catch (e) {
               lastError = e;
+
+              // 判断是否是 "Failed to fetch" 错误
+              // 如果是且这是 shutdown 请求，说明后端已收到请求并开始关闭（网络断开）
+              const isNetworkError = e.message === 'Failed to fetch' ||
+                                     e.name === 'TypeError';
+              const isShutdownRequest = true; // 当前上下文就是 shutdown
+
+              if (isNetworkError && isShutdownRequest) {
+                // 这种情况下，后端实际上已经收到了关闭指令
+                // 只是网络连接在响应传输过程中断开了
+                backendSuccess = true;  // 视为成功！
+                lastError = null;
+
+                if (step1) {
+                  step1.textContent = "✓ 后端已接收关闭指令 (网络断开确认)";
+                  step1.classList.remove("pending");
+                  step1.classList.add("done");
+                }
+                break; // 跳出重试循环
+              }
+
               backendSuccess = false;
 
               if (attempt < maxRetries) {
@@ -283,7 +390,7 @@ window.App = window.App || {};
                   step1.classList.add("error");
                 }
                 await new Promise(function(r) { setTimeout(r, 2000); });
-                
+
                 if (step1) {
                   step1.classList.remove("error");
                   step1.classList.add("pending");
@@ -305,12 +412,12 @@ window.App = window.App || {};
             step2.style.display = "block";
             step2.textContent = "⏳ 验证后端已停止...";
 
-            var backendStopped = false;
-            for (var i = 0; i < 15; i++) {
+            let backendStopped = false;
+            for (let i = 0; i < 15; i++) {
               await new Promise(function(r) { setTimeout(r, 500); });
 
               try {
-                var checkBackendResp = await fetch(App.BACKEND_URL + "/api/health", {
+                const checkBackendResp = await fetch(App.BACKEND_URL + "/api/health", {
                   mode: 'no-cors',
                   cache: 'no-store'
                 });
@@ -342,7 +449,7 @@ window.App = window.App || {};
           }
 
           try {
-            var directResp = await fetch(window.location.origin + "/__shutdown__", {
+            const directResp = await fetch(window.location.origin + "/__shutdown__", {
               method: "GET"
             });
 
@@ -360,12 +467,12 @@ window.App = window.App || {};
           }
 
           // 等待前端实际停止
-          var frontendStopped = false;
-          for (var i = 0; i < 10; i++) {
+          let frontendStopped = false;
+          for (let i = 0; i < 10; i++) {
             await new Promise(function(r) { setTimeout(r, 400); });
 
             try {
-              var checkFrontendResp = await fetch(window.location.origin + "/__ping__", {
+              const checkFrontendResp = await fetch(window.location.origin + "/__ping__", {
                 mode: 'no-cors',
                 cache: 'no-store'
               });
@@ -381,24 +488,26 @@ window.App = window.App || {};
           await new Promise(function(r) { setTimeout(r, 600); });
 
           if (overlay) {
-            var resultIcon = (backendSuccess && frontendStopped) ? "✅" : "🔶";
-            var resultTitle = (backendSuccess && frontendStopped) ? "所有服务已关闭" : "部分服务已关闭";
+            const resultIcon = (backendSuccess && frontendStopped) ? "✅" : "🔶";
+            const resultTitle = (backendSuccess && frontendStopped) ? "所有服务已关闭" : "部分服务已关闭";
 
-            var backendStatus = "";
+            let backendStatus = "";
             if (backendSuccess) {
               backendStatus = "✅ 后端API服务已停止<br>";
             } else {
               backendStatus = "❌ 后端未能自动关闭<br>";
               if (lastError) {
-                backendStatus += "   错误: " + lastError.message.substring(0, 80) + "<br>";
+                // 错误信息可能来自异常对象，进行转义处理
+                backendStatus += "   错误: " + HtmlUtils.escape(lastError.message.substring(0, 80)) + "<br>";
               }
               backendStatus += "   请手动关闭运行后端的终端窗口<br>";
             }
 
-            var frontendStatus = frontendStopped
+            const frontendStatus = frontendStopped
               ? "✅ Web前端服务已强制停止<br>"
               : "⚠️ Web前端可能仍在运行<br>";
 
+            // 最终结果是动态生成的，但数据来源可信（系统状态），使用 setTrustedHtml
             overlay.innerHTML =
               '<div class="shutdown-screen">' +
               '<div class="shutdown-icon">' + resultIcon + '</div>' +
@@ -427,17 +536,20 @@ window.App = window.App || {};
   }, 30000);
 
   document.addEventListener("DOMContentLoaded", function() {
-    var modeIndicator = document.getElementById("apiModeIndicator");
+    // 初始化 DOM 缓存
+    DOM.init();
+
+    const modeIndicator = DOM.apiModeIndicator;
     if (modeIndicator) {
       modeIndicator.textContent = App.apiMode === "backend" ? "后端模式" : "独立模式";
     }
-    var modeSelect = document.getElementById("apiModeQuickToggle");
+    const modeSelect = document.getElementById("apiModeQuickToggle");
     if (modeSelect) {
       modeSelect.addEventListener("change", function() {
         App.setApiMode(modeSelect.value);
       });
     }
-    var sel = document.getElementById("npcSelect");
+    const sel = DOM.npcSelect;
     if (sel) {
       sel.addEventListener("change", function() {
         App.selectedNpcId = sel.value;

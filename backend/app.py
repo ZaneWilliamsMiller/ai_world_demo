@@ -84,7 +84,10 @@ async def _auto_save_loop():
 
 @app.on_event("shutdown")
 async def _shutdown():
-    """优雅关闭：取消自动存档任务 + 自动存档所有活跃玩家 + 释放 httpx 连接池。"""
+    """优雅关闭：取消自动存档任务 + 自动存档所有活跃玩家 + 释放 httpx 连接池。
+
+    修复 Major #9：区分异常类型，对连接超时等瞬态错误增加重试机制。
+    """
     # 取消定期存档任务
     global _auto_save_task
     if _auto_save_task and not _auto_save_task.done():
@@ -94,16 +97,42 @@ async def _shutdown():
     for pid, p in list(room.players.items()):
         if p.dead or p.ended:
             continue
-        try:
-            save_game(p)
-            saved += 1
-        except Exception as e:
-            _log.error("auto-save failed %s: %s", pid, e)
-    if saved:
-        _log.info("shutdown auto-saved %d active player(s)", saved)
+        # 修复 Major #9：对存档操作增加重试机制，最多重试 2 次
+        max_save_retries = 2
+        for save_attempt in range(max_save_retries):
+            try:
+                save_game(p)
+                saved += 1
+                break
+            except (ConnectionError, TimeoutError, OSError) as transient_err:
+                # 连接类瞬态错误：可重试
+                if save_attempt < max_save_retries - 1:
+                    _log.warning(
+                        f"auto-save transient error for {pid} (attempt {save_attempt + 1}/{max_save_retries}): "
+                        f"{type(transient_err).__name__}: {transient_err}"
+                    )
+                    import asyncio
+                    await asyncio.sleep(0.5 * (save_attempt + 1))
+                    continue
+                _log.error(f"auto-save failed after retries for {pid}: {transient_err}")
+            except Exception as e:
+                # 非瞬态错误（如数据损坏、权限问题）：不重试，直接记录
+                _log.error(f"auto-save non-retryable error for {pid}: {type(e).__name__}: {e}")
+                break
 
+    if saved:
+        _log.info(f"shutdown auto-saved {saved} active player(s)")
+
+    # 修复 Major #9：关闭 LLM 客户端时增加异常分类处理
     from backend.llm_client import _close_client
-    await _close_client()
+    try:
+        await _close_client()
+    except (ConnectionError, TimeoutError, OSError) as close_err:
+        # 连接关闭时的瞬态错误（如连接超时），仅警告不中断关闭流程
+        _log.warning(f"LLM client close transient error (ignored): {type(close_err).__name__}: {close_err}")
+    except Exception as close_err:
+        # 其他未知错误，记录但不阻止 shutdown 流程
+        _log.error(f"LLM client close unexpected error: {type(close_err).__name__}: {close_err}")
 
 
 @app.post("/api/shutdown")
@@ -161,7 +190,7 @@ async def shutdown_server():
     def delayed_shutdown():
         import time
         import sys
-        time.sleep(1.0)
+        time.sleep(3.0)
         print(f"\n   💀 后端进程即将退出 (sys.exit)...")
         sys.exit(0)
 

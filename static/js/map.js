@@ -46,8 +46,11 @@ window.App = window.App || {};
   // ═══════════════════════════════════════════
   //  摄像机状态 - 优化平滑度
   // ═══════════════════════════════════════════
-  var cam = { x: 0, y: 0, targetX: 0, targetY: 0, lerp: 0.2 };
-  var mapState = { rows: [], cols: 0, id: "" };
+  var cam = { x: 0, y: 0, targetX: 0, targetY: 0, lerp: 0.25 };
+var mapState = { rows: [], cols: 0, id: "" };
+
+// 玩家屏幕位置（带插值）- 解决玩家标记与地形割裂问题
+var playerScreen = { x: 0, y: 0 };
 
   // ═══════════════════════════════════════════
   //  Canvas 引用
@@ -266,6 +269,12 @@ window.App = window.App || {};
         ctx.fillStyle = gradient;
         ctx.fillRect(sx - TILE/3, sy - TILE/3, TILE * 1.7, TILE * 1.7);
         
+        // NPC 投影 - 增加深度感
+        ctx.fillStyle = "rgba(0,0,0,0.25)";
+        ctx.beginPath();
+        ctx.arc(sx + TILE/2 + 2, sy + TILE/2 + 2, 6, 0, Math.PI * 2);
+        ctx.fill();
+        
         // NPC 点 - 更精致
         ctx.fillStyle = "#ff8c64";
         ctx.beginPath();
@@ -305,9 +314,23 @@ window.App = window.App || {};
       ctx.fillText(loc.name, lx, ly + 2);
     }
 
-    // ─── 玩家标记 - 全新设计 ───
-    var playerScreenX = (px - cam.x) * TILE + TILE / 2;
-    var playerScreenY = (py - cam.y) * TILE + TILE / 2;
+    // ─── 玩家标记 - 使用插值同步摄像机 ───
+    // 目标屏幕位置
+    var targetPlayerSX = (px - cam.x) * TILE + TILE / 2;
+    var targetPlayerSY = (py - cam.y) * TILE + TILE / 2;
+
+    // 平滑插值（与摄像机相同的速度），解决玩家飘在地形上的问题
+    playerScreen.x += (targetPlayerSX - playerScreen.x) * cam.lerp;
+    playerScreen.y += (targetPlayerSY - playerScreen.y) * cam.lerp;
+
+    var playerScreenX = playerScreen.x;
+    var playerScreenY = playerScreen.y;
+
+    // 玩家投影 - 增加深度感
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.beginPath();
+    ctx.arc(playerScreenX + 2, playerScreenY + 2, 7, 0, Math.PI * 2);
+    ctx.fill();
 
     // 外圈大光晕
     var glowR = TILE * 1.1;
@@ -541,6 +564,11 @@ window.App = window.App || {};
   App.moveTo = async function(tx, ty) {
     if (App._isMoving) return;
     App._isMoving = true;
+    
+    // 移动期间清除悬停高亮，防止高亮残留造成视觉干扰
+    _hoverX = -1;
+    _hoverY = -1;
+    
     clearPath();
 
     try {
