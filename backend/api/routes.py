@@ -47,62 +47,12 @@ from backend.systems.save_system import (
 
 router = APIRouter()
 
-def _player_public(p: PlayerState) -> dict[str, Any]:
-    return {
-        "map_id": p.map_id,
-        "px": p.px,
-        "py": p.py,
-        "coins": p.coins,
-        "gender": p.gender,
-        "permadeath": p.permadeath,
-        "dead": p.dead,
-        "death_reason": p.death_reason,
-        "move_locked": bool(getattr(p, "move_locked", False)),
-        "move_lock_npc_id": getattr(p, "move_lock_npc_id", None),
-        "trap_reason": getattr(p, "trap_reason", None),
-        "trap_attempts": int(getattr(p, "trap_attempts", 0) or 0),
-        "enslaved": bool(getattr(p, "enslaved", False)),
-        "enslaved_reason": getattr(p, "enslaved_reason", None),
-        "vigor": int(getattr(p, "vigor", 80) or 0),
-        "vigor_max": int(getattr(p, "vigor_max", 100) or 100),
-        "spirit": int(getattr(p, "spirit", 80) or 0),
-        "spirit_max": int(getattr(p, "spirit_max", 100) or 100),
-        "sleep_debt": int(getattr(p, "sleep_debt", 0) or 0),
-        "unconscious_ticks": int(getattr(p, "unconscious_ticks", 0) or 0),
-        "rescue_needed": bool(getattr(p, "rescue_needed", False)),
-        "life_burn_ticks": int(getattr(p, "life_burn_ticks", 0) or 0),
-        "life_burn_max": int(getattr(p, "life_burn_max", 0) or 0),
-        "world_day": int(p.world_day),
-        "world_shichen_idx": int(p.world_shichen),
-        "world_shichen": shichen_name(p.world_shichen),
-        "world_phase": shichen_phase(p.world_shichen),
-        "world_is_night": is_night(p.world_shichen),
-        "weather": p.weather,
-        "inventory": dict(p.inventory),
-        "reputation": dict(p.reputation),
-        "npc_states": dict(getattr(p, "npc_states", {}) or {}),
-        "bounties": getattr(p, "bounties", None) or [],
-        "active_bounty": getattr(p, "active_bounty", None),
-        "completed_bounties": getattr(p, "completed_bounties", None) or [],
-    }
-
-def _maps_public() -> dict[str, Any]:
-    out: dict[str, Any] = {}
-    for mid, m in MAPS.items():
-        out[mid] = {"name": m["name"], "rows": m["rows"], "portals": m.get("portals", [])}
-    return out
-
-def _npc_catalog(p: PlayerState) -> list[dict[str, Any]]:
-    return npc_catalog_for_player(p)
-
-def _npcs_here(p: PlayerState) -> list[dict[str, str]]:
-    return [{"id": i, "name": NPCS[i]["name"]} for i in npc_ids_for_player(p)]
+from backend.views import player_public as _player_public, npcs_here as _npcs_here, npc_catalog as _npc_catalog, maps_public as _maps_public, factions_public as _factions_public
 
 def _sse(obj: dict[str, Any]) -> str:
     return f"data: {json.dumps(obj, ensure_ascii=False)}\n\n"
 
-def _factions_public() -> dict[str, str]:
-    return dict(FACTIONS)
+# _factions_public 已移至 backend.views
 
 def _story_digest(p: PlayerState) -> str:
     inv_line = "身无长物" if not p.inventory else "随身:" + "、".join(

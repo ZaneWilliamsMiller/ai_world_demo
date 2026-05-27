@@ -317,18 +317,19 @@ def complete_bounty(p: PlayerState) -> tuple[bool, str, dict[str, Any]]:
     coins = int(reward.get("coins", 0))
     if coins:
         from backend.systems.economy import apply_coin_delta
-        apply_coin_delta(p, coins, reason=f"完成悬赏：{bounty['title']}")
+        apply_coin_delta(p, coins)
 
     # 发声望
     rep = reward.get("rep", {})
-    for fac, delta in rep.items():
-        apply_rep_delta(p, fac, delta, reason=f"完成悬赏：{bounty['title']}")
+    if rep:
+        from backend.systems.reputation import apply_rep_delta
+        apply_rep_delta(p, rep)
 
     # 发物品
     items = reward.get("items_gain", [])
-    for item in items:
+    if items:
         from backend.systems.economy import add_items
-        add_items(p, item, 1)
+        add_items(p, items)
 
     # 发好感
     favor = reward.get("favor", {})

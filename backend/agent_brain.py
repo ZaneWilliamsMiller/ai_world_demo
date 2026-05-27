@@ -16,6 +16,7 @@ from typing import Any
 from backend import memory as mem
 from backend.llm_client import chat_completion
 from backend.data.relationships import NPC_RELATIONSHIPS
+from backend.data.npcs_data import NPCS
 
 log = logging.getLogger("agent_brain")
 
@@ -330,7 +331,6 @@ async def cross_reflect(
         text_lower = m.text.lower()
         for rel in own_rels:
             tid = rel["target"]
-            from backend.data.npcs_data import NPCS
             tname = (NPCS.get(tid, {}).get("name") or "").lower()
             tshort = (NPCS.get(tid, {}).get("short") or "").lower()
             if not tname:
@@ -365,7 +365,6 @@ async def cross_reflect(
         attitude = rel_info.get("attitude", "面熟") if rel_info else "面熟"
         note = rel_info.get("note", "") if rel_info else ""
 
-        from backend.data.npcs_data import NPCS
         tname = NPCS.get(target_id, {}).get("name", target_id)
 
         recent_tobs = sorted(tobs, key=lambda m: m.created_at, reverse=True)[:5]

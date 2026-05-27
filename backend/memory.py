@@ -54,7 +54,7 @@ REFLECTION_MIN_INTERVAL_S = 30.0      # 两次反思的最小间隔(秒),避免�
 _mind_indexes: dict[int, MemoryIndex] = {}
 
 # ─── 工具:分词与相似度 ─────────────────────
-_PUNCT_RE = re.compile(r"[\s,。、,.;;::!?!?\"'「」『』《》()()【】]+")
+_PUNCT_RE = re.compile(r"[\s,。、,.;;::!?!?\"'「」『』《》()【】]+")
 
 def _tokenize(text: str) -> set[str]:
     """分词（向后兼容：内部调用 memory_index.tokenize）。"""
@@ -827,12 +827,22 @@ def _resolve_deictic(user_message: str, hist_slice: list[dict[str, str]]) -> str
         return ""
 
     # ── 中文指代词检测 ──
-    PERSON_PRONOUNS = {"他", "她", "它", "他们", "她们", "它们", "其"}
+    # 注意：单字代词（他/她/它）在中文中极易误匹配（如"其他""他们"），
+    # 改为使用正则词边界检测，确保独立成词时才命中
+    PERSON_PRONOUNS = {"他们", "她们", "它们", "其"}
+    PERSON_PRONOUN_SINGLE = {"他", "她", "它"}
     DEICTIC_NOUNS = {"这人", "那人", "此人", "彼", "这位", "那位", "该人"}
     DEICTIC_PREFIX = {"这", "那", "此", "该"}
     DEICTIC_THINGS = {"这事", "那事", "那件事", "这件事", "此", "这个", "那个", "这种", "那种"}
 
+    # 多字代词直接用 in 检测（不会误匹配）
     has_person_pronoun = any(p in msg for p in PERSON_PRONOUNS)
+    # 单字代词用正则确保独立成词（前后不是汉字字符）
+    if not has_person_pronoun:
+        for p in PERSON_PRONOUN_SINGLE:
+            if re.search(rf"(?<![一-龟]){re.escape(p)}(?![一-龟])", msg):
+                has_person_pronoun = True
+                break
     has_deictic_noun = any(d in msg for d in DEICTIC_NOUNS)
     has_deictic_thing = any(d in msg for d in DEICTIC_THINGS)
 

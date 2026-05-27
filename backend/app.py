@@ -4,6 +4,8 @@ from __future__ import annotations
 运行（在 ai_world_demo 目录下）:
   python -m uvicorn backend.app:app --host 127.0.0.1 --port 8765
 """
+import asyncio
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -14,6 +16,10 @@ from fastapi.staticfiles import StaticFiles
 from backend.config import settings
 from backend.data.prompts import WORLD_NAME
 from backend.api.routes import router as api_router
+from backend.session.store import room
+from backend.systems.save_system import save_game
+
+_log = logging.getLogger("app")
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "static"
@@ -45,13 +51,6 @@ if STATIC.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
 
 
-import logging
-import asyncio
-_log = logging.getLogger("app.shutdown")
-from backend.session.store import room
-from backend.systems.save_system import save_game
-from backend.config import settings
-
 # 定期自动存档（后台任务）
 _auto_save_task = None
 
@@ -66,7 +65,7 @@ async def _startup():
 
 async def _auto_save_loop():
     """每 5 分钟自动存档所有活跃玩家。"""
-    _log = logging.getLogger("auto_save")
+    _save_log = logging.getLogger("auto_save")
     while True:
         await asyncio.sleep(300)  # 5 分钟
         saved = 0
@@ -77,9 +76,9 @@ async def _auto_save_loop():
                 save_game(p)
                 saved += 1
             except Exception as e:
-                _log.error("auto-save failed %s: %s", pid, e)
+                _save_log.error("auto-save failed %s: %s", pid, e)
         if saved:
-            _log.info("auto-saved %d player(s)", saved)
+            _save_log.info("auto-saved %d player(s)", saved)
 
 @app.on_event("shutdown")
 async def _shutdown():

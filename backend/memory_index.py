@@ -129,10 +129,13 @@ class MemoryIndex:
                 hit_counts[doc_id] += 1
 
         if not hit_counts:
-            # 无命中：退回全量候选（取最近的）
+            # 无命中：退回全量候选（限制数量，避免全扫描）
             all_ids = {m.id for m in mind.items}
-            # 限制候选数
-            return all_ids if len(all_ids) <= _MAX_CANDIDATES else set()
+            if len(all_ids) <= _MAX_CANDIDATES:
+                return all_ids
+            # 候选过多时返回最近的一部分（按时间倒序取前N条）
+            recent_ids = {m.id for m in list(mind.items)[-_MAX_CANDIDATES:]}
+            return recent_ids
 
         # 按命中次数排序
         sorted_ids = sorted(hit_counts, key=hit_counts.get, reverse=True)

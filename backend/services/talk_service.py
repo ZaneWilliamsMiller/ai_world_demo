@@ -395,8 +395,8 @@ def apply_npc_reply(
     # ── NPC 情绪自然衰减：对话推时辰时同步所有 NPC 情绪向中性回归 ──
     _decay_all_npc_moods(p)
 
-    # 避免循环导入，在这里导入 _player_public 等
-    from backend.api.routes import _player_public, _npcs_here
+    # 使用共享视图模块，避免循环导入
+    from backend.views import player_public, npcs_here
     
     return ({
         "visible_text": visible,
@@ -405,8 +405,8 @@ def apply_npc_reply(
         "favor": dict(p.favor),
         "rumors": list(p.rumors),
         "events": list(p.events[-10:]),
-        "player": _player_public(p),
-        "npcs_here": _npcs_here(p),
+        "player": player_public(p),
+        "npcs_here": npcs_here(p),
         "atmosphere": scene_context(p),
         "delta": {
             "coins": coin_delta_applied,

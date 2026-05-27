@@ -335,12 +335,29 @@ import atexit
 
 
 def _cleanup() -> None:
-    """进程退出时关闭共享 client。"""
+    """进程退出时尽力关闭共享 client（同步上下文 fallback）。
+
+    注意：如果进程是在事件循环运行中退出（如 uvicorn 正常关闭），
+    _close_client() 已通过 FastAPI shutdown 事件调用，此处仅为
+    非 FastAPI 上下文（如测试、脚本）的兜底。
+    在运行中的事件循环内调用 run_until_complete 会抛 RuntimeError，
+    此处直接同步关闭 client 即可。
+    """
+    global _client
     if _client and not _client.is_closed:
         try:
-            asyncio.get_event_loop().run_until_complete(_close_client())
+            # 尝试在无运行事件循环时优雅关闭
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # 事件循环正在运行 → 无法 run_until_complete，放弃异步关闭
+                # （FastAPI shutdown 事件已负责此场景）
+                pass
+            else:
+                loop.run_until_complete(_client.aclose())
         except Exception:
             pass
+        finally:
+            _client = None
 
 
 atexit.register(_cleanup)
