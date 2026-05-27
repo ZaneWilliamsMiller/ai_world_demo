@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.data.maps_data import MAPS
+from backend.data.maps_data import MAPS, MAP_LOCATIONS
 from backend.data.npcs_data import NPCS
 from backend.data.factions import FACTIONS
 from backend.models.player import PlayerState
@@ -71,6 +71,14 @@ def maps_public() -> dict[str, Any]:
     out: dict[str, Any] = {}
     for mid, m in MAPS.items():
         out[mid] = {"name": m["name"], "rows": m["rows"], "portals": m.get("portals", [])}
+    return out
+
+
+def map_locations_public() -> dict[str, dict[str, list[int]]]:
+    """返回地点坐标映射，供前端渲染标签。"""
+    out: dict[str, dict[str, list[int]]] = {}
+    for mid, locs in MAP_LOCATIONS.items():
+        out[mid] = {name: list(pos) for name, pos in locs.items()}
     return out
 
 

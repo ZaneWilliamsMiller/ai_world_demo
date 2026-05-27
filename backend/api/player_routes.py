@@ -37,6 +37,7 @@ from backend.systems.save_system import save_game, respawn_at_supply_point
 from backend.services.agent_service import bg_plan_for_npcs
 from backend.views import player_public as _player_public, npcs_here as _npcs_here
 from backend.views import npc_catalog as _npc_catalog, maps_public as _maps_public, factions_public as _factions_public
+from backend.views import map_locations_public as _map_locations_public
 
 router = APIRouter()
 
@@ -83,6 +84,7 @@ async def hello(body: HelloBody) -> dict[str, Any]:
         "npc_labels": {nid: v["name"] for nid, v in NPCS.items()},
         "ambush_markers": list(MAP_AMBUSH_MARKERS),
         "factions": _factions_public(),
+        "map_locations": _map_locations_public(),
         "events": list(p.events[-10:]),
     }
 
@@ -285,6 +287,7 @@ async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
         "atmosphere": scene_context(p),
         "events": list(p.events[-10:]),
         "npc_catalog": _npc_catalog(p),
+        "map_locations": _map_locations_public(),
         "respawn_msg": respawn_msg,
     }
 

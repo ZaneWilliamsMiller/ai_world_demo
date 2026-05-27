@@ -22,33 +22,15 @@ const GOLD     := Color(1.0, 0.82, 0.08)
 const RED      := Color(0.92, 0.32, 0.30)
 
 # ═══════════════════════════════════════════════════════
-#  Map Tile Colors
-# ═══════════════════════════════════════════════════════
-const TILE_COLORS := {
-	"#": Color(0.15,0.12,0.10), ".": Color(0.25,0.24,0.22),
-	"~": Color(0.10,0.30,0.50), "=": Color(0.35,0.30,0.20),
-	"F": Color(0.10,0.35,0.15), "m": Color(0.30,0.25,0.15),
-	";": Color(0.50,0.45,0.10), "/": Color(0.35,0.30,0.20),
-	"T": Color(0.60,0.40,0.10), "Y": Color(0.10,0.50,0.60),
-	"I": Color(0.40,0.15,0.30), "M": Color(0.60,0.50,0.10),
-	"B": Color(0.50,0.20,0.20), "C": Color(0.55,0.30,0.55),
-	" ": Color(0.04,0.04,0.07),
-}
-const TILE_SIZE := 14
-
-# ═══════════════════════════════════════════════════════
 #  Node Refs (set in _ready / _build_game_ui)
 # ═══════════════════════════════════════════════════════
 var _login_overlay: Control
 var _game_ui: Control
 
 # Map
-var _map_scroll: ScrollContainer
-var _map_container: Control
-var _map_cells: Array[Dictionary] = []
-var _current_map_id: String = ""
-var _map_rows: Array = []
-var _map_cols: int = 72
+var _map_renderer: Node2D  # map_renderer.gd instance
+var _map_sub_vp: SubViewportContainer
+var _map_sub: SubViewport
 
 # Dialogue
 var _dialogue_label: RichTextLabel
@@ -291,20 +273,33 @@ func _build_game_ui() -> void:
 	_map_name_label = _lbl("--", 11, DIM)  # reuse as map name in title bar
 	mt_hb.add_child(_map_name_label)
 
-	# Map scroll container (fills remaining space)
-	_map_scroll = ScrollContainer.new()
-	_map_scroll.size_flags_horizontal = SIZE_EXPAND_FILL
-	_map_scroll.size_flags_vertical = SIZE_EXPAND_FILL
-	map_panel.add_child(_map_scroll)
+	# Map SubViewport container (fills remaining space)
+	_map_sub_vp = SubViewportContainer.new()
+	_map_sub_vp.name = "MapSubVPContainer"
+	_map_sub_vp.size_flags_horizontal = SIZE_EXPAND_FILL
+	_map_sub_vp.size_flags_vertical = SIZE_EXPAND_FILL
+	_map_sub_vp.stretch = true
+	map_panel.add_child(_map_sub_vp)
 
-	# Map content container (plain Control with dark bg)
-	_map_container = Control.new()
-	var map_bg := ColorRect.new()
-	map_bg.name = "MapBackground"
-	map_bg.color = BG_DARK
-	map_bg.set_anchors_preset(PRESET_FULL_RECT)
-	_map_container.add_child(map_bg)
-	_map_scroll.add_child(_map_container)
+	_map_sub = SubViewport.new()
+	_map_sub.name = "MapSubViewport"
+	_map_sub.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	_map_sub_vp.add_child(_map_sub)
+
+	# Map renderer (Node2D with Camera2D)
+	_map_renderer = preload("res://scripts/map_renderer.gd").new()
+	_map_renderer.name = "MapRenderer"
+	_map_sub.add_child(_map_renderer)
+
+	# Connect map renderer signals
+	_map_renderer.tile_clicked.connect(func(x, y): GameManager.move_player(x, y))
+	_map_renderer.npc_clicked.connect(func(nid, nname):
+		for idx in _npc_select.item_count:
+			if _npc_select.get_item_text(idx) == nname:
+				_npc_select.select(idx)
+				_msg_input.grab_focus()
+				return
+	)
 
 	# ═══ RIGHT: Side Panel (card-based sections) ═══
 	var side_panel := VBoxContainer.new()
@@ -446,71 +441,15 @@ func _build_game_ui() -> void:
 #  Map Rendering
 # ═══════════════════════════════════════════════════════
 func _build_map() -> void:
-	for c in _map_cells: c["node"].queue_free()
-	_map_cells.clear()
-
-	_current_map_id = GameManager.player_map_id
-	print("[Game] _build_map() — id=%s" % _current_map_id)
-	var info = GameManager.maps_data.get(_current_map_id, {})
-	_map_rows = info.get("rows", [])
-	if _map_rows.is_empty():
-		print("[Game] _build_map() — rows EMPTY!")
+	if not _map_renderer:
 		return
-	_map_cols = _map_rows[0].length()
-	var total_w := _map_cols * TILE_SIZE
-	var total_h := _map_rows.size() * TILE_SIZE
-	print("[Game] _build_map() — %d×%d tiles, total=(%d,%d)" % [_map_rows.size(), _map_cols, total_w, total_h])
-
-	# Set map container size directly (it's a plain Control)
-	_map_container.set_size(Vector2(total_w, total_h))
-
-	for y in _map_rows.size():
-		var row: String = _map_rows[y]
-		for x in _map_cols:
-			var ch := " " if x >= row.length() else row[x]
-			var tile := ColorRect.new()
-			tile.color = TILE_COLORS.get(ch, Color(0.2,0.2,0.2))
-			tile.set_position(Vector2(x * TILE_SIZE, y * TILE_SIZE))
-			tile.set_size(Vector2(TILE_SIZE, TILE_SIZE))
-			tile.mouse_filter = Control.MOUSE_FILTER_STOP
-			tile.gui_input.connect(_on_tile_click.bind(x, y))
-			_map_container.add_child(tile)
-			_map_cells.append({"node":tile, "x":x, "y":y, "ch":ch})
-
-	print("[Game] _build_map() — created %d tiles" % _map_cells.size())
+	_map_renderer.build_map()
 
 
 func _update_map_player() -> void:
-	var px := GameManager.player_px; var py := GameManager.player_py
-
-	# NPC 坐标索引
-	var npc_at := {}
-	for n in GameManager.npc_catalog:
-		if n.get("map", "") == _current_map_id:
-			npc_at[Vector2i(n.get("x", -1), n.get("y", -1))] = n
-
-	for e in _map_cells:
-		var tile: ColorRect = e["node"]
-		var ex: int = e["x"]; var ey: int = e["y"]
-		if ex == px and ey == py:
-			tile.color = ACCENT
-		elif npc_at.has(Vector2i(ex, ey)):
-			tile.color = ACCENT2
-		else:
-			tile.color = TILE_COLORS.get(e["ch"], Color(0.2,0.2,0.2))
-
-
-func _on_tile_click(ev: InputEvent, x: int, y: int) -> void:
-	if ev is InputEventMouseButton and ev.pressed:
-		if ev.button_index == MOUSE_BUTTON_LEFT:
-			for n in GameManager.npc_catalog:
-				if n.get("map", "") == _current_map_id and n.get("x", -1) == x and n.get("y", -1) == y:
-					for idx in _npc_select.item_count:
-						if _npc_select.get_item_text(idx) == n.get("name", ""):
-							_npc_select.select(idx)
-							_msg_input.grab_focus()
-							return
-			GameManager.move_player(x, y)
+	if not _map_renderer:
+		return
+	_map_renderer.update_player_position()
 
 
 # ═══════════════════════════════════════════════════════
@@ -570,7 +509,7 @@ func _refresh() -> void:
 	print("[Game] _refresh() — map_id: cur=%s gm=%s" % [_current_map_id, gm.player_map_id])
 
 	# Map
-	if gm.player_map_id != _current_map_id:
+	if gm.player_map_id != _map_renderer.get_current_map_id():
 		_build_map()
 	_update_map_player()
 

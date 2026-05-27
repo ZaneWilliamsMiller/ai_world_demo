@@ -7,8 +7,8 @@ var player_id: String = ""
 var display_name: String = ""
 
 var player_map_id: String = "world"
-var player_px: int = 8
-var player_py: int = 13
+var player_px: int = 16
+var player_py: int = 30
 var player_coins: int = 0
 var player_vigor: int = 80
 var player_vigor_max: int = 100
@@ -27,6 +27,7 @@ var player_weather: String = "薄阴"
 
 # ── World Data ──
 var maps_data: Dictionary = {}
+var map_locations: Dictionary = {}
 var npcs_here: Array = []
 var npc_labels: Dictionary = {}
 var npc_catalog: Array = []
@@ -88,6 +89,7 @@ func _apply_hello_response(data: Dictionary) -> void:
 	"""Parse /api/hello or /api/load response into game state."""
 	display_name = data.get("display_name", display_name)
 	maps_data = data.get("maps", {})
+	map_locations = data.get("map_locations", {})
 	npcs_here = data.get("npcs_here", [])
 	npc_labels = data.get("npc_labels", {})
 	npc_catalog = data.get("npc_catalog", [])
