@@ -1,6 +1,6 @@
 # 活纸江湖 · 项目结构说明
 
-> 最后更新：2026-05-27 (悬赏榜进度检测真实判定 + requires 变量填充修复)
+> 最后更新：2026-05-27 (代词消解动态化 + 记忆摘要情感增强)
 
 ## 顶层
 
@@ -41,7 +41,7 @@ living-paper/
 
 | 文件 | 作用 |
 |------|------|
-| `app.py` | FastAPI 应用入口：挂载静态文件、注册路由、定期自动存档（5min）、shutdown 优雅关闭 |
+| `app.py` | FastAPI 应用入口：挂载静态文件、注册路由、定期自动存档（5min）、shutdown 优雅关闭、启动时初始化实体关键词缓存 |
 | `config.py` | 配置读取（`.env` → `Settings`）：LLM/连接池/熔断/缓存/重试/Prompt Cache 开关 |
 
 ### LLM 调用层
@@ -63,7 +63,7 @@ living-paper/
 | 文件 | 作用 |
 |------|------|
 | `agent_brain.py` | NPC 认知闭环：观察提取 → 反思生成 → 计划生成 → 记忆检索 |
-| `memory.py` | NPC 记忆存储：观察/反思/计划/情感状态、A-Mem 顿悟演化 |
+| `memory.py` | NPC 记忆存储：观察/反思/计划/情感状态、A-Mem 顿悟演化、动态实体关键词（代词消解白名单从 NPCS/MAPS 自动同步） |
 | `memory_index.py` | 倒排索引加速记忆检索（500 条 ~0.9ms） |
 
 ### 游戏状态
@@ -95,7 +95,7 @@ living-paper/
 
 | 文件 | 作用 |
 |------|------|
-| `talk_service.py` | 对话服务：Prompt Cache 分层构建 / 消息构建 / 回复应用 / 优雅降级（visible_text + reply 双字段） |
+| `talk_service.py` | 对话服务：Prompt Cache 分层构建 / 消息构建 / 回复应用 / 优雅降级 / 情感感知记忆摘要 |
 | `agent_service.py` | NPC 智能体：自动反思（夜间保护）/ 计划生成 / 记忆凝结 |
 
 ### 会话与持久化 `session/`

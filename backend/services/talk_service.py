@@ -485,7 +485,12 @@ def _summarize_for_memory(
     visible: str,
     parsed: NpcResponseSchema,
 ) -> str:
-    """把一轮对话浓缩为一行可写入记忆的「见闻」。"""
+    """把一轮对话浓缩为一行可写入记忆的「见闻」。
+
+    2026-05-27 改进：情感感知摘要——NPC 情绪越强烈，记忆越生动；
+    平静时则更简洁客观。这模拟了人类「情绪锚定记忆」的机制：
+    激动时刻的细节更清晰，平淡时刻只留大略。
+    """
     bits: list[str] = [f"{p.display_name}对我说：{user_message.strip()[:60]}"]
     if parsed.coin_delta:
         bits.append(f"涉钱{parsed.coin_delta:+d}")
@@ -496,8 +501,31 @@ def _summarize_for_memory(
     if parsed.events:
         bits.append("是日传闻：" + "；".join(parsed.events[:2])[:50])
     first_line = next((s.strip() for s in (visible or "").splitlines() if s.strip()), "")
-    if first_line:
-        bits.append("我答：" + first_line[:50])
+
+    # ── 情感感知摘要：根据 NPC 当前情绪调制记忆丰富度 ──
+    mind = get_or_init_mind(p, npc_id)
+    arousal = float(getattr(mind, "affect_arousal", 5.0) or 5.0)
+    valence = float(getattr(mind, "affect_valence", 0.0) or 0.0)
+
+    if arousal >= 7.0:
+        # 高唤醒度：记忆更细致，记录更多对话细节
+        if first_line:
+            bits.append("我答：" + first_line[:80])
+        mood_label = getattr(mind, "affect_mood", "") or ""
+        if mood_label:
+            bits.append(f"彼时心绪{mood_label}")
+    elif abs(valence) >= 4.0:
+        # 强效价（大喜/大悲）：记录心境缘由
+        if first_line:
+            bits.append("我答：" + first_line[:60])
+        cause = getattr(mind, "affect_cause", "") or ""
+        if cause:
+            bits.append(f"心有所感：{cause[:40]}")
+    else:
+        # 平静：简洁摘要，只记核心
+        if first_line:
+            bits.append("我答：" + first_line[:50])
+
     return "；".join(bits)[:280]
 
 

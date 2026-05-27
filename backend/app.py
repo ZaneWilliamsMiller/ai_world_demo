@@ -57,9 +57,12 @@ _auto_save_task = None
 
 @app.on_event("startup")
 async def _startup():
-    """启动后台定期存档任务。"""
+    """启动后台定期存档任务 + 初始化实体关键词缓存。"""
     global _auto_save_task
     _auto_save_task = asyncio.create_task(_auto_save_loop())
+    # 初始化代词消解用的实体关键词缓存（从 NPCS/MAPS 数据动态构建）
+    from backend.memory import init_entity_keywords
+    init_entity_keywords()
 
 async def _auto_save_loop():
     """每 5 分钟自动存档所有活跃玩家。"""

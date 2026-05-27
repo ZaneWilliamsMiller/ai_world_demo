@@ -838,7 +838,7 @@ def _resolve_deictic(user_message: str, hist_slice: list[dict[str, str]]) -> str
 
     # 扩展：检测「这/那/此 + 实体名」模式（如「那帖子」「这笔买卖」「此路引」）
     # 这些应和代词/指示词一样触发消解——之前因常量定义顺序导致此检测为死代码
-    ALL_ENTITIES = ALL_ENTITY_KEYWORDS
+    ALL_ENTITIES = _get_all_entity_keywords()
     has_deictic_entity = False
     for ent in ALL_ENTITIES:
         for prefix in ("这", "那", "此"):
@@ -851,7 +851,10 @@ def _resolve_deictic(user_message: str, hist_slice: list[dict[str, str]]) -> str
     if not (has_person_pronoun or has_deictic_noun or has_deictic_thing or has_deictic_entity):
         return ""
 
-    # ── 从最近2轮对话中提取所有命中的实体（使用模块级共享常量）──
+    # ── 从最近2轮对话中提取所有命中的实体 ──
+    _person_names = _get_person_names()
+    _place_names = _get_place_names()
+    _thing_kws = _get_thing_keywords()
     recent = hist_slice[-2:]
     found_persons: list[str] = []
     found_places: list[str] = []
@@ -864,15 +867,15 @@ def _resolve_deictic(user_message: str, hist_slice: list[dict[str, str]]) -> str
         user_text = (turn.get("user", "") or "").lower()
         combined = assistant_text + " " + user_text
 
-        for pn in PERSON_NAMES:
+        for pn in _person_names:
             if pn.lower() in combined and pn not in seen:
                 found_persons.append(pn)
                 seen.add(pn)
-        for pl in PLACE_NAMES:
+        for pl in _place_names:
             if pl.lower() in combined and pl not in seen:
                 found_places.append(pl)
                 seen.add(pl)
-        for tk in THING_KEYWORDS:
+        for tk in _thing_kws:
             if tk.lower() in combined and tk not in seen:
                 found_things.append(tk)
                 seen.add(tk)
@@ -884,7 +887,7 @@ def _resolve_deictic(user_message: str, hist_slice: list[dict[str, str]]) -> str
         # 代词指人/指实体 → 取最近出现的人名或事物（优先NPC回复中的，因为那更可能是话题焦点）
         for turn in reversed(recent):
             assistant_text = (turn.get("assistant", "") or "").lower()
-            for pn in PERSON_NAMES:
+            for pn in _person_names:
                 if pn.lower() in assistant_text:
                     if pn not in resolved_terms:
                         resolved_terms.append(pn)
@@ -900,14 +903,14 @@ def _resolve_deictic(user_message: str, hist_slice: list[dict[str, str]]) -> str
         # 指示事物/实体 → 取最近出现的事物关键词
         for turn in reversed(recent):
             assistant_text = (turn.get("assistant", "") or "").lower()
-            for tk in THING_KEYWORDS:
+            for tk in _thing_kws:
                 if tk.lower() in assistant_text:
                     if tk not in resolved_terms:
                         resolved_terms.append(tk)
                     break
-            if any(t in THING_KEYWORDS for t in resolved_terms):
+            if any(t in _thing_kws for t in resolved_terms):
                 break
-        if not any(t in THING_KEYWORDS for t in resolved_terms):
+        if not any(t in _thing_kws for t in resolved_terms):
             for tk in reversed(found_things[:2]):
                 if tk not in resolved_terms:
                     resolved_terms.append(tk)
@@ -945,11 +948,12 @@ def build_retrieval_query(user_message: str, hist_slice: list[dict[str, str]]) -
     recent = hist_slice[-4:]  # 取最近4轮
     topic_words: list[str] = []
 
-    # 1) 从对话历史中抽取实体关键词（使用模块级共享常量）
+    # 1) 从对话历史中抽取实体关键词（使用动态构建的实体白名单）
+    _all_kw = _get_all_entity_keywords()
     seen_words: set[str] = set()
     for turn in recent:
         combined = (turn.get("user", "") + " " + turn.get("assistant", "")).lower()
-        for kw in ALL_ENTITY_KEYWORDS:
+        for kw in _all_kw:
             if kw in combined and kw not in seen_words:
                 topic_words.append(kw)
                 seen_words.add(kw)
@@ -962,7 +966,7 @@ def build_retrieval_query(user_message: str, hist_slice: list[dict[str, str]]) -
                 # 取问句核心词（问号附近的词）
                 q_idx = max(0, user_msg.index(q_marker) - 20)
                 snippet = user_msg[q_idx:q_idx + 30]
-                for kw in ALL_ENTITY_KEYWORDS:
+                for kw in _all_kw:
                     if kw in snippet and kw not in seen_words:
                         topic_words.append(kw)
                         seen_words.add(kw)
@@ -1050,32 +1054,167 @@ def affective_memory_importance(base_importance: float, mind: AgentMind) -> floa
     return min(10.0, base_importance + bonus)
 
 
-# ─── 共享实体关键词（中文代词/指示词消解 & 检索查询构建共用）───
-# 保持各处一致，避免独立维护导致白名单不一致
+# ─── 动态实体关键词构建（从 NPCS/MAPS 数据自动同步）───
+# 替代旧的硬编码白名单，确保新增 NPC/地图时代词消解自动覆盖
+# 延迟导入避免循环依赖：首次调用时从数据模块拉取
 
-PERSON_NAMES = (
-    "掌柜", "牙人", "皂隶", "镖头", "黑店", "匪首", "船家", "阿泠",
-    "里正", "驿卒", "知客", "帮掌", "书生", "卡吏", "风闻", "江",
-)
+_DYNAMIC_ENTITIES_CACHED: dict[str, tuple] | None = None
 
-PLACE_NAMES = (
-    "同福", "牙行", "镖局", "县衙", "渡头", "画舫", "野径",
-    "芦花", "佛寺", "书院", "厘卡", "漕口", "驿舍", "碾坊",
-)
 
-THING_KEYWORDS = (
-    "路引", "信物", "帖子", "信函", "银子", "制钱", "药", "毒",
-    "镖", "船", "马", "刀", "剑", "赎身", "缉文", "帮规",
-    "鲜鱼", "干粮", "野果",
-)
+def _build_dynamic_entities() -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+    """从 NPCS 和 MAPS 数据动态构建实体关键词白名单。
 
-EVENT_KEYWORDS = (
-    "杀", "仇", "逃", "救", "帮", "买卖", "赊欠", "火并",
-    "走私", "偷渡", "贿赂", "典当", "盘店", "搭股",
-)
+    返回 (PERSON_NAMES, PLACE_NAMES, THING_KEYWORDS, ALL_ENTITY_KEYWORDS)
+    与旧硬编码格式兼容，但自动与数据源同步。
 
-# 用于 build_retrieval_query 话题链抽取的全量白名单
-ALL_ENTITY_KEYWORDS = PERSON_NAMES + PLACE_NAMES + THING_KEYWORDS + EVENT_KEYWORDS
+    构建策略：
+    - NPC name 中的实体部分（如 "同福栈 · 沈掌柜" → "沈掌柜"、"掌柜"）
+    - NPC short 直接加入
+    - NPC id 中的中文部分（如无 name/short 兜底）
+    - 地图 portal 中的地名
+    - NPC frequent 出没地点中的地名
+
+    首次调用后缓存，后续调用直接返回缓存。
+    """
+    global _DYNAMIC_ENTITIES_CACHED
+    if _DYNAMIC_ENTITIES_CACHED is not None:
+        return _DYNAMIC_ENTITIES_CACHED
+
+    persons: set[str] = set()
+    places: set[str] = set()
+
+    try:
+        from backend.data.npcs_data import NPCS, NPC_HABITS
+        from backend.data.maps_data import MAPS
+
+        for nid, meta in NPCS.items():
+            name = (meta.get("name") or "").strip()
+            short = (meta.get("short") or "").strip()
+            if name:
+                # 去除括号及括号内内容："玄真子（炼丹术士）"→"玄真子"
+                import re as _re
+                name_clean = _re.sub(r"[（(][^）)]*[）)]", "", name).strip()
+                # "同福栈 · 沈掌柜" → "沈掌柜"、"掌柜"
+                if "·" in name_clean:
+                    parts = [p.strip() for p in name_clean.split("·") if p.strip()]
+                    for p in parts:
+                        if len(p) <= 6:
+                            persons.add(p)
+                        if len(p) >= 2:
+                            persons.add(p[-2:])
+                        if len(p) >= 3:
+                            persons.add(p[-3:])
+                else:
+                    persons.add(name_clean)
+                    if len(name_clean) >= 2:
+                        persons.add(name_clean[-2:])
+                    if len(name_clean) >= 3:
+                        persons.add(name_clean[-3:])
+            if short:
+                persons.add(short)
+                if len(short) >= 2:
+                    persons.add(short[-2:])
+
+            # 从习惯出没地提取地名
+            habits = NPC_HABITS.get(nid, {})
+            for _m, loc_name in habits.get("frequent", []):
+                if loc_name and len(loc_name) >= 2:
+                    places.add(loc_name)
+
+        # 从地图 portal 提取地名
+        for mid, m in MAPS.items():
+            map_name = m.get("name", "")
+            if map_name and len(map_name) >= 2:
+                places.add(map_name)
+            for portal in m.get("portals", []):
+                target = portal.get("target_name", "") or portal.get("name", "")
+                if target and len(target) >= 2:
+                    places.add(target)
+    except Exception:
+        # 数据模块未就绪时回退到硬编码
+        pass
+
+    # 保留硬编码的兜底：确保数据源缺失时不会空白
+    _HARDCODED_PERSONS = (
+        "掌柜", "牙人", "皂隶", "镖头", "黑店", "匪首", "船家", "阿泠",
+        "里正", "驿卒", "知客", "帮掌", "书生", "卡吏", "风闻", "江",
+    )
+    _HARDCODED_PLACES = (
+        "同福", "牙行", "镖局", "县衙", "渡头", "画舫", "野径",
+        "芦花", "佛寺", "书院", "厘卡", "漕口", "驿舍", "碾坊",
+    )
+
+    persons.update(_HARDCODED_PERSONS)
+    places.update(_HARDCODED_PLACES)
+
+    # 过滤太短的（1字歧义太大）和太长的
+    persons = {p for p in persons if 2 <= len(p) <= 8}
+    places = {p for p in places if 2 <= len(p) <= 8}
+
+    # 事物和事件关键词仍为硬编码（不依赖数据源）
+    things: tuple[str, ...] = (
+        "路引", "信物", "帖子", "信函", "银子", "制钱", "药", "毒",
+        "镖", "船", "马", "刀", "剑", "赎身", "缉文", "帮规",
+        "鲜鱼", "干粮", "野果",
+    )
+    events: tuple[str, ...] = (
+        "杀", "仇", "逃", "救", "帮", "买卖", "赊欠", "火并",
+        "走私", "偷渡", "贿赂", "典当", "盘店", "搭股",
+    )
+
+    all_kw = tuple(persons) + tuple(places) + things + events
+    result = (tuple(sorted(persons)), tuple(sorted(places)), things, all_kw)
+    _DYNAMIC_ENTITIES_CACHED = result
+    return result
+
+
+def _get_person_names() -> tuple[str, ...]:
+    return _build_dynamic_entities()[0]
+
+def _get_place_names() -> tuple[str, ...]:
+    return _build_dynamic_entities()[1]
+
+def _get_thing_keywords() -> tuple[str, ...]:
+    return _build_dynamic_entities()[2]
+
+def _get_all_entity_keywords() -> tuple[str, ...]:
+    return _build_dynamic_entities()[3]
+
+
+# ─── 模块级向后兼容常量 ───
+# 首次访问时延迟构建，之后缓存。
+# 注意：这些是 tuple，构建后不会随 NPC 数据变化而更新。
+# 若需实时同步，请直接调用 _get_xxx() 函数。
+
+PERSON_NAMES: tuple[str, ...] = ()
+PLACE_NAMES: tuple[str, ...] = ()
+THING_KEYWORDS: tuple[str, ...] = ()
+EVENT_KEYWORDS: tuple[str, ...] = ()
+ALL_ENTITY_KEYWORDS: tuple[str, ...] = ()
+
+
+def init_entity_keywords() -> None:
+    """在应用启动时调用，从 NPCS/MAPS 数据构建实体关键词并缓存到模块级常量。
+
+    这样做既保持了向后兼容（模块级常量仍可用），又实现了与数据源的自动同步。
+    """
+    global PERSON_NAMES, PLACE_NAMES, THING_KEYWORDS, EVENT_KEYWORDS, ALL_ENTITY_KEYWORDS
+    global _DYNAMIC_ENTITIES_CACHED
+    # 重置缓存以确保用最新数据重建
+    _DYNAMIC_ENTITIES_CACHED = None
+    result = _build_dynamic_entities()
+    PERSON_NAMES = result[0]
+    PLACE_NAMES = result[1]
+    THING_KEYWORDS = result[2]
+    EVENT_KEYWORDS = (
+        "杀", "仇", "逃", "救", "帮", "买卖", "赊欠", "火并",
+        "走私", "偷渡", "贿赂", "典当", "盘店", "搭股",
+    )
+    ALL_ENTITY_KEYWORDS = result[3]
+    log.info(
+        "Entity keywords initialized: %d persons, %d places, %d things, %d total",
+        len(PERSON_NAMES), len(PLACE_NAMES), len(THING_KEYWORDS), len(ALL_ENTITY_KEYWORDS),
+    )
 
 # ─── CMA·认知记忆凝结(2026前沿:LinkedIn CMA范式落地)───
 OBS_CONDENSE_THRESHOLD = 60       # 当 observation 条数超过此阈值时触发凝结
