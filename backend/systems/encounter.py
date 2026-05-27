@@ -50,11 +50,17 @@ BAD_WEATHERS = {"骤雨", "湿瘴", "重雾", "风急"}
 # 非城区为野外（触发奇遇概率更高）
 def _is_wild(p: PlayerState) -> bool:
     """判断玩家是否在野外（非安全城区）。"""
-    # 县城区域 (x:5-20, y:12-20) 视作安全区
-    if 5 <= p.px <= 20 and 12 <= p.py <= 20:
+    # 县城区域 (x:10-50, y:25-45) 视作安全区
+    if 10 <= p.px <= 50 and 25 <= p.py <= 45:
         return False
-    # 寺庙区域 (x:22-31, y:5-11) 视作安全区
-    if 22 <= p.px <= 31 and 5 <= p.py <= 11:
+    # 寺庙区域 (x:40-65, y:10-25) 视作安全区
+    if 40 <= p.px <= 65 and 10 <= p.py <= 25:
+        return False
+    # 关塞区域 (x:60-90, y:4-14) 视作安全区
+    if 60 <= p.px <= 90 and 4 <= p.py <= 14:
+        return False
+    # 渡口区域 (x:70-100, y:42-62) 视作安全区
+    if 70 <= p.px <= 100 and 42 <= p.py <= 62:
         return False
     return True
 

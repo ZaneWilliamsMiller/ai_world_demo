@@ -17,8 +17,8 @@ class PlayerState:
     dead: bool = False
     death_reason: str | None = None
     map_id: str = "world"
-    px: int = 10
-    py: int = 14
+    px: int = 16
+    py: int = 30
     coins: int = 120
     flags: dict[str, int] = field(
         default_factory=lambda: {"order": 0, "truth": 0, "hope": 0, "chaos": 0}

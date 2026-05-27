@@ -121,30 +121,53 @@ WORLD_REGIONS: dict[str, list[str]] = {
         "栅栏斜拧铁蒺藜。验引的木亭边吊了半截破船——说是「警示水匪」，其实更像示众。风从卡缝过，呜咽得像查验你的吏员在哼调。",
         "厘卡哨的两侧有暗沟：货从沟底过的是三成抽头；从卡门过的要五成——且要站住让人掂你的褡裢。",
     ],
+    "fortress": [
+        "关塞城墙上箭楼林立，旌旗猎猎。守军目光如刀——过了这道关，便是北地胡尘。",
+        "关楼石阶被马蹄踏出凹痕。烽火台上的狼粪随时备着，一道烟就是十里外的催命符。",
+    ],
+    "eastport": [
+        "盐风裹着鱼腥扑面。港市码头桅杆如林，鹾船与渔舟挤成一簇。东港——出海口，也是海路尽头。",
+        "港务司门前的木牌挂着红黑两色的告示。盐仓的苦咸味飘过来，比海风还浓三分。",
+    ],
+    "southmarsh": [
+        "脚下的泥地渗着黑水，芦苇遮天蔽日。沼泽深处偶尔传来闷响——也许是气泡，也许不是。",
+        "南泽的水面不动声色，映着天光也映不出底。泽民说这水底沉着一座旧城，没人敢下去看。",
+    ],
+    "westmount": [
+        "西陵山道窄得只容一骑，崖壁上的栈道年久失修，踩一步晃三晃。",
+        "山家的炊烟在雾里绕了半天才散。采药人说再往西走有古矿废墟——但也说不上是谁的矿。",
+    ],
 }
 
-# 玩家位置 → 地区名
-# 对应区域：
-# - city:  县域城区 (x:5-20, y:12-20)
-# - dock:  渡口沿岸 (x:33-44, y:22-29)
-# - temple: 卧佛寺 (x:22-31, y:5-11)
-# - guild: 漕口帮坞 (x:55-65, y:8-15)
-# - academy: 竹林书院 (x:52-65, y:16-25)
-# - village: 芦花墟 (x:8-21, y:34-43)
-# - mill:  碾坊 (x:25-32, y:34-39)
-# - post:  驿舍 (x:33-44, y:30-38)
-# - checkpoint: 厘卡 (x:52-61, y:34-41)
-# - wild:  其余野外
+# 玩家位置 → 地区名（150×100 大地图）
+# - city:      县域城区 (x:10-50, y:25-45)
+# - temple:    卧佛寺 (x:40-65, y:10-25)
+# - fortress:  北关塞 (x:60-90, y:4-14)
+# - dock:      渡口沿岸 (x:70-100, y:42-62)
+# - guild:     漕口帮坞 (x:110-138, y:15-35)
+# - academy:   竹林书院 (x:108-138, y:36-55)
+# - village:   芦花墟 (x:10-48, y:65-88)
+# - mill:      碾坊 (x:50-70, y:65-82)
+# - post:      驿舍 (x:75-105, y:55-75)
+# - checkpoint: 厘卡 (x:108-135, y:60-80)
+# - eastport:  东港 (x:120-146, y:72-92)
+# - southmarsh: 南泽 (x:35-75, y:85-97)
+# - westmount: 西陵山 (x:3-18, y:42-65)
+# - wild:      其余野外
 def _player_region(px: int, py: int) -> str:
-    if 5 <= px <= 20 and 12 <= py <= 20: return "city"
-    if 33 <= px <= 44 and 22 <= py <= 29: return "dock"
-    if 22 <= px <= 31 and 5 <= py <= 11: return "temple"
-    if 55 <= px <= 65 and 8 <= py <= 15: return "guild"
-    if 52 <= px <= 65 and 16 <= py <= 25: return "academy"
-    if 8 <= px <= 21 and 34 <= py <= 43: return "village"
-    if 25 <= px <= 32 and 34 <= py <= 39: return "mill"
-    if 33 <= px <= 44 and 30 <= py <= 38: return "post"
-    if 52 <= px <= 61 and 34 <= py <= 41: return "checkpoint"
+    if 10 <= px <= 50 and 25 <= py <= 45: return "city"
+    if 40 <= px <= 65 and 10 <= py <= 25: return "temple"
+    if 60 <= px <= 90 and 4 <= py <= 14: return "fortress"
+    if 70 <= px <= 100 and 42 <= py <= 55: return "dock"
+    if 110 <= px <= 148 and 15 <= py <= 35: return "guild"
+    if 108 <= px <= 148 and 36 <= py <= 55: return "academy"
+    if 10 <= px <= 48 and 65 <= py <= 88: return "village"
+    if 50 <= px <= 70 and 65 <= py <= 82: return "mill"
+    if 75 <= px <= 105 and 56 <= py <= 75: return "post"
+    if 108 <= px <= 135 and 56 <= py <= 72: return "checkpoint"
+    if 120 <= px <= 148 and 72 <= py <= 97: return "eastport"
+    if 35 <= px <= 75 and 85 <= py <= 97: return "southmarsh"
+    if 3 <= px <= 18 and 42 <= py <= 65: return "westmount"
     return "wild"
 
 
@@ -178,7 +201,9 @@ def scene_context(p: "PlayerState") -> str:
     region = _player_region(p.px, p.py)
     region_name = {"city": "县城", "wild": "荒野", "dock": "渡口", "mill": "碾坊",
                    "village": "芦花墟", "post": "驿舍", "temple": "卧佛寺",
-                   "guild": "漕口帮坞", "academy": "竹林书院", "checkpoint": "厘卡哨"}.get(region, "野外")
+                   "guild": "漕口帮坞", "academy": "竹林书院", "checkpoint": "厘卡哨",
+                   "fortress": "北关塞", "eastport": "东港", "southmarsh": "南泽",
+                   "westmount": "西陵山"}.get(region, "野外")
 
     # 地格气氛
     from backend.systems.pathfinding import tile_at
