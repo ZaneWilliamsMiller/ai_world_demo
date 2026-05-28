@@ -249,6 +249,52 @@ window.App = window.App || {};
     }
   };
 
+  App.doUseItem = async function(itemName) {
+    if (!App.playerId) return;
+    try {
+      const data = await App.useItem(itemName);
+      if (data) {
+        App.addMsg("system", data.message || "使用了 " + itemName);
+        if (data.player) App.updateUI(data);
+      }
+    } catch (e) {
+      App.addMsg("system", "使用失败: " + e.message);
+    }
+  };
+
+  App.doRest = async function() {
+    if (!App.playerId) return;
+    try {
+      App.addMsg("system", "正在休息...");
+      const data = await App.doRest();
+      if (data) {
+        App.addMsg("system", data.message || "休息完毕");
+        if (data.player) App.updateUI(data);
+      }
+    } catch (e) {
+      App.addMsg("system", "休息失败: " + e.message);
+    }
+  };
+
+  App.doFinale = async function() {
+    if (!App.playerId) return;
+    App.showConfirm(
+      "终局收束",
+      "确定要结束这段江湖旅程吗？<br><br>⚠️ <b>此操作不可逆</b>",
+      async function() {
+        try {
+          const data = await App.doFinale();
+          if (data) {
+            App.addMsg("system", data.ending_label || "江湖路尽");
+            if (data.player) App.updateUI(data);
+          }
+        } catch (e) {
+          App.addMsg("system", "终局失败: " + e.message);
+        }
+      }
+    );
+  };
+
   // showConfirm: message 参数必须为调用方硬编码的可信 HTML（不可传入用户输入）
   var _confirmActive = false;
 

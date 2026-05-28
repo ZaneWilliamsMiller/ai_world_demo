@@ -309,33 +309,59 @@ func _build_npc_index() -> void:
 
 
 func _build_npc_markers() -> void:
-	for c in _npc_markers.get_children():
-		c.queue_free()
-	_build_npc_index()
+	var current_ids: Dictionary = {}
 	for pos: Vector2i in _npc_at:
 		var npc: Dictionary = _npc_at[pos]
-		var glow := PanelContainer.new()
-		var glow_sb := StyleBoxFlat.new()
-		glow_sb.bg_color = Color(ACCENT2.r, ACCENT2.g, ACCENT2.b, 0.25)
-		glow_sb.set_corner_radius_all(10)
-		glow.add_theme_stylebox_override("panel", glow_sb)
-		glow.custom_minimum_size = Vector2(20, 20)
-		glow.size = Vector2(20, 20)
-		glow.position = Vector2(pos.x * TILE_SIZE + TILE_SIZE / 2.0 - 10, pos.y * TILE_SIZE + TILE_SIZE / 2.0 - 10)
-		glow.z_index = 4
-		glow.name = "NpcGlow_%s" % npc.get("id", "")
-		_npc_markers.add_child(glow)
-		var marker := PanelContainer.new()
-		var marker_sb := StyleBoxFlat.new()
-		marker_sb.bg_color = ACCENT2
-		marker_sb.set_corner_radius_all(5)
-		marker.add_theme_stylebox_override("panel", marker_sb)
-		marker.custom_minimum_size = Vector2(10, 10)
-		marker.size = Vector2(10, 10)
-		marker.position = Vector2(pos.x * TILE_SIZE + TILE_SIZE / 2.0 - 5, pos.y * TILE_SIZE + TILE_SIZE / 2.0 - 5)
-		marker.z_index = 5
-		marker.name = "NpcMarker_%s" % npc.get("id", "")
-		_npc_markers.add_child(marker)
+		current_ids[npc.get("id", "")] = {"pos": pos, "npc": npc}
+	var existing_ids: Dictionary = {}
+	for c in _npc_markers.get_children():
+		var id_str: String = c.name.replace("NpcGlow_", "").replace("NpcMarker_", "")
+		existing_ids[id_str] = c
+	var to_remove: Array = []
+	for id_str in existing_ids:
+		if not current_ids.has(id_str):
+			to_remove.append(existing_ids[id_str])
+	for c in to_remove:
+		if is_instance_valid(c):
+			var id_str2: String = c.name.replace("NpcGlow_", "").replace("NpcMarker_", "")
+			var marker_node = _npc_markers.get_node_or_null("NpcMarker_" + id_str2)
+			if marker_node and is_instance_valid(marker_node):
+				marker_node.queue_free()
+			c.queue_free()
+	for id_str in current_ids:
+		if existing_ids.has(id_str):
+			var pos: Vector2i = current_ids[id_str]["pos"]
+			var glow_node = _npc_markers.get_node_or_null("NpcGlow_" + id_str)
+			var marker_node = _npc_markers.get_node_or_null("NpcMarker_" + id_str)
+			if glow_node and is_instance_valid(glow_node):
+				glow_node.position = Vector2(pos.x * TILE_SIZE + TILE_SIZE / 2.0 - 10, pos.y * TILE_SIZE + TILE_SIZE / 2.0 - 10)
+			if marker_node and is_instance_valid(marker_node):
+				marker_node.position = Vector2(pos.x * TILE_SIZE + TILE_SIZE / 2.0 - 5, pos.y * TILE_SIZE + TILE_SIZE / 2.0 - 5)
+		else:
+			var pos: Vector2i = current_ids[id_str]["pos"]
+			var npc: Dictionary = current_ids[id_str]["npc"]
+			var glow := PanelContainer.new()
+			var glow_sb := StyleBoxFlat.new()
+			glow_sb.bg_color = Color(ACCENT2.r, ACCENT2.g, ACCENT2.b, 0.25)
+			glow_sb.set_corner_radius_all(10)
+			glow.add_theme_stylebox_override("panel", glow_sb)
+			glow.custom_minimum_size = Vector2(20, 20)
+			glow.size = Vector2(20, 20)
+			glow.position = Vector2(pos.x * TILE_SIZE + TILE_SIZE / 2.0 - 10, pos.y * TILE_SIZE + TILE_SIZE / 2.0 - 10)
+			glow.z_index = 4
+			glow.name = "NpcGlow_%s" % npc.get("id", "")
+			_npc_markers.add_child(glow)
+			var marker := PanelContainer.new()
+			var marker_sb := StyleBoxFlat.new()
+			marker_sb.bg_color = ACCENT2
+			marker_sb.set_corner_radius_all(5)
+			marker.add_theme_stylebox_override("panel", marker_sb)
+			marker.custom_minimum_size = Vector2(10, 10)
+			marker.size = Vector2(10, 10)
+			marker.position = Vector2(pos.x * TILE_SIZE + TILE_SIZE / 2.0 - 5, pos.y * TILE_SIZE + TILE_SIZE / 2.0 - 5)
+			marker.z_index = 5
+			marker.name = "NpcMarker_%s" % npc.get("id", "")
+			_npc_markers.add_child(marker)
 
 
 func _update_npc_markers() -> void:

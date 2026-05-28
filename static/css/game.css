@@ -1269,3 +1269,89 @@ html, body {
   font-size: 12px;
   margin-top: 8px;
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   物品可点击样式
+   ═══════════════════════════════════════════════════════════════════ */
+.inv-item {
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.inv-item:hover {
+  border-color: var(--accent-green) !important;
+  color: var(--accent-green);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.3);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   响应式设计
+   ═══════════════════════════════════════════════════════════════════ */
+@media (max-width: 1100px) {
+  .side-panel {
+    width: 380px;
+  }
+  .login-box {
+    width: 460px;
+    padding: 36px 40px;
+  }
+  .config-panel {
+    width: 460px;
+    padding: 32px 36px;
+  }
+}
+
+@media (max-width: 900px) {
+  .main {
+    flex-direction: column;
+  }
+  .side-panel {
+    width: 100%;
+    max-height: 50vh;
+  }
+  .map-panel {
+    min-height: 300px;
+  }
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 8px 16px;
+    gap: 10px;
+  }
+  .topbar h1 {
+    font-size: 18px;
+    letter-spacing: 4px;
+  }
+  .dialogue-section {
+    height: 260px;
+    min-height: 200px;
+  }
+}
+
+@media (max-width: 600px) {
+  .login-box {
+    width: 95vw;
+    padding: 28px 24px;
+  }
+  .login-box h2 {
+    font-size: 22px;
+    letter-spacing: 6px;
+    margin-bottom: 28px;
+  }
+  .config-panel {
+    width: 95vw;
+    padding: 24px 20px;
+  }
+  .stat-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 16px;
+  }
+  .topbar button {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  .map-legend {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+}

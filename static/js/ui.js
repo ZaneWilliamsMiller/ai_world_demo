@@ -116,11 +116,17 @@ window.App = window.App || {};
     const inv = p.inventory || {};
     let html = "";
     Object.keys(inv).forEach(function(k) {
-      html += "<span>" + HtmlUtils.escape(k) + "\u00d7" + HtmlUtils.escape(inv[k]) + "</span>";
+      html += "<span class='inv-item' data-item='" + HtmlUtils.escape(k) + "'>" + HtmlUtils.escape(k) + "\u00d7" + HtmlUtils.escape(inv[k]) + "</span>";
     });
     const statInv = document.getElementById("statInv");
     HtmlUtils.setSafeHtml(statInv,
       html || "<span style='color:#555;'>\u8eab\u65e0\u957f\u7269</span>");
+    statInv.querySelectorAll(".inv-item").forEach(function(el) {
+      el.addEventListener("click", function() {
+        var name = el.getAttribute("data-item");
+        if (name) App.doUseItem(name);
+      });
+    });
   }
 
   // ── 此地图 NPC 列表 ──

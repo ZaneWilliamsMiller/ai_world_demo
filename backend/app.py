@@ -9,6 +9,7 @@ import logging
 import os
 import threading
 import time as _time
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -38,7 +39,68 @@ def _cors_allow_origins() -> tuple[list[str], bool]:
 
 _origins, _creds = _cors_allow_origins()
 
-app = FastAPI(title=f"{WORLD_NAME} · 江湖行纪")
+_auto_save_task = None
+
+async def _auto_save_loop():
+    """每 5 分钟自动存档所有活跃玩家。"""
+    _save_log = logging.getLogger("auto_save")
+    while True:
+        await asyncio.sleep(settings.auto_save_interval_s)
+        saved = 0
+        for pid, p in list(room.players.items()):
+            if p.dead or p.ended:
+                continue
+            try:
+                await asyncio.to_thread(save_game, p)
+                saved += 1
+            except Exception as e:
+                _save_log.error("auto-save failed %s: %s", pid, e)
+        if saved:
+            _save_log.info("auto-saved %d player(s)", saved)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global _auto_save_task
+    _auto_save_task = asyncio.create_task(_auto_save_loop())
+    from backend.memory import init_entity_keywords
+    init_entity_keywords()
+    yield
+    if _auto_save_task and not _auto_save_task.done():
+        _auto_save_task.cancel()
+    saved = 0
+    for pid, p in list(room.players.items()):
+        if p.dead or p.ended:
+            continue
+        max_save_retries = 2
+        for save_attempt in range(max_save_retries):
+            try:
+                await asyncio.to_thread(save_game, p)
+                saved += 1
+                break
+            except (ConnectionError, TimeoutError, OSError) as transient_err:
+                if save_attempt < max_save_retries - 1:
+                    _log.warning(
+                        "auto-save transient error for %s (attempt %d/%d): %s: %s",
+                        pid, save_attempt + 1, max_save_retries,
+                        type(transient_err).__name__, transient_err,
+                    )
+                    await asyncio.sleep(0.5 * (save_attempt + 1))
+                    continue
+                _log.error("auto-save failed after retries for %s: %s", pid, transient_err)
+            except Exception as e:
+                _log.error("auto-save non-retryable error for %s: %s: %s", pid, type(e).__name__, e)
+                break
+    if saved:
+        _log.info("shutdown auto-saved %d active player(s)", saved)
+    from backend.llm_client import _close_client
+    try:
+        await _close_client()
+    except (ConnectionError, TimeoutError, OSError) as close_err:
+        _log.warning("LLM client close transient error (ignored): %s: %s", type(close_err).__name__, close_err)
+    except Exception as close_err:
+        _log.error("LLM client close unexpected error: %s: %s", type(close_err).__name__, close_err)
+
+app = FastAPI(title=f"{WORLD_NAME} · 江湖行纪", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
@@ -67,87 +129,6 @@ async def log_requests(request: Request, call_next):
 # 真正的前后端分离：后端只提供API，不提供静态文件
 # if STATIC.exists():
 #     app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
-
-
-# 定期自动存档（后台任务）
-_auto_save_task = None
-
-@app.on_event("startup")
-async def _startup():
-    """启动后台定期存档任务 + 初始化实体关键词缓存。"""
-    global _auto_save_task
-    _auto_save_task = asyncio.create_task(_auto_save_loop())
-    # 初始化代词消解用的实体关键词缓存（从 NPCS/MAPS 数据动态构建）
-    from backend.memory import init_entity_keywords
-    init_entity_keywords()
-
-async def _auto_save_loop():
-    """每 5 分钟自动存档所有活跃玩家。"""
-    _save_log = logging.getLogger("auto_save")
-    while True:
-        await asyncio.sleep(settings.auto_save_interval_s)
-        saved = 0
-        for pid, p in list(room.players.items()):
-            if p.dead or p.ended:
-                continue
-            try:
-                await asyncio.to_thread(save_game, p)
-                saved += 1
-            except Exception as e:
-                _save_log.error("auto-save failed %s: %s", pid, e)
-        if saved:
-            _save_log.info("auto-saved %d player(s)", saved)
-
-@app.on_event("shutdown")
-async def _shutdown():
-    """优雅关闭：取消自动存档任务 + 自动存档所有活跃玩家 + 释放 httpx 连接池。
-
-    修复 Major #9：区分异常类型，对连接超时等瞬态错误增加重试机制。
-    """
-    # 取消定期存档任务
-    global _auto_save_task
-    if _auto_save_task and not _auto_save_task.done():
-        _auto_save_task.cancel()
-
-    saved = 0
-    for pid, p in list(room.players.items()):
-        if p.dead or p.ended:
-            continue
-        # 修复 Major #9：对存档操作增加重试机制，最多重试 2 次
-        max_save_retries = 2
-        for save_attempt in range(max_save_retries):
-            try:
-                await asyncio.to_thread(save_game, p)
-                saved += 1
-                break
-            except (ConnectionError, TimeoutError, OSError) as transient_err:
-                # 连接类瞬态错误：可重试
-                if save_attempt < max_save_retries - 1:
-                    _log.warning(
-                        f"auto-save transient error for {pid} (attempt {save_attempt + 1}/{max_save_retries}): "
-                        f"{type(transient_err).__name__}: {transient_err}"
-                    )
-                    await asyncio.sleep(0.5 * (save_attempt + 1))
-                    continue
-                _log.error(f"auto-save failed after retries for {pid}: {transient_err}")
-            except Exception as e:
-                # 非瞬态错误（如数据损坏、权限问题）：不重试，直接记录
-                _log.error(f"auto-save non-retryable error for {pid}: {type(e).__name__}: {e}")
-                break
-
-    if saved:
-        _log.info(f"shutdown auto-saved {saved} active player(s)")
-
-    # 修复 Major #9：关闭 LLM 客户端时增加异常分类处理
-    from backend.llm_client import _close_client
-    try:
-        await _close_client()
-    except (ConnectionError, TimeoutError, OSError) as close_err:
-        # 连接关闭时的瞬态错误（如连接超时），仅警告不中断关闭流程
-        _log.warning(f"LLM client close transient error (ignored): {type(close_err).__name__}: {close_err}")
-    except Exception as close_err:
-        # 其他未知错误，记录但不阻止 shutdown 流程
-        _log.error(f"LLM client close unexpected error: {type(close_err).__name__}: {close_err}")
 
 
 @app.post("/api/shutdown")

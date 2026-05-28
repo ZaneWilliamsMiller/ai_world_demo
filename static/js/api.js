@@ -133,6 +133,46 @@ window.App = window.App || {};
     return await backendPost("/api/save", { player_id: App.playerId });
   };
 
+  App.doRest = async function() {
+    if (App.apiMode !== "backend") return null;
+    return await backendPost("/api/rest", { player_id: App.playerId });
+  };
+
+  App.useItem = async function(itemName) {
+    if (App.apiMode !== "backend") return null;
+    return await backendPost("/api/item/use", { player_id: App.playerId, item: itemName });
+  };
+
+  App.doFinale = async function() {
+    if (App.apiMode !== "backend") return null;
+    return await backendPost("/api/finale", { player_id: App.playerId });
+  };
+
+  App.bountyRefresh = async function() {
+    if (App.apiMode !== "backend") return null;
+    return await backendPost("/api/bounty/refresh", { player_id: App.playerId });
+  };
+
+  App.bountyAccept = async function(bountyId) {
+    if (App.apiMode !== "backend") return null;
+    return await backendPost("/api/bounty/accept", { player_id: App.playerId, bounty_id: bountyId });
+  };
+
+  App.bountyCheck = async function() {
+    if (App.apiMode !== "backend") return null;
+    return await backendPost("/api/bounty/check", { player_id: App.playerId });
+  };
+
+  App.bountyComplete = async function() {
+    if (App.apiMode !== "backend") return null;
+    return await backendPost("/api/bounty/complete", { player_id: App.playerId });
+  };
+
+  App.bountyAbandon = async function() {
+    if (App.apiMode !== "backend") return null;
+    return await backendPost("/api/bounty/abandon", { player_id: App.playerId });
+  };
+
   // ═══════════════════════════════════════════
   //  NPC 对话
   // ═══════════════════════════════════════════
@@ -175,7 +215,9 @@ window.App = window.App || {};
   App.testBackend = async function() {
     try {
       const data = await backendGet("/api/health");
-      return { ok: true, detail: "model=" + data.model + " world=" + data.world };
+      var model = data.model || "(unknown)";
+      var world = data.world || "(unknown)";
+      return { ok: true, detail: "model=" + model + " world=" + world };
     } catch (e) {
       return { ok: false, detail: e.message };
     }
