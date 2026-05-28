@@ -186,7 +186,7 @@ def save_game(p: PlayerState) -> str:
             except Exception:
                 pass
             raise
-        log.info("存档成功: %s (%s, 第d日 制钱%d)", p.display_name, p.player_id,
+        log.info("存档成功: %s (%s, 第%d日 制钱%d)", p.display_name, p.player_id,
                   p.world_day, p.coins)
         return str(fp)
     except Exception as e:
@@ -205,7 +205,7 @@ def load_game(player_id: str) -> PlayerState | None:
         p = _deserialize_player(data)
         if p.permadeath and p.dead:
             raise ValueError(f"角色 {p.display_name} 已在真实江湖中身故，存档已废")
-        log.info("存档加载: %s (%s, 第d日", p.display_name, p.player_id, p.world_day)
+        log.info("存档加载: %s (%s, 第%d日)", p.display_name, p.player_id, p.world_day)
         return p
     except ValueError:
         raise

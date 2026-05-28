@@ -6,6 +6,7 @@ from __future__ import annotations
 """
 import asyncio
 import logging
+import hmac
 import os
 import threading
 import time as _time
@@ -47,7 +48,9 @@ async def _auto_save_loop():
     while True:
         await asyncio.sleep(settings.auto_save_interval_s)
         saved = 0
-        for pid, p in list(room.players.items()):
+        async with room._lock:
+            snapshot = list(room.players.items())
+        for pid, p in snapshot:
             if p.dead or p.ended:
                 continue
             try:
@@ -139,7 +142,7 @@ async def shutdown_server(request: Request):
     expected = os.environ.get("SHUTDOWN_SECRET", "")
     if not expected:
         raise HTTPException(403, "未配置 SHUTDOWN_SECRET，拒绝远程关闭")
-    if secret != expected:
+    if not hmac.compare_digest(secret, expected):
         raise HTTPException(403, "无权关闭服务")
 
     frontend_port = os.environ.get("FRONTEND_PORT")

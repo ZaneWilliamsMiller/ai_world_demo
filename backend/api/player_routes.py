@@ -5,7 +5,7 @@ import asyncio
 import logging
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Path, status
 from pydantic import BaseModel, Field
 
 from backend.data.maps_data import MAPS
@@ -295,14 +295,15 @@ async def _bg_encounter(player_id: str) -> None:
         enc = await generate_dynamic_encounter(p)
         if enc:
             async with p.lock:
-                apply_encounter(p, enc)
+                if not p.dead and not p.ended:
+                    apply_encounter(p, enc)
     except Exception as e:
         import logging
         logging.getLogger("routes").warning("_bg_encounter failed for player=%s: %s", player_id, e)
 
 
 @router.get("/api/state/{player_id}")
-async def get_state(player_id: str = Field(..., min_length=1, max_length=64)) -> dict[str, Any]:
+async def get_state(player_id: str = Path(..., min_length=1, max_length=64)) -> dict[str, Any]:
     from backend.session.store import room
     p = room.players.get(player_id)
     if not p:
@@ -332,7 +333,7 @@ async def get_state(player_id: str = Field(..., min_length=1, max_length=64)) ->
 
 
 @router.get("/api/journal/{player_id}")
-async def journal(player_id: str = Field(..., min_length=1, max_length=64)) -> dict[str, Any]:
+async def journal(player_id: str = Path(..., min_length=1, max_length=64)) -> dict[str, Any]:
     from backend.session.store import room
     p = room.players.get(player_id)
     if not p:

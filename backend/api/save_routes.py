@@ -16,16 +16,16 @@ router = APIRouter()
 
 
 class SaveBody(BaseModel):
-    player_id: str = Field(..., min_length=1)
+    player_id: str = Field(..., min_length=1, max_length=64)
 
 class LoadBody(BaseModel):
-    player_id: str = Field(..., min_length=1)
+    player_id: str = Field(..., min_length=1, max_length=64)
     display_name: str | None = None
     gender: str = Field(default="未言", pattern="^(男|女|未言)$")
     permadeath: bool = False
 
 class DeleteSaveBody(BaseModel):
-    player_id: str = Field(..., min_length=1)
+    player_id: str = Field(..., min_length=1, max_length=64)
 
 
 @router.get("/api/saves")
@@ -39,8 +39,8 @@ async def save_player(body: SaveBody) -> dict[str, Any]:
     p = room.players.get(body.player_id)
     if not p:
         raise HTTPException(404, "未知 player_id")
-    path = await asyncio.to_thread(save_game, p)
-    return {"ok": True, "path": path}
+    await asyncio.to_thread(save_game, p)
+    return {"ok": True}
 
 
 @router.post("/api/load")

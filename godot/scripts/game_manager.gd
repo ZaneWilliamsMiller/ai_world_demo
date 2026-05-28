@@ -17,6 +17,8 @@ var player_spirit_max: int = 100
 var player_gender: String = ""
 var player_permadeath: bool = false
 var player_dead: bool = false
+var player_ended: bool = false
+var player_ending_label: String = ""
 var player_inventory: Dictionary = {}
 var player_reputation: Dictionary = {}
 var player_flags: Dictionary = {}
@@ -142,6 +144,8 @@ func _apply_player(p: Dictionary) -> void:
 	player_gender = p.get("gender", player_gender)
 	player_permadeath = p.get("permadeath", player_permadeath)
 	player_dead = p.get("dead", player_dead)
+	player_ended = p.get("ended", player_ended)
+	player_ending_label = p.get("ending_label", player_ending_label)
 	player_inventory = p.get("inventory", {})
 	player_reputation = p.get("reputation", {})
 	player_flags = p.get("flags", {})
@@ -222,29 +226,6 @@ func move_player(tx: int, ty: int) -> void:
 	state_updated.emit()
 
 
-func talk_to_npc(npc_id: String, message: String) -> bool:
-	var body := {"player_id": player_id, "npc_id": npc_id, "message": message}
-	
-	var res: Dictionary = await ApiClient.request("/api/npc/talk", "POST", body)
-
-	if res.has("error"):
-		system_message.emit("对话失败")
-		return false
-
-	var visible_text: String = res.get("visible_text", res.get("reply", ""))
-	var npc_name: String = npc_labels.get(npc_id, npc_id)
-	chat_message.emit(npc_name, visible_text, npc_id)
-
-	var p: Dictionary = res.get("player", {})
-	if not p.is_empty():
-		_apply_player(p)
-	npcs_here = res.get("npcs_here", npcs_here)
-	state_updated.emit()
-
-	var fallback: bool = res.get("llm_fallback", false)
-	return not fallback
-
-
 func save_game() -> bool:
 	## Persist current game to disk.
 	var body := {"player_id": player_id}
@@ -259,11 +240,14 @@ func list_saves() -> Array:
 
 
 func fetch_state() -> void:
-	## Poll server for latest player state.
 	var res: Dictionary = await ApiClient.request("/api/state/" + player_id, "GET", {})
 	if not res.has("error"):
 		_apply_player(res.get("player", {}))
 		npcs_here = res.get("npcs_here", npcs_here)
+		player_ended = res.get("ended", player_ended)
+		player_ending_label = res.get("ending_label", player_ending_label)
+		player_flags = res.get("flags", player_flags)
+		player_favor = res.get("favor", player_favor)
 		state_updated.emit()
 
 
@@ -281,6 +265,8 @@ func reset_state() -> void:
 	player_gender = ""
 	player_permadeath = false
 	player_dead = false
+	player_ended = false
+	player_ending_label = ""
 	player_inventory = {}
 	player_reputation = {}
 	player_flags = {}
