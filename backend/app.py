@@ -205,7 +205,33 @@ async def shutdown_server(request: Request):
 
     def delayed_shutdown():
         _time.sleep(3.0)
-        print(f"\n   💀 后端进程即将退出 (os._exit)...")
+        print(f"\n   💀 后端进程即将退出...")
+
+        try:
+            saved = 0
+            for pid, p in list(room.players.items()):
+                if p.dead or p.ended:
+                    continue
+                try:
+                    save_game(p)
+                    saved += 1
+                except Exception:
+                    pass
+            if saved:
+                print(f"   💾 已保存 {saved} 个活跃玩家")
+
+            try:
+                from backend.llm_client import LLMClientManager
+                inst = LLMClientManager._instance
+                if inst and inst._client and not inst._client.is_closed:
+                    inst._client = None
+                if inst:
+                    inst._custom_clients.clear()
+            except Exception:
+                pass
+        except Exception:
+            pass
+
         os._exit(0)
 
     thread = threading.Thread(target=delayed_shutdown, daemon=True)

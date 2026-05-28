@@ -19,6 +19,8 @@ import socket
 import subprocess
 import time
 import platform
+import signal
+import atexit
 
 # Windows GBK 编码修复：强制使用 UTF-8 输出
 if sys.platform == "win32":
@@ -35,6 +37,27 @@ DEFAULT_WEB_PORT = 8766
 
 # Web前端静态文件目录
 STATIC_DIR = os.path.join(PROJECT_ROOT, "static")
+
+_child_processes = []
+
+
+def _cleanup_children():
+    for proc in _child_processes:
+        if proc.poll() is None:
+            try:
+                proc.terminate()
+                proc.wait(timeout=3)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+
+
+def _signal_handler(signum, frame):
+    print("\n🛑 收到退出信号，正在清理...")
+    _cleanup_children()
+    sys.exit(0)
 
 
 class CORSRequestHandler(SimpleHTTPRequestHandler):
@@ -129,6 +152,29 @@ def is_backend_running(host: str = "127.0.0.1", port: int = DEFAULT_BACKEND_PORT
         return False
 
 
+def kill_port_process(port: int) -> bool:
+    if platform.system() != "Windows":
+        return False
+    try:
+        result = subprocess.run(
+            ["netstat", "-ano"],
+            capture_output=True, text=True, timeout=5
+        )
+        for line in result.stdout.splitlines():
+            if f":{port}" in line and "LISTENING" in line:
+                parts = line.split()
+                pid = int(parts[-1])
+                if pid > 0:
+                    subprocess.run(["taskkill", "/F", "/PID", str(pid)],
+                                   capture_output=True, timeout=5)
+                    print(f"   已终止占用端口 {port} 的进程 (PID: {pid})")
+                    time.sleep(1)
+                    return True
+    except Exception:
+        pass
+    return False
+
+
 # ════════════════════════════════════════════════
 #  后端启动
 # ════════════════════════════════════════════════
@@ -137,6 +183,11 @@ def is_backend_running(host: str = "127.0.0.1", port: int = DEFAULT_BACKEND_PORT
 def start_backend(port: int = DEFAULT_BACKEND_PORT, frontend_port: int = None) -> subprocess.Popen | None:
     """启动后端服务"""
     print(f"🔧 启动后端服务 (端口 {port})...")
+
+    if is_port_in_use(port) and not is_backend_running(port=port):
+        print(f"⚠️ 端口 {port} 被占用但不是有效后端，尝试清理...")
+        kill_port_process(port)
+
     os.chdir(PROJECT_ROOT)
 
     env = os.environ.copy()
@@ -155,9 +206,11 @@ def start_backend(port: int = DEFAULT_BACKEND_PORT, frontend_port: int = None) -
         cwd=PROJECT_ROOT,
         env=env,
         creationflags=creationflags,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdout=None,
+        stderr=None,
     )
+
+    _child_processes.append(proc)
 
     max_wait = 15
     for i in range(max_wait):
@@ -167,9 +220,6 @@ def start_backend(port: int = DEFAULT_BACKEND_PORT, frontend_port: int = None) -
             return proc
         if proc.poll() is not None:
             print(f"❌ 后端启动失败，退出码: {proc.returncode}")
-            stderr_output = proc.stderr.read().decode("utf-8", errors="replace")[:500]
-            if stderr_output:
-                print(f"   错误: {stderr_output}")
             return None
 
     print(f"⚠️ 后端启动超时 ({max_wait}s)，请手动检查")
@@ -208,7 +258,7 @@ class StoppableHTTPServer(HTTPServer):
         t.start()
 
 
-def run_web_server(port: int = DEFAULT_WEB_PORT, block: bool = True) -> None:
+def run_web_server(port: int = DEFAULT_WEB_PORT, block: bool = True) -> subprocess.Popen | None:
     """启动 Web 静态文件服务器（内嵌，替代原 serve_frontend.py）"""
     os.chdir(STATIC_DIR)
 
@@ -227,16 +277,16 @@ def run_web_server(port: int = DEFAULT_WEB_PORT, block: bool = True) -> None:
             print("\n👋 服务器已停止")
             sys.exit(0)
     else:
-        # 非阻塞模式：在子进程中运行
         creationflags = 0
         if platform.system() == "Windows":
             creationflags = subprocess.CREATE_NEW_CONSOLE
 
-        subprocess.Popen(
+        proc = subprocess.Popen(
             [sys.executable, __file__, "--serve-only", str(port)],
             cwd=PROJECT_ROOT,
             creationflags=creationflags,
         )
+        return proc
 
 
 def trigger_frontend_shutdown():
@@ -245,11 +295,14 @@ def trigger_frontend_shutdown():
     _frontend_should_shutdown = True
 
 
-def start_web_frontend(port: int = DEFAULT_WEB_PORT) -> None:
+def start_web_frontend(port: int = DEFAULT_WEB_PORT) -> subprocess.Popen | None:
     """启动Web前端（非阻塞，在子进程中运行）"""
     print(f"🌐 启动Web前端 (端口 {port})...")
-    run_web_server(port, block=False)
-    print(f"✅ Web前端已启动 → http://127.0.0.1:{port}")
+    proc = run_web_server(port, block=False)
+    if proc:
+        _child_processes.append(proc)
+        print(f"✅ Web前端已启动 → http://127.0.0.1:{port}")
+    return proc
 
 
 # ════════════════════════════════════════════════
@@ -372,6 +425,11 @@ def main():
         return
 
     # ── 正常启动流程 ──
+    atexit.register(_cleanup_children)
+    signal.signal(signal.SIGINT, _signal_handler)
+    if platform.system() != "Windows":
+        signal.signal(signal.SIGTERM, _signal_handler)
+
     print("=" * 50)
     print("🏮 活纸江湖 · 统一启动器")
     print("=" * 50)
@@ -385,7 +443,7 @@ def main():
     if not is_backend_running(port=backend_port):
         backend_proc = start_backend(
             backend_port,
-            frontend_port=web_port if frontend_mode == "web" else None
+            frontend_port=web_port
         )
         if not backend_proc and not is_backend_running(port=backend_port):
             print("\n❌ 无法启动后端，请检查Python依赖:")
@@ -411,6 +469,21 @@ def main():
     else:
         print("📍 Godot编辑器已打开，按 F5 运行游戏")
     print()
+
+    # 3. 监控循环（仅 web 模式）
+    if frontend_mode == "web":
+        print("📡 监控服务运行中 (Ctrl+C 退出)...")
+        try:
+            while True:
+                time.sleep(10)
+                if not is_backend_running(port=backend_port):
+                    print("⚠️ 后端已停止，尝试重启...")
+                    new_proc = start_backend(backend_port, frontend_port=web_port)
+                    if new_proc:
+                        print("✅ 后端已重启")
+        except KeyboardInterrupt:
+            print("\n👋 正在停止所有服务...")
+            _cleanup_children()
 
 
 if __name__ == "__main__":
