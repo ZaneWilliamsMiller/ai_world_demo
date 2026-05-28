@@ -17,7 +17,7 @@ window.App = window.App || {};
       const str = String(text);
       const div = document.createElement('div');
       div.textContent = str;
-      return div.innerHTML;
+      return div.innerHTML.replace(/'/g, '&#39;');
     },
 
     // 安全设置元素的 innerHTML（自动转义）
@@ -116,7 +116,7 @@ window.App = window.App || {};
     const inv = p.inventory || {};
     let html = "";
     Object.keys(inv).forEach(function(k) {
-      html += "<span class='inv-item' data-item='" + HtmlUtils.escape(k) + "'>" + HtmlUtils.escape(k) + "\u00d7" + HtmlUtils.escape(inv[k]) + "</span>";
+      html += "<span class='inv-item' data-item=\"" + HtmlUtils.escape(k) + "\">" + HtmlUtils.escape(k) + "\u00d7" + HtmlUtils.escape(inv[k]) + "</span>";
     });
     const statInv = document.getElementById("statInv");
     HtmlUtils.setSafeHtml(statInv,

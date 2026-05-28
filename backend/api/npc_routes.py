@@ -59,14 +59,14 @@ class TalkBody(BaseModel):
     llm_model: str | None = Field(None, description="自定义LLM模型名称")
 
 class UseItemBody(BaseModel):
-    player_id: str
+    player_id: str = Field(..., min_length=1)
     item: str = Field(..., min_length=1, max_length=20, description="物品名")
 
 class RestBody(BaseModel):
-    player_id: str
+    player_id: str = Field(..., min_length=1)
 
 class FinaleBody(BaseModel):
-    player_id: str
+    player_id: str = Field(..., min_length=1)
     closing_note: str | None = Field(None, max_length=600)
 
 class AgentActBody(BaseModel):
@@ -106,6 +106,8 @@ async def use_item(body: UseItemBody) -> dict[str, Any]:
         raise HTTPException(404, f"未知 player_id: {body.player_id}")
     if getattr(p, "dead", False):
         raise HTTPException(400, "角色已故，物无所用。")
+    if p.ended:
+        raise HTTPException(400, "本局已收束")
     if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
         raise HTTPException(409, "你正处于昏迷状态，无法使用物品。")
 
@@ -525,17 +527,17 @@ from backend.systems.bounty_board import (
 )
 
 class RefreshBountyBody(BaseModel):
-    player_id: str
+    player_id: str = Field(..., min_length=1)
 
 class AcceptBountyBody(BaseModel):
-    player_id: str
-    bounty_id: str
+    player_id: str = Field(..., min_length=1)
+    bounty_id: str = Field(..., min_length=1, max_length=32)
 
 class CompleteBountyBody(BaseModel):
-    player_id: str
+    player_id: str = Field(..., min_length=1)
 
 class AbandonBountyBody(BaseModel):
-    player_id: str
+    player_id: str = Field(..., min_length=1)
 
 
 @router.post("/api/bounty/refresh")
@@ -548,6 +550,8 @@ async def bounty_refresh(body: RefreshBountyBody) -> dict[str, Any]:
         raise HTTPException(400, "角色已故，无法操作悬赏。")
     if p.ended:
         raise HTTPException(400, "本局已收束，无法操作悬赏。")
+    if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
+        raise HTTPException(409, "你正处于昏迷状态，无法操作悬赏。")
     refresh_bounties(p)
     if not p.bounties:
         p.bounties = generate_bounties(p, count=3)
@@ -565,6 +569,8 @@ async def bounty_accept(body: AcceptBountyBody) -> dict[str, Any]:
         raise HTTPException(400, "角色已故，无法操作悬赏。")
     if p.ended:
         raise HTTPException(400, "本局已收束，无法操作悬赏。")
+    if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
+        raise HTTPException(409, "你正处于昏迷状态，无法操作悬赏。")
     ok, msg = accept_bounty(p, body.bounty_id)
     return {"ok": ok, "message": msg}
 
@@ -579,6 +585,8 @@ async def bounty_check(body: CompleteBountyBody) -> dict[str, Any]:
         raise HTTPException(400, "角色已故，无法操作悬赏。")
     if p.ended:
         raise HTTPException(400, "本局已收束，无法操作悬赏。")
+    if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
+        raise HTTPException(409, "你正处于昏迷状态，无法操作悬赏。")
     progress = check_bounty_progress(p)
     if progress is None:
         return {"has_active": False}
@@ -595,6 +603,8 @@ async def bounty_complete(body: CompleteBountyBody) -> dict[str, Any]:
         raise HTTPException(400, "角色已故，无法操作悬赏。")
     if p.ended:
         raise HTTPException(400, "本局已收束，无法操作悬赏。")
+    if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
+        raise HTTPException(409, "你正处于昏迷状态，无法操作悬赏。")
     ok, msg, reward = complete_bounty(p)
     return {"ok": ok, "message": msg, "reward": reward}
 
@@ -609,5 +619,7 @@ async def bounty_abandon(body: AbandonBountyBody) -> dict[str, Any]:
         raise HTTPException(400, "角色已故，无法操作悬赏。")
     if p.ended:
         raise HTTPException(400, "本局已收束，无法操作悬赏。")
+    if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
+        raise HTTPException(409, "你正处于昏迷状态，无法操作悬赏。")
     ok, msg = abandon_bounty(p)
     return {"ok": ok, "message": msg}

@@ -33,7 +33,8 @@ window.App = window.App || {};
     npcName = npcName ? npcName.name : "NPC";
 
     try {
-      var reader = await App.talkStream(App.selectedNpcId, msg);
+      var reader = null;
+      reader = await App.talkStream(App.selectedNpcId, msg);
       
       var msgDiv = App.addMsg("npc", {speaker: npcName, text: "..."}, false);
       var textEl = msgDiv.querySelector(".msg-text");
@@ -108,7 +109,7 @@ window.App = window.App || {};
       }
       App.addMsg("system", errorMsg);
     } finally {
-      try { reader.releaseLock(); } catch (e) { /* already released */ }
+      if (reader) try { reader.releaseLock(); } catch (e) { /* already released */ }
     }
 
     App.isStreaming = false;
