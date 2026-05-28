@@ -74,7 +74,7 @@ func _on_poll_timeout() -> void:
 func hello(p_name: String, p_gender: String, p_permadeath: bool) -> void:
 	## Start a new game.
 	print("[GM] hello() called: name=%s gender=%s permadeath=%s" % [p_name, p_gender, p_permadeath])
-	player_id = "godot_%d" % (Time.get_unix_time_from_system())
+	player_id = "godot_%d_%d" % [Time.get_unix_time_from_system(), Time.get_ticks_usec() % 100000]
 	display_name = p_name
 
 	var body := {

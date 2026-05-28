@@ -181,10 +181,15 @@ window.App = window.App || {};
       console.error("[App] createPlayer FAILED:", e);
       // 用页面内提示代替 alert（避免被浏览器拦截）
       const errDiv = document.createElement("div");
+      errDiv.className = "login-error";
       errDiv.style.cssText = "color:#ef5350;margin-top:8px;font-size:13px;";
       errDiv.textContent = "❌ 创建角色失败：" + e.message;
       const loginFormEl = DOM.loginForm || document.getElementById("loginForm");
-      if (loginFormEl) loginFormEl.appendChild(errDiv);
+      if (loginFormEl) {
+        var oldErr = loginFormEl.querySelector(".login-error");
+        if (oldErr) oldErr.remove();
+        loginFormEl.appendChild(errDiv);
+      }
       if (btn) { btn.disabled = false; btn.textContent = "踏入江湖"; }
     }
   };
@@ -266,7 +271,7 @@ window.App = window.App || {};
     if (!App.playerId) return;
     try {
       App.addMsg("system", "正在休息...");
-      const data = await App.doRest();
+      const data = await App.rest();
       if (data) {
         App.addMsg("system", data.message || "休息完毕");
         if (data.player) App.updateUI(data);
@@ -283,7 +288,7 @@ window.App = window.App || {};
       "确定要结束这段江湖旅程吗？<br><br>⚠️ <b>此操作不可逆</b>",
       async function() {
         try {
-          const data = await App.doFinale();
+          const data = await App.finale();
           if (data) {
             if (data.epilogue) {
               App.addMsg("system", "【" + (data.ending_label || "江湖路尽") + "】");

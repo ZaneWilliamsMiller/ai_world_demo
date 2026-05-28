@@ -244,6 +244,9 @@ func _update_map_player() -> void:
 # ═══════════════════════════════════════════════════════
 #  Dialogue — 对话系统
 # ═══════════════════════════════════════════════════════
+var _stream_timeout_msec: int = 0
+const STREAM_TIMEOUT_MSEC: int = 120000
+
 func _on_send() -> void:
 	if _is_streaming: return
 	var text := _msg_input.text.strip_edges()
@@ -264,6 +267,7 @@ func _on_send() -> void:
 	_is_streaming = true
 	_send_btn.disabled = true
 	GameManager.is_streaming = true
+	_stream_timeout_msec = Time.get_ticks_msec()
 
 	_msg_display.add_chat(GameColors.ACCENT2, npc_name, "...")
 	var npc_msg_index: int = _msg_display.msg_count() - 1
@@ -285,6 +289,9 @@ func _on_send() -> void:
 
 func _on_stream_chunk(text: String) -> void:
 	if not _is_streaming: return
+	if _stream_timeout_msec > 0 and (Time.get_ticks_msec() - _stream_timeout_msec) > STREAM_TIMEOUT_MSEC:
+		_on_stream_done({"error": "对话超时，请重试"})
+		return
 	_stream_text += text
 	var bb := "[b][color=#%s]%s[/color][/b]\n%s" % [GameColors.ACCENT2.to_html(false), _stream_npc_name.replace("[", "[lb]"), _stream_text.replace("[", "[lb]")]
 	_msg_display.update_msg(_stream_npc_msg_index, bb)

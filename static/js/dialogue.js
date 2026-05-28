@@ -38,11 +38,31 @@ window.App = window.App || {};
       var msgDiv = App.addMsg("npc", {speaker: npcName, text: "..."}, false);
       var textEl = msgDiv.querySelector(".msg-text");
       var visibleText = "";
-      
+
       var decoder = new TextDecoder();
       var buf = "";
       var receivedDone = false;
       var _rafPending = false;
+      var _streamTimeout = null;
+
+      function _resetStreamState() {
+        App.isStreaming = false;
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = "发送";
+          btn.classList.remove("streaming");
+        }
+        if (cancelBtn) cancelBtn.classList.remove("visible");
+        if (_streamTimeout) clearTimeout(_streamTimeout);
+        if (textEl) textEl.textContent = visibleText;
+        App.scrollToBottom();
+      }
+
+      _streamTimeout = setTimeout(function() {
+        visibleText += "\n[对话超时，回复可能不完整]";
+        _resetStreamState();
+        reader && reader.cancel && reader.cancel().catch(function(){});
+      }, 120000);
 
       while (true) {
         var chunk = await reader.read();
@@ -118,16 +138,7 @@ window.App = window.App || {};
       App._streamAbortController = null;
     }
 
-    App.isStreaming = false;
-    var cancelBtn2 = document.getElementById("cancelStreamBtn");
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = "发送";
-      btn.classList.remove("streaming");
-    }
-    if (cancelBtn2) cancelBtn2.classList.remove("visible");
-    textEl && (textEl.textContent = visibleText);
-    App.scrollToBottom();
+    _resetStreamState();
   };
 
 })(window.App);

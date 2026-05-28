@@ -37,13 +37,13 @@ router = APIRouter()
 
 
 class HelloBody(BaseModel):
-    player_id: str | None = None
-    display_name: str | None = None
+    player_id: str | None = Field(None, min_length=1, max_length=64)
+    display_name: str | None = Field(None, min_length=1, max_length=24)
     gender: str = Field(default="未言", pattern="^(男|女|未言)$")
     permadeath: bool = False
 
 class MoveBody(BaseModel):
-    player_id: str
+    player_id: str = Field(..., min_length=1, max_length=64)
     to_x: int = Field(..., ge=0, le=149)
     to_y: int = Field(..., ge=0, le=99)
 
@@ -278,14 +278,15 @@ async def _bg_encounter(player_id: str) -> None:
             return
         enc = await generate_dynamic_encounter(p)
         if enc:
-            apply_encounter(p, enc)
+            async with p.lock:
+                apply_encounter(p, enc)
     except Exception as e:
         import logging
         logging.getLogger("routes").warning("_bg_encounter failed for player=%s: %s", player_id, e)
 
 
 @router.get("/api/state/{player_id}")
-async def get_state(player_id: str) -> dict[str, Any]:
+async def get_state(player_id: str = Field(..., min_length=1, max_length=64)) -> dict[str, Any]:
     from backend.session.store import room
     p = room.players.get(player_id)
     if not p:
@@ -315,7 +316,7 @@ async def get_state(player_id: str) -> dict[str, Any]:
 
 
 @router.get("/api/journal/{player_id}")
-async def journal(player_id: str) -> dict[str, Any]:
+async def journal(player_id: str = Field(..., min_length=1, max_length=64)) -> dict[str, Any]:
     from backend.session.store import room
     p = room.players.get(player_id)
     if not p:

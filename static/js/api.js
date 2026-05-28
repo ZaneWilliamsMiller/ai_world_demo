@@ -148,7 +148,7 @@ window.App = window.App || {};
     return await backendPost("/api/save", { player_id: App.playerId });
   };
 
-  App.doRest = async function() {
+  App.rest = async function() {
     if (App.apiMode !== "backend") return null;
     return await backendPost("/api/rest", { player_id: App.playerId });
   };
@@ -158,7 +158,7 @@ window.App = window.App || {};
     return await backendPost("/api/item/use", { player_id: App.playerId, item: itemName });
   };
 
-  App.doFinale = async function() {
+  App.finale = async function() {
     if (App.apiMode !== "backend") return null;
     return await backendPost("/api/finale", { player_id: App.playerId });
   };

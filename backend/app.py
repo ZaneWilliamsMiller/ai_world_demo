@@ -105,8 +105,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
     allow_credentials=_creds,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Shutdown-Secret"],
 )
 
 app.include_router(api_router)

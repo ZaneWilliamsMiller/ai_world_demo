@@ -175,8 +175,14 @@ func talk_stream(npc_id: String, message: String, player_id: String = "", llm_ba
 		emit_signal("stream_done", {"error": "connect_failed", "done": true})
 		return
 
+	var _connect_start_msec := Time.get_ticks_msec()
 	while http.get_status() == HTTPClient.STATUS_CONNECTING or http.get_status() == HTTPClient.STATUS_RESOLVING:
 		http.poll()
+		if (Time.get_ticks_msec() - _connect_start_msec) > 15000:
+			http.close()
+			_active_stream_http = null
+			emit_signal("stream_done", {"error": "连接超时(15s)", "done": true})
+			return
 		await get_tree().process_frame
 
 	if http.get_status() != HTTPClient.STATUS_CONNECTED:
@@ -199,8 +205,14 @@ func talk_stream(npc_id: String, message: String, player_id: String = "", llm_ba
 		emit_signal("stream_done", {"error": "request_failed", "done": true})
 		return
 
+	var _request_start_msec := Time.get_ticks_msec()
 	while http.get_status() == HTTPClient.STATUS_REQUESTING:
 		http.poll()
+		if (Time.get_ticks_msec() - _request_start_msec) > 30000:
+			http.close()
+			_active_stream_http = null
+			emit_signal("stream_done", {"error": "请求超时(30s)", "done": true})
+			return
 		await get_tree().process_frame
 
 	if http.get_status() != HTTPClient.STATUS_BODY:

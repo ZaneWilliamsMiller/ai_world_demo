@@ -94,8 +94,11 @@ window.App = window.App || {};
       html += "<span class='inv-item' data-item=\"" + HtmlUtils.escape(k) + "\">" + HtmlUtils.escape(k) + "\u00d7" + HtmlUtils.escape(inv[k]) + "</span>";
     });
     const statInv = document.getElementById("statInv");
-    HtmlUtils.setSafeHtml(statInv,
-      html || "<span style='color:#555;'>\u8eab\u65e0\u957f\u7269</span>");
+    if (html) {
+      statInv.innerHTML = html;
+    } else {
+      statInv.innerHTML = "<span style='color:#555;'>\u8eab\u65e0\u957f\u7269</span>";
+    }
     statInv.querySelectorAll(".inv-item").forEach(function(el) {
       el.addEventListener("click", function() {
         var name = el.getAttribute("data-item");
@@ -108,22 +111,23 @@ window.App = window.App || {};
     App.npcsHere = data.npcs_here || [];
 
     var ul = document.getElementById("npcList");
-    ul.innerHTML = "";
     if (!App.npcsHere || App.npcsHere.length === 0) {
       ul.innerHTML = '<div style="color:var(--text-muted);padding:8px;font-size:12px;">附近无人，试试移动到其他地点</div>';
+    } else {
+      ul.innerHTML = "";
+      App.npcsHere.forEach(function(n) {
+        const li = document.createElement("li");
+        li.innerHTML = '<span class="npc-dot"></span>' + HtmlUtils.escape(n.name);
+        li.onclick = function() {
+          App.selectedNpcId = n.id;
+          renderNpcBar(data);
+          setNpcSelect(n.id);
+          document.getElementById("msgInput").focus();
+        };
+        if (n.id === App.selectedNpcId) li.classList.add("selected");
+        ul.appendChild(li);
+      });
     }
-    App.npcsHere.forEach(function(n) {
-      const li = document.createElement("li");
-      li.innerHTML = '<span class="npc-dot"></span>' + HtmlUtils.escape(n.name);
-      li.onclick = function() {
-        App.selectedNpcId = n.id;
-        renderNpcBar(data);
-        setNpcSelect(n.id);
-        document.getElementById("msgInput").focus();
-      };
-      if (n.id === App.selectedNpcId) li.classList.add("selected");
-      ul.appendChild(li);
-    });
 
     const sel = document.getElementById("npcSelect");
     const oldVal = sel.value;

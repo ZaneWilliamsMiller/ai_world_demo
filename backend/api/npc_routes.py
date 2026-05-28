@@ -223,7 +223,7 @@ async def npc_talk(body: TalkBody, bg: BackgroundTasks) -> dict[str, Any]:
             "npc_talk UNHANDLED ERROR for npc=%s player=%s:\n%s",
             body.npc_id, body.player_id, traceback.format_exc()
         )
-        raise HTTPException(500, f"NPC对话处理失败: {type(e).__name__}: {str(e)[:200]}")
+        raise HTTPException(500, "NPC对话处理失败，请稍后重试")
 
 
 @router.post("/api/npc/talk_stream")
