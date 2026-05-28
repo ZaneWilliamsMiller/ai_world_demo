@@ -36,6 +36,7 @@ from backend.systems.pathfinding import tile_at
 from backend.systems.time_weather import shichen_name, is_night
 from backend.data.zones import is_safe_zone
 from backend.llm_params import ENCOUNTER_TEMPERATURE, ENCOUNTER_MAX_TOKENS
+from backend.systems.constants import RECENT_THRESHOLD_S
 
 log = logging.getLogger("encounter")
 
@@ -318,9 +319,6 @@ def format_encounter_perception_block(mind: "mem.AgentMind", world_shichen: str)
     """
     import time as _time
     now = _time.time()
-    # 只取最近2小时内的感知记忆（6时辰 ≈ 12小时，2小时约为1-2个时辰）
-    RECENT_THRESHOLD_S = 7200.0
-
     encounter_perceptions = []
     for m in mind.items:
         if m.kind != "observation":

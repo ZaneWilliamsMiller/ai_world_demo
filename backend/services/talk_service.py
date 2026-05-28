@@ -61,6 +61,7 @@ from backend.systems.time_weather import shichen_name, advance_clock, is_night
 from backend.views import player_public, npcs_here
 from backend.llm_client import chat_completion, parse_npc_reply_json, cached_system
 from backend.models.llm_schema import NpcResponseSchema
+from backend.game_state import get_or_init_mind
 from backend.systems.encounter import format_encounter_perception_block
 from backend.memory import format_insight_block
 from backend.data.relationships import relationship_context

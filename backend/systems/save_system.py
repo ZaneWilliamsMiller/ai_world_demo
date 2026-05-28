@@ -153,14 +153,14 @@ def _deserialize_player(data: dict[str, Any]) -> PlayerState:
                 continue
 
     # 兼容：没有这些字段的老存档
-    if not hasattr(p, "vigor_max") or not p.vigor_max:
+    if not getattr(p, "vigor_max", None) or int(p.vigor_max) <= 0:
         p.vigor_max = INITIAL_VIGOR_MAX
-    if not hasattr(p, "spirit_max") or not p.spirit_max:
+    if not getattr(p, "spirit_max", None) or int(p.spirit_max) <= 0:
         p.spirit_max = INITIAL_SPIRIT_MAX
-    if int(getattr(p, "vigor", 0)) <= 0:
-        p.vigor = INITIAL_VIGOR
-    if int(getattr(p, "spirit", 0)) <= 0:
-        p.spirit = INITIAL_SPIRIT
+    if int(getattr(p, "vigor", 0)) < 0:
+        p.vigor = 0
+    if int(getattr(p, "spirit", 0)) < 0:
+        p.spirit = 0
 
     from backend.data.maps_data import MAPS
     if p.map_id not in MAPS:

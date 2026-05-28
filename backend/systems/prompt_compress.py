@@ -12,6 +12,7 @@ import logging
 from typing import Any
 
 from backend.llm_client import chat_completion
+from backend.llm_params import COMPRESS_TEMPERATURE, COMPRESS_MAX_TOKENS
 
 log = logging.getLogger("compress")
 

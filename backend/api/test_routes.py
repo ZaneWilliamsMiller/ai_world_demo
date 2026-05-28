@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Path as FastPath
 from pydantic import BaseModel
 
 TESTS_DIR = Path(__file__).resolve().parents[2] / "tests"
@@ -66,7 +66,7 @@ async def list_tests():
 
 
 @router.post("/run/{test_name}")
-async def run_test(test_name: str):
+async def run_test(test_name: str = FastPath(..., min_length=1, max_length=64, pattern=r'^[a-zA-Z_][a-zA-Z0-9_]*$')):
     """执行指定的测试脚本"""
     if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', test_name):
         raise HTTPException(400, "无效的测试名称")
