@@ -146,15 +146,15 @@ async def shutdown_server(request: Request):
         raise HTTPException(403, "无权关闭服务")
 
     frontend_port = os.environ.get("FRONTEND_PORT")
+    frontend_host = os.environ.get("FRONTEND_HOST", "127.0.0.1")
 
     shutdown_log = _log.getChild("shutdown")
     shutdown_log.info("收到关闭请求")
     shutdown_log.info("前端端口: %s", frontend_port)
 
-    # 通知前端服务器关闭
     if frontend_port:
         try:
-            frontend_url = f"http://127.0.0.1:{frontend_port}/__shutdown__"
+            frontend_url = f"http://{frontend_host}:{frontend_port}/__shutdown__"
             shutdown_log.info("通知前端服务器关闭: %s", frontend_url)
 
             def notify_frontend():

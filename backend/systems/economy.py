@@ -3,6 +3,7 @@ from __future__ import annotations
 from backend.models.player import PlayerState
 from backend.data.maps_data import MAPS
 from backend.data.zones import zone_price_mod
+from backend.systems.constants import MAX_COIN_DELTA, MAX_ITEM_NAME_LEN
 
 # ════════════════════════════════════════════════════════════════════
 #  物品定价表 — 江湖百业行情（单位：制钱/文）

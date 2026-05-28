@@ -29,6 +29,7 @@ from backend.systems.constants import (
     HAZARD_MAX_DEATH_PROB,
     HAZARD_COIN_POOR_THRESHOLD,
     HAZARD_COIN_RICH_THRESHOLD,
+    HAZARD_REP_PROTECT_THRESHOLD,
 )
 from backend.systems.pathfinding import tile_at, is_dangerous
 from backend.systems.time_weather import is_night, shichen_name, shichen_phase
@@ -187,9 +188,9 @@ def hazard_roll_death(p: PlayerState) -> str | None:
     rep_mult = 1.0
     lulin = int(p.reputation.get("lulin", 0))
     caobang = int(p.reputation.get("caobang", 0))
-    if ch in ("&", "I") and lulin >= HAZARD_COIN_POOR_THRESHOLD:
+    if ch in ("&", "I") and lulin >= HAZARD_REP_PROTECT_THRESHOLD:
         rep_mult *= HAZARD_LULIN_PROTECT_MULT
-    if ch == "~" and caobang >= HAZARD_COIN_POOR_THRESHOLD:
+    if ch == "~" and caobang >= HAZARD_REP_PROTECT_THRESHOLD:
         rep_mult *= HAZARD_CAOBANG_PROTECT_MULT
     if ch == "I":
         if p.coins <= HAZARD_COIN_POOR_THRESHOLD:

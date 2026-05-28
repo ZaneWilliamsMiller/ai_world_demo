@@ -8,7 +8,7 @@ import time
 import traceback
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends, Path
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from collections import defaultdict
@@ -334,7 +334,7 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
 
 
 @router.get("/api/agent/{player_id}/{npc_id}/mind")
-async def agent_mind(player_id: str, npc_id: str) -> dict[str, Any]:
+async def agent_mind(player_id: str = Path(..., min_length=1, max_length=64), npc_id: str = Path(..., min_length=1, max_length=64)) -> dict[str, Any]:
     from backend.session.store import room
     p = room.players.get(player_id)
     if not p:

@@ -17,6 +17,14 @@ from backend.systems.constants import (
 )
 
 
+def _default_flags() -> dict[str, int]:
+    return {"order": 0, "truth": 0, "hope": 0, "chaos": 0}
+
+
+def _default_reputation() -> dict[str, int]:
+    return {k: 0 for k in FACTIONS.keys()}
+
+
 @dataclass
 class PlayerState:
     player_id: str
@@ -29,9 +37,7 @@ class PlayerState:
     px: int = INITIAL_PX
     py: int = INITIAL_PY
     coins: int = INITIAL_COINS
-    flags: dict[str, int] = field(
-        default_factory=lambda: {"order": 0, "truth": 0, "hope": 0, "chaos": 0}
-    )
+    flags: dict[str, int] = field(default_factory=_default_flags)
     history: dict[str, list[dict[str, str]]] = field(default_factory=dict)
     favor: dict[str, int] = field(default_factory=dict)
     rumors: list[str] = field(default_factory=list)
@@ -60,7 +66,7 @@ class PlayerState:
     weather: str = "薄阴"
     # 库存、声望、事件流
     inventory: dict[str, int] = field(default_factory=dict)
-    reputation: dict[str, int] = field(default_factory=lambda: {k: 0 for k in FACTIONS.keys()})
+    reputation: dict[str, int] = field(default_factory=_default_reputation)
     events: list[dict[str, Any]] = field(default_factory=list)
     # 每个 NPC 在本玩家会话下的「心智」（记忆流 + 当日计划）
     minds: dict[str, AgentMind] = field(default_factory=dict)

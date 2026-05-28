@@ -395,7 +395,3 @@ def condense_old_observations(mind: Any, world_day: int, world_shichen: str) -> 
     ), _skip_evolve=True)
 
     return len(to_condense)
-
-
-# 类型别名
-from typing import Any
