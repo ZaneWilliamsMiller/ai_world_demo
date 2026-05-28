@@ -7,12 +7,19 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.data.maps_data import MAPS, MAP_LOCATIONS
+from backend.data.maps_data import MAPS, MAP_LOCATIONS, MAP_AMBUSH_MARKERS
 from backend.data.npcs_data import NPCS
 from backend.data.factions import FACTIONS
+from backend.data.prompts import WORLD_NAME, FIXED_INTRO
 from backend.models.player import PlayerState
-from backend.systems.core import npc_ids_for_player, npc_catalog_for_player
+from backend.systems.core import npc_ids_for_player, npc_catalog_for_player, perception_scan, danger_sense_narrative
 from backend.systems.time_weather import shichen_name, is_night, shichen_phase
+
+_maps_cache: dict | None = None
+_factions_cache: dict | None = None
+_map_locations_cache: dict | None = None
+_npc_labels_cache: dict | None = None
+_ambush_markers_cache: list | None = None
 
 
 def player_public(p: PlayerState) -> dict[str, Any]:
@@ -69,21 +76,75 @@ def npc_catalog(p: PlayerState) -> list[dict[str, Any]]:
 
 
 def maps_public() -> dict[str, Any]:
-    """返回公开地图信息。"""
+    global _maps_cache
+    if _maps_cache is not None:
+        return _maps_cache
     out: dict[str, Any] = {}
     for mid, m in MAPS.items():
         out[mid] = {"name": m["name"], "rows": m["rows"], "portals": m.get("portals", [])}
-    return out
+    _maps_cache = out
+    return _maps_cache
 
 
 def map_locations_public() -> dict[str, dict[str, list[int]]]:
-    """返回地点坐标映射，供前端渲染标签。"""
+    global _map_locations_cache
+    if _map_locations_cache is not None:
+        return _map_locations_cache
     out: dict[str, dict[str, list[int]]] = {}
     for mid, locs in MAP_LOCATIONS.items():
         out[mid] = {name: list(pos) for name, pos in locs.items()}
-    return out
+    _map_locations_cache = out
+    return _map_locations_cache
 
 
 def factions_public() -> dict[str, str]:
-    """返回公开势力信息。"""
-    return dict(FACTIONS)
+    global _factions_cache
+    if _factions_cache is not None:
+        return _factions_cache
+    _factions_cache = dict(FACTIONS)
+    return _factions_cache
+
+
+def npc_labels_public() -> dict[str, str]:
+    global _npc_labels_cache
+    if _npc_labels_cache is not None:
+        return _npc_labels_cache
+    _npc_labels_cache = {nid: v["name"] for nid, v in NPCS.items()}
+    return _npc_labels_cache
+
+
+def ambush_markers_public() -> list:
+    global _ambush_markers_cache
+    if _ambush_markers_cache is not None:
+        return _ambush_markers_cache
+    _ambush_markers_cache = list(MAP_AMBUSH_MARKERS)
+    return _ambush_markers_cache
+
+
+def build_init_response(p: PlayerState) -> dict[str, Any]:
+    scan = perception_scan(p)
+    danger_sense = danger_sense_narrative(p, scan) if scan else None
+    return {
+        "player_id": p.player_id,
+        "display_name": p.display_name,
+        "world_name": WORLD_NAME,
+        "intro": FIXED_INTRO,
+        "maps": maps_public(),
+        "npc_catalog": npc_catalog(p),
+        "player": player_public(p),
+        "npcs_here": npcs_here(p),
+        "danger_sense": {
+            "alert": danger_sense or None,
+            "scan": scan,
+        },
+        "flags": p.flags,
+        "ended": p.ended,
+        "ending_label": p.ending_label,
+        "favor": dict(p.favor),
+        "rumors": list(p.rumors),
+        "npc_labels": npc_labels_public(),
+        "ambush_markers": ambush_markers_public(),
+        "factions": factions_public(),
+        "map_locations": map_locations_public(),
+        "events": list(p.events[-10:]),
+    }

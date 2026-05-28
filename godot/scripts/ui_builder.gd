@@ -1,4 +1,6 @@
 class_name UIBuilder
+
+var start_btn: Button
 ## UIBuilder — 活纸 · 江湖行纪 UI 构建器
 ## UI Builder for Login Screen, Game Main UI, and Style Helpers
 ##
@@ -76,9 +78,12 @@ func build_login(parent: Control, on_start: Callable, on_load: Callable,
 		var g: String = "未言"
 		var sel: int = gender_sel.get_selected_id()
 		if sel >= 0 and sel <= 2: g = ["男","女","未言"][sel]
+		start_btn.text = "⏳ 进入江湖..."
+		start_btn.disabled = true
 		on_start.call(nm, g, pd_cb.button_pressed)
 	)
 	vb.add_child(start_btn)
+	self.start_btn = start_btn
 
 	var load_btn := btn("载入旧档 →", Color(0.5,0.5,0.5))
 	load_btn.pressed.connect(on_load)
@@ -116,8 +121,7 @@ func build_load_dialog(parent: Control, saves: Array, on_select: Callable, on_cl
 	add_panel_style(box)
 	popup.add_child(box)
 	popup.resized.connect(func():
-		var ps: Vector2 = popup.size
-		box.position = (ps - Vector2(320, 300)) / 2.0
+		center_in_parent(box, popup.size, Vector2(320, 300))
 	)
 	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 6)
 	vb.set_anchors_preset(PRESET_FULL_RECT); box.add_child(vb)
@@ -427,6 +431,10 @@ func build_game_ui(parent: Control, on_tile_click: Callable, on_npc_map_click: C
 ## 创建半透明遮罩层 (右键关闭)
 ## [param parent] 父节点
 ## returns ColorRect 遮罩节点
+static func center_in_parent(panel: Control, parent_size: Vector2, panel_size: Vector2) -> void:
+	panel.position = (parent_size - panel_size) / 2.0
+
+
 static func overlay(parent: Control) -> ColorRect:
 	var o := ColorRect.new(); o.color = Color(0,0,0,0.75)
 	o.set_anchors_preset(PRESET_FULL_RECT)
@@ -555,8 +563,8 @@ static func btn(text: String, bg: Color) -> Button:
 ## [param name] NPC 名称
 ## [param _id] NPC ID (预留)
 ## returns Panel 条目节点
-static func npc_entry(name: String, _id: String) -> Panel:
-	var p := Panel.new()
+static func npc_entry(name: String, _id: String, on_click: Callable = Callable()) -> PanelContainer:
+	var p := PanelContainer.new()
 	p.custom_minimum_size = Vector2(0, 30)
 	var esb := StyleBoxFlat.new()
 	esb.bg_color = Color(0,0,0,0)
@@ -564,6 +572,7 @@ static func npc_entry(name: String, _id: String) -> Panel:
 	esb.content_margin_left = 6; esb.content_margin_right = 6
 	esb.content_margin_top = 4; esb.content_margin_bottom = 4
 	p.add_theme_stylebox_override("panel", esb)
+	p.mouse_filter = Control.MOUSE_FILTER_STOP
 
 	var hb := HBoxContainer.new()
 	hb.set_anchors_preset(PRESET_FULL_RECT)
@@ -576,4 +585,13 @@ static func npc_entry(name: String, _id: String) -> Panel:
 	hb.add_child(dot)
 
 	hb.add_child(lbl(name, 12, GameColors.TEXT))
+
+	if on_click.is_valid():
+		p.gui_input.connect(func(ev):
+			if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+				on_click.call()
+		)
+		var hover_sb := esb.duplicate()
+		hover_sb.bg_color = Color(1, 1, 1, 0.05)
+		p.add_theme_stylebox_override("hover", hover_sb)
 	return p

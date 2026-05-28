@@ -66,7 +66,14 @@ window.App = window.App || {};
             }
             if (d.done) {
               receivedDone = true;
-              if (d.player) App.fetchState().then(App.updateUI);
+              if (d.player) {
+                var stateData = d.player;
+                if (d.npcs_here) stateData = { player: d.player, npcs_here: d.npcs_here };
+                App.updateUI(stateData);
+              }
+              if (!d.player) {
+                App.fetchState().then(function(data) { if (data) App.updateUI(data); });
+              }
               break;
             }
           } catch (e) { /* 忽略解析错误 */ }

@@ -37,6 +37,7 @@ var _msg_display: MessageDisplay
 # ═══════════════════════════════════════════════════════
 var _login_overlay: Control
 var _game_ui: Control
+var _start_btn: Button
 
 # Map
 var _map_renderer: Node2D
@@ -140,12 +141,21 @@ func _logged_in_deferred() -> void:
 func _build_login() -> void:
 	_login_overlay = _ui_builder.build_login(
 		self,
-		func(nm, g, pd): GameManager.hello(nm, g, pd),
+		func(nm, g, pd): _on_start_pressed(nm, g, pd),
 		func(): _show_load_dialog(),
 		func(): _config_panel.toggle(),
 		func(): _test_center.show_test_center(self, func(text, err=false): _msg_display.add_system_msg_ex(text, err)),
 		func(): _shutdown_service.confirm_and_execute(self)
 	)
+	_start_btn = _ui_builder.start_btn
+
+
+func _on_start_pressed(nm: String, g: String, pd: bool) -> void:
+	await GameManager.hello(nm, g, pd)
+	if _login_overlay and _login_overlay.visible:
+		if _start_btn and is_instance_valid(_start_btn):
+			_start_btn.text = "踏入江湖"
+			_start_btn.disabled = false
 
 
 func _show_load_dialog() -> void:
@@ -253,6 +263,7 @@ func _on_send() -> void:
 	_msg_input.clear()
 	_is_streaming = true
 	_send_btn.disabled = true
+	GameManager.is_streaming = true
 
 	_msg_display.add_chat(GameColors.ACCENT2, npc_name, "...")
 	var npc_msg_index: int = _msg_display.msg_count() - 1
@@ -292,6 +303,7 @@ func _on_stream_done(data: Dictionary) -> void:
 	_is_streaming = false
 	_send_btn.disabled = false
 	_msg_input.grab_focus()
+	GameManager.is_streaming = false
 
 	GameManager.apply_stream_result(data)
 
@@ -340,17 +352,26 @@ func _refresh() -> void:
 	# NPC list in sidebar
 	if _npc_list_container:
 		for c in _npc_list_container.get_children(): c.queue_free()
+		var npc_idx := 0
 		for n in gm.npcs_here:
-			var entry := UIBuilder.npc_entry(n.get("name", n.get("id","?")), n.get("id",""))
+			var idx := npc_idx
+			var entry := UIBuilder.npc_entry(n.get("name", n.get("id","?")), n.get("id",""), func():
+				if idx < _npc_select.item_count:
+					_npc_select.select(idx)
+					gm.selected_npc_id = n.get("id", "")
+					_msg_input.grab_focus()
+			)
 			_npc_list_container.add_child(entry)
+			npc_idx += 1
 
 	# HUD bars & labels
-	_vigor_bar.max_value = gm.player_vigor_max; _vigor_bar.value = gm.player_vigor
+	_vigor_bar.max_value = gm.player_vigor_max; _animate_bar(_vigor_bar, gm.player_vigor)
 	_vigor_label.text = "%d/%d" % [gm.player_vigor, gm.player_vigor_max]
-	_spirit_bar.max_value = gm.player_spirit_max; _spirit_bar.value = gm.player_spirit
+	_spirit_bar.max_value = gm.player_spirit_max; _animate_bar(_spirit_bar, gm.player_spirit)
 	_spirit_label.text = "%d/%d" % [gm.player_spirit, gm.player_spirit_max]
 	_coins_label.text = "💰 %d文" % gm.player_coins
-	_time_label.text = "🧭 第%d日·%s" % [gm.player_world_day, gm.player_world_shichen]
+	var time_icon := "🌙" if gm.player_world_is_night else "☀️"
+	_time_label.text = "%s %s · 第%d天" % [time_icon, gm.player_world_shichen, gm.player_world_day]
 	_weather_label.text = "🌤 %s" % gm.player_weather
 	var mname = gm.maps_data.get(gm.player_map_id,{}).get("name", gm.player_map_id)
 	_map_name_label.text = "📍 %s(%d,%d)" % [mname, gm.player_px, gm.player_py]
@@ -396,6 +417,35 @@ func _refresh() -> void:
 # ═══════════════════════════════════════════════════════
 #  API Mode Indicator — API模式指示器更新回调
 # ═══════════════════════════════════════════════════════
+func _unhandled_input(event: InputEvent) -> void:
+	if not _game_ui.visible or _is_streaming or GameManager._is_moving:
+		return
+	if _msg_input and _msg_input.has_focus():
+		return
+	var dx := 0
+	var dy := 0
+	if event.is_action_pressed("ui_up"):
+		dy = -1
+	elif event.is_action_pressed("ui_down"):
+		dy = 1
+	elif event.is_action_pressed("ui_left"):
+		dx = -1
+	elif event.is_action_pressed("ui_right"):
+		dx = 1
+	else:
+		return
+	get_viewport().set_input_as_handled()
+	GameManager.move_player(GameManager.player_px + dx, GameManager.player_py + dy)
+
+
+func _animate_bar(bar: ProgressBar, new_value: float) -> void:
+	if absf(bar.value - new_value) < 0.5:
+		bar.value = new_value
+		return
+	var tween := create_tween()
+	tween.tween_property(bar, "value", new_value, 0.3).set_trans(Tween.TRANS_SINE)
+
+
 func _on_api_mode_updated(new_text: String, new_color: Color) -> void:
 	_api_mode_indicator.text = new_text
 	_api_mode_indicator.add_theme_color_override("font_color", new_color)

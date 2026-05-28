@@ -314,10 +314,25 @@ func _build_npc_markers() -> void:
 	_build_npc_index()
 	for pos: Vector2i in _npc_at:
 		var npc: Dictionary = _npc_at[pos]
-		var marker := ColorRect.new()
-		marker.color = ACCENT2
-		marker.size = Vector2(6, 6)
-		marker.position = Vector2(pos.x * TILE_SIZE + TILE_SIZE - 6, pos.y * TILE_SIZE + TILE_SIZE - 6)
+		var glow := PanelContainer.new()
+		var glow_sb := StyleBoxFlat.new()
+		glow_sb.bg_color = Color(ACCENT2.r, ACCENT2.g, ACCENT2.b, 0.25)
+		glow_sb.set_corner_radius_all(10)
+		glow.add_theme_stylebox_override("panel", glow_sb)
+		glow.custom_minimum_size = Vector2(20, 20)
+		glow.size = Vector2(20, 20)
+		glow.position = Vector2(pos.x * TILE_SIZE + TILE_SIZE / 2.0 - 10, pos.y * TILE_SIZE + TILE_SIZE / 2.0 - 10)
+		glow.z_index = 4
+		glow.name = "NpcGlow_%s" % npc.get("id", "")
+		_npc_markers.add_child(glow)
+		var marker := PanelContainer.new()
+		var marker_sb := StyleBoxFlat.new()
+		marker_sb.bg_color = ACCENT2
+		marker_sb.set_corner_radius_all(5)
+		marker.add_theme_stylebox_override("panel", marker_sb)
+		marker.custom_minimum_size = Vector2(10, 10)
+		marker.size = Vector2(10, 10)
+		marker.position = Vector2(pos.x * TILE_SIZE + TILE_SIZE / 2.0 - 5, pos.y * TILE_SIZE + TILE_SIZE / 2.0 - 5)
 		marker.z_index = 5
 		marker.name = "NpcMarker_%s" % npc.get("id", "")
 		_npc_markers.add_child(marker)
@@ -364,7 +379,14 @@ func _get_tile_color(x: int, y: int, ch: String) -> Color:
 	var pos: Vector2i = Vector2i(x, y)
 	if _npc_at.has(pos):
 		return Color(ACCENT2.r, ACCENT2.g, ACCENT2.b, 0.7)
-	return TILE_COLORS.get(ch, DEFAULT_TILE)
+	var base := TILE_COLORS.get(ch, DEFAULT_TILE)
+	var brightness_adj := 0.015 if (x + y) % 2 == 0 else -0.015
+	base = Color(
+		clampf(base.r + brightness_adj, 0, 1),
+		clampf(base.g + brightness_adj, 0, 1),
+		clampf(base.b + brightness_adj, 0, 1)
+	)
+	return base
 
 
 func _clear_map() -> void:

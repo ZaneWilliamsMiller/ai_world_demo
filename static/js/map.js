@@ -58,9 +58,8 @@ window.App = window.App || {};
   // ═══════════════════════════════════════════
   var mainCanvas, mainCtx;
   var miniCanvas, miniCtx;
-  var viewW, viewH;             // 主视口像素尺寸
-  var viewCols, viewRows;       // 主视口可见瓦片数
-  var rafId = null;
+  var viewW, viewH;
+  var viewCols, viewRows;
 
   // ─── 地点标签 ───
   var _locationLabels = [];
@@ -76,6 +75,16 @@ window.App = window.App || {};
 
   // ─── 悬停瓦片 ───
   var _hoverX = -1, _hoverY = -1;
+
+  var _dirty = true;
+  var _rafId = null;
+
+  function markDirty() {
+    _dirty = true;
+    if (!_rafId) {
+      _rafId = requestAnimationFrame(renderLoop);
+    }
+  }
 
   // ═══════════════════════════════════════════
   //  初始化 - 优化小地图位置和样式
@@ -140,6 +149,7 @@ window.App = window.App || {};
     var miniH = mapState.rows.length * MINI_TILE;
     miniCanvas.width = miniW;
     miniCanvas.height = miniH;
+    markDirty();
   }
 
   // ═══════════════════════════════════════════
@@ -172,16 +182,23 @@ window.App = window.App || {};
     lerpCamera();
     renderMain();
     renderMini();
-    rafId = requestAnimationFrame(renderLoop);
+
+    var camMoving = Math.abs(cam.x - cam.targetX) > 0.01 || Math.abs(cam.y - cam.targetY) > 0.01;
+
+    if (camMoving || _dirty) {
+      _dirty = false;
+      _rafId = requestAnimationFrame(renderLoop);
+    } else {
+      _rafId = null;
+    }
   }
 
   function startRender() {
-    if (rafId) return;
-    rafId = requestAnimationFrame(renderLoop);
+    markDirty();
   }
 
   function stopRender() {
-    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+    if (_rafId) { cancelAnimationFrame(_rafId); _rafId = null; }
   }
 
   // ═══════════════════════════════════════════
@@ -479,8 +496,13 @@ window.App = window.App || {};
     var rect = mainCanvas.getBoundingClientRect();
     var mx = e.clientX - rect.left;
     var my = e.clientY - rect.top;
-    _hoverX = Math.floor((mx / TILE) + cam.x);
-    _hoverY = Math.floor((my / TILE) + cam.y);
+    var newX = Math.floor((mx / TILE) + cam.x);
+    var newY = Math.floor((my / TILE) + cam.y);
+    if (newX !== _hoverX || newY !== _hoverY) {
+      _hoverX = newX;
+      _hoverY = newY;
+      markDirty();
+    }
   }
 
   function onMiniClick(e) {
@@ -504,6 +526,7 @@ window.App = window.App || {};
     for (var i = 0; i < path.length; i++) {
       _pathSet[path[i][0] + "," + path[i][1]] = true;
     }
+    markDirty();
   }
 
   function clearPath() {
@@ -511,6 +534,7 @@ window.App = window.App || {};
     _animPath = [];
     _animIdx = 0;
     if (_animTimer) { clearInterval(_animTimer); _animTimer = null; }
+    markDirty();
   }
 
   // ═══════════════════════════════════════════
@@ -574,7 +598,8 @@ window.App = window.App || {};
       cam.x = cam.targetX;
       cam.y = cam.targetY;
     }
-
+    playerScreen.initialized = false;
+    markDirty();
     startRender();
   };
 
@@ -615,6 +640,7 @@ window.App = window.App || {};
 
         _animIdx = i;
         updateCameraTarget(step[0], step[1]);
+        markDirty();
 
         await new Promise(function(r) { setTimeout(r, 50); });
       }
@@ -661,6 +687,7 @@ window.App = window.App || {};
 
   App.updatePlayerMarker = function(x, y, state) {
     App._playerMarkerState = state || "normal";
+    markDirty();
   };
 
 })(window.App);

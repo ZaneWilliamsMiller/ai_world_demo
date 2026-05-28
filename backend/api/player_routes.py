@@ -34,7 +34,7 @@ from backend.systems.save_system import save_game, respawn_at_supply_point, dele
 from backend.services.agent_service import bg_plan_for_npcs
 from backend.views import player_public as _player_public, npcs_here as _npcs_here
 from backend.views import npc_catalog as _npc_catalog, maps_public as _maps_public, factions_public as _factions_public
-from backend.views import map_locations_public as _map_locations_public
+from backend.views import map_locations_public as _map_locations_public, build_init_response
 
 router = APIRouter()
 
@@ -58,32 +58,7 @@ async def hello(body: HelloBody) -> dict[str, Any]:
     p = await room.get_or_create(body.player_id, body.display_name, body.gender, body.permadeath)
     init_npc_positions(p)
     init_npc_inventories(p)
-    scan = perception_scan(p)
-    danger_sense = danger_sense_narrative(p, scan) if scan else None
-    return {
-        "player_id": p.player_id,
-        "display_name": p.display_name,
-        "world_name": WORLD_NAME,
-        "intro": FIXED_INTRO,
-        "maps": _maps_public(),
-        "npc_catalog": _npc_catalog(p),
-        "player": _player_public(p),
-        "npcs_here": _npcs_here(p),
-        "danger_sense": {
-            "alert": danger_sense or None,
-            "scan": scan,
-        },
-        "flags": p.flags,
-        "ended": p.ended,
-        "ending_label": p.ending_label,
-        "favor": dict(p.favor),
-        "rumors": list(p.rumors),
-        "npc_labels": {nid: v["name"] for nid, v in NPCS.items()},
-        "ambush_markers": list(MAP_AMBUSH_MARKERS),
-        "factions": _factions_public(),
-        "map_locations": _map_locations_public(),
-        "events": list(p.events[-10:]),
-    }
+    return build_init_response(p)
 
 
 @router.post("/api/move")
@@ -149,15 +124,6 @@ async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
         spirit_cost_applied = 0
         actual_path: list[tuple[int, int]] = [path[0]]
         injuries: list[str] = []
-        move_trace: list[dict[str, Any]] = [
-            {
-                "map_id": p.map_id,
-                "px": p.px,
-                "py": p.py,
-                "vigor": int(getattr(p, "vigor", 0)),
-                "spirit": int(getattr(p, "spirit", 0)),
-            }
-        ]
         forced = None
         for nx, ny in path[1:]:
             cx, cy = p.px, p.py
@@ -195,14 +161,6 @@ async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
                             "blurb": reason,
                         }
                         break
-
-            move_trace.append({
-                "map_id": p.map_id,
-                "px": p.px,
-                "py": p.py,
-                "vigor": int(getattr(p, "vigor", 0)),
-                "spirit": int(getattr(p, "spirit", 0)),
-            })
 
             if not p.dead:
                 forced = tile_forced_encounter(p)
@@ -295,9 +253,6 @@ async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
         },
         "path_map_id": prev_map,
         "path": actual_path,
-        "path_cost": cost,
-        "path_ticks": ticks,
-        "path_algorithm": "dijkstra_min_cost",
         "forced_encounter": forced,
         "trap_state": {
             "active": bool(getattr(p, "move_locked", False)),
@@ -308,7 +263,6 @@ async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
             "vigor": vigor_cost_applied,
             "spirit": spirit_cost_applied,
         },
-        "move_trace": move_trace,
         "injuries": injuries,
         "atmosphere": scene_context(p),
         "events": list(p.events[-10:]),

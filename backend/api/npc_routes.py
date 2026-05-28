@@ -78,6 +78,26 @@ def _sse(obj: dict[str, Any]) -> str:
     return f"data: {json.dumps(obj, ensure_ascii=False)}\n\n"
 
 
+def _validate_talk_request(body: TalkBody):
+    from backend.session.store import room
+    p = room.players.get(body.player_id)
+    if not p:
+        raise HTTPException(404, "未知 player_id")
+    if p.ended:
+        raise HTTPException(400, "本局已收束")
+    if p.dead:
+        raise HTTPException(400, "角色已身故,无法交谈")
+    if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
+        raise HTTPException(409, "你正处于昏迷状态，无法开口交谈。")
+    npc = NPCS.get(body.npc_id)
+    if not npc:
+        raise HTTPException(400, "未知 npc")
+    allowed = set(npc_ids_for_player(p))
+    if body.npc_id not in allowed:
+        raise HTTPException(400, "此人不在你当前这一格(或不可交谈)。请先移动贴近。")
+    return p, npc
+
+
 @router.post("/api/item/use")
 async def use_item(body: UseItemBody) -> dict[str, Any]:
     from backend.session.store import room
@@ -149,24 +169,7 @@ async def npc_talk(body: TalkBody, bg: BackgroundTasks) -> dict[str, Any]:
     if _talk_limiter.is_limited(body.player_id):
         raise HTTPException(429, "对话过于频繁，请稍后再试")
     try:
-        from backend.session.store import room
-        p = room.players.get(body.player_id)
-        if not p:
-            raise HTTPException(404, "未知 player_id")
-        if p.ended:
-            raise HTTPException(400, "本局已收束")
-        if p.dead:
-            raise HTTPException(400, "角色已身故,无法交谈")
-        if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
-            raise HTTPException(409, "你正处于昏迷状态，无法开口交谈。")
-
-        npc = NPCS.get(body.npc_id)
-        if not npc:
-            raise HTTPException(400, "未知 npc")
-
-        allowed = set(npc_ids_for_player(p))
-        if body.npc_id not in allowed:
-            raise HTTPException(400, "此人不在你当前这一格(或不可交谈)。请先移动贴近。")
+        p, npc = _validate_talk_request(body)
 
         async with p.lock:
             hist = p.history.setdefault(body.npc_id, [])
@@ -230,22 +233,7 @@ async def npc_talk(body: TalkBody, bg: BackgroundTasks) -> dict[str, Any]:
 async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingResponse:
     if _talk_limiter.is_limited(body.player_id):
         raise HTTPException(429, "对话过于频繁，请稍后再试")
-    from backend.session.store import room
-    p = room.players.get(body.player_id)
-    if not p:
-        raise HTTPException(404, "未知 player_id")
-    if p.ended:
-        raise HTTPException(400, "本局已收束")
-    if p.dead:
-        raise HTTPException(400, "角色已身故,无法交谈")
-    if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
-        raise HTTPException(409, "你正处于昏迷状态，无法开口交谈。")
-    npc = NPCS.get(body.npc_id)
-    if not npc:
-        raise HTTPException(400, "未知 npc")
-    allowed = set(npc_ids_for_player(p))
-    if body.npc_id not in allowed:
-        raise HTTPException(400, "此人不在你当前这一格(或不可交谈)。请先移动贴近。")
+    p, npc = _validate_talk_request(body)
 
     async with p.lock:
         hist = p.history.setdefault(body.npc_id, [])

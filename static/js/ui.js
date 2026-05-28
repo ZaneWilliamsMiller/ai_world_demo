@@ -127,9 +127,11 @@ window.App = window.App || {};
   function renderNpcBar(data) {
     App.npcsHere = data.npcs_here || [];
 
-    // 侧栏列表 - NPC 名称需要转义
-    const ul = document.getElementById("npcList");
+    var ul = document.getElementById("npcList");
     ul.innerHTML = "";
+    if (!App.npcsHere || App.npcsHere.length === 0) {
+      ul.innerHTML = '<div style="color:var(--text-muted);padding:8px;font-size:12px;">附近无人，试试移动到其他地点</div>';
+    }
     App.npcsHere.forEach(function(n) {
       const li = document.createElement("li");
       // NPC 名称来自后端数据，为安全起见进行转义

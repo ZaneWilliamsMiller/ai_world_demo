@@ -44,8 +44,7 @@ func _do_shutdown(parent: Control) -> void:
 	UIBuilder.add_panel_style(panel, Color(0.08, 0.06, 0.1))
 	progress_popup.add_child(panel)
 	progress_popup.resized.connect(func():
-		var ps: Vector2 = progress_popup.size
-		panel.position = (ps - Vector2(500, 400)) / 2.0
+		UIBuilder.center_in_parent(panel, progress_popup.size, Vector2(500, 400))
 	)
 
 	var vb := VBoxContainer.new()

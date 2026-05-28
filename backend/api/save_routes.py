@@ -16,7 +16,7 @@ from backend.systems.economy import init_npc_inventories
 from backend.systems.save_system import save_game, load_game, list_saves, delete_save
 from backend.views import player_public as _player_public, npcs_here as _npcs_here
 from backend.views import npc_catalog as _npc_catalog, maps_public as _maps_public, factions_public as _factions_public
-from backend.views import map_locations_public as _map_locations_public
+from backend.views import map_locations_public as _map_locations_public, build_init_response
 
 router = APIRouter()
 
@@ -53,7 +53,6 @@ async def save_player(body: SaveBody) -> dict[str, Any]:
 
 @router.post("/api/load")
 async def load_player(body: LoadBody) -> dict[str, Any]:
-    """加载已有角色（覆盖内存中的当前玩家）。"""
     from backend.session.store import room
     loaded = load_game(body.player_id)
     if not loaded:
@@ -65,32 +64,7 @@ async def load_player(body: LoadBody) -> dict[str, Any]:
     room.players[body.player_id] = loaded
     init_npc_positions(loaded)
     init_npc_inventories(loaded)
-    scan = perception_scan(loaded)
-    danger_sense = danger_sense_narrative(loaded, scan) if scan else None
-    return {
-        "player_id": loaded.player_id,
-        "display_name": loaded.display_name,
-        "world_name": WORLD_NAME,
-        "intro": FIXED_INTRO,
-        "maps": _maps_public(),
-        "npc_catalog": _npc_catalog(loaded),
-        "player": _player_public(loaded),
-        "npcs_here": _npcs_here(loaded),
-        "danger_sense": {
-            "alert": danger_sense or None,
-            "scan": scan,
-        },
-        "flags": loaded.flags,
-        "ended": loaded.ended,
-        "ending_label": loaded.ending_label,
-        "favor": dict(loaded.favor),
-        "rumors": list(loaded.rumors),
-        "npc_labels": {nid: v["name"] for nid, v in NPCS.items()},
-        "ambush_markers": list(MAP_AMBUSH_MARKERS),
-        "factions": _factions_public(),
-        "map_locations": _map_locations_public(),
-        "events": list(loaded.events[-10:]),
-    }
+    return build_init_response(loaded)
 
 
 @router.post("/api/delete-save")

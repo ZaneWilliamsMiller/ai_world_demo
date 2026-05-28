@@ -44,8 +44,7 @@ func show_confirm(parent: Control, title: String, message: String, on_confirm: C
 
 	popup.add_child(panel)
 	popup.resized.connect(func():
-		var ps: Vector2 = popup.size
-		panel.position = (ps - Vector2(460, 240)) / 2.0
+		UIBuilder.center_in_parent(panel, popup.size, Vector2(460, 240))
 	)
 
 	var vb := VBoxContainer.new()
@@ -108,8 +107,7 @@ func show_alert(parent: Control, title: String, message: String,
 
 	popup.add_child(panel)
 	popup.resized.connect(func():
-		var ps: Vector2 = popup.size
-		panel.position = (ps - Vector2(400, 200)) / 2.0
+		UIBuilder.center_in_parent(panel, popup.size, Vector2(400, 200))
 	)
 
 	var vb := VBoxContainer.new()

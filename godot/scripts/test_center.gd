@@ -42,8 +42,7 @@ func show_test_center(parent: Control, on_system_msg: Callable) -> void:
 	UIBuilder.add_panel_style(panel, Color(0.15, 0.1, 0.18), Color(0.9, 0.27, 0.37))
 	_overlay.add_child(panel)
 	_overlay.resized.connect(func():
-		var ps: Vector2 = _overlay.size
-		panel.position = (ps - Vector2(700, 550)) / 2.0
+		UIBuilder.center_in_parent(panel, _overlay.size, Vector2(700, 550))
 	)
 
 	var main_vb := VBoxContainer.new()

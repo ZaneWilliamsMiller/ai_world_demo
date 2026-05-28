@@ -545,9 +545,30 @@ window.App = window.App || {};
     );
   };
 
+  App.setLoading = function(active, text) {
+    var overlay = document.getElementById("loadingOverlay");
+    if (!overlay) return;
+    if (active) {
+      overlay.style.display = "flex";
+      var label = overlay.querySelector(".loading-text");
+      if (label) label.textContent = text || "加载中...";
+    } else {
+      overlay.style.display = "none";
+    }
+  };
+
   let _pollErrorCount = 0;
+  var _pageVisible = true;
+
+  document.addEventListener("visibilitychange", function() {
+    _pageVisible = !document.hidden;
+    if (_pageVisible && App.playerId && App.apiMode === "backend") {
+      App.fetchState().then(function(data) { if (data) App.updateUI(data); });
+    }
+  });
 
   _statePollTimer = setInterval(function() {
+    if (!_pageVisible) return;
     if (App.playerId && !App.isStreaming && App.apiMode === "backend") {
       App.fetchState().then(function(data) {
         if (data) {

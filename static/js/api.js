@@ -110,6 +110,7 @@ window.App = window.App || {};
   App.doMove = async function(tx, ty) {
     if (App.isMoving) return null;
     App.isMoving = true;
+    App.setLoading(true, "行走中...");
     try {
       return await backendPost("/api/move", {
         player_id: App.playerId,
@@ -118,6 +119,7 @@ window.App = window.App || {};
       });
     } finally {
       App.isMoving = false;
+      App.setLoading(false);
     }
   };
 

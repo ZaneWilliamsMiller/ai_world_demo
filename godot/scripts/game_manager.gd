@@ -23,6 +23,7 @@ var player_flags: Dictionary = {}
 var player_favor: Dictionary = {}
 var player_world_day: int = 1
 var player_world_shichen: String = "午时"
+var player_world_is_night: bool = false
 var player_weather: String = "薄阴"
 var player_move_locked: bool = false
 var player_trap_reason: String = ""
@@ -31,6 +32,8 @@ var player_death_reason: String = ""
 var player_unconscious_ticks: int = 0
 var player_bounties: Array = []
 var _is_moving: bool = false
+var selected_npc_id: String = ""
+var is_streaming: bool = false
 
 # ── World Data ──
 var maps_data: Dictionary = {}
@@ -51,6 +54,21 @@ signal logged_out()
 
 # ── Config ──
 @export var backend_url: String = ""
+
+var _poll_timer: Timer = null
+
+func _ready() -> void:
+	_poll_timer = Timer.new()
+	_poll_timer.wait_time = 30.0
+	_poll_timer.one_shot = false
+	_poll_timer.timeout.connect(_on_poll_timeout)
+	add_child(_poll_timer)
+	_poll_timer.start()
+
+func _on_poll_timeout() -> void:
+	if player_id.is_empty() or _is_moving or is_streaming:
+		return
+	fetch_state()
 
 
 func hello(p_name: String, p_gender: String, p_permadeath: bool) -> void:
@@ -130,6 +148,7 @@ func _apply_player(p: Dictionary) -> void:
 	player_favor = p.get("favor", {})
 	player_world_day = p.get("world_day", player_world_day)
 	player_world_shichen = p.get("world_shichen", player_world_shichen)
+	player_world_is_night = p.get("world_is_night", player_world_is_night)
 	player_weather = p.get("weather", player_weather)
 	npc_states = p.get("npc_states", npc_states)
 	player_move_locked = p.get("move_locked", player_move_locked)
@@ -257,6 +276,7 @@ func reset_state() -> void:
 	player_favor = {}
 	player_world_day = 1
 	player_world_shichen = "午时"
+	player_world_is_night = false
 	player_weather = "薄阴"
 	player_move_locked = false
 	player_trap_reason = ""
