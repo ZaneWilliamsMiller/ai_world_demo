@@ -30,7 +30,7 @@ window.App = window.App || {};
     try {
       var reader = await App.talkStream(App.selectedNpcId, msg);
       
-      var msgDiv = App.addMsg("npc", "...", npcName);
+      var msgDiv = App.addMsg("npc", {speaker: npcName, text: "..."}, false);
       var textEl = msgDiv.querySelector(".msg-text");
       var visibleText = "";
       

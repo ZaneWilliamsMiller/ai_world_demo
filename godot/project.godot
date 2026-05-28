@@ -12,9 +12,9 @@ config/features=PackedStringArray("4.3")
 
 [autoload]
 
+GameColors="*res://scripts/game_colors.gd"
 GameManager="*res://scripts/game_manager.gd"
 ApiClient="*res://scripts/api_client.gd"
-GameColors="*res://scripts/game_colors.gd"
 
 [display]
 

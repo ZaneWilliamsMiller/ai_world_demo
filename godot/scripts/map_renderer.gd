@@ -52,7 +52,6 @@ var _active_tiles: Dictionary = {}  # key = "x,y" -> ColorRect
 func _ready() -> void:
 	print("[MapRenderer] _ready() called")
 	
-	# 创建节点树
 	_tile_container = Node2D.new()
 	_tile_container.name = "TileContainer"
 	add_child(_tile_container)
@@ -65,29 +64,37 @@ func _ready() -> void:
 	_location_labels.name = "LocationLabels"
 	add_child(_location_labels)
 
-	# 玩家标记
 	_player_marker = ColorRect.new()
 	_player_marker.color = ACCENT
 	_player_marker.size = Vector2(TILE_SIZE, TILE_SIZE)
 	_player_marker.z_index = 10
 	add_child(_player_marker)
 
-	# 玩家光晕
 	_player_glow = ColorRect.new()
 	_player_glow.color = Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.3)
 	_player_glow.size = Vector2(TILE_SIZE * 2, TILE_SIZE * 2)
 	_player_glow.z_index = 9
 	add_child(_player_glow)
 
-	# 摄像机 - 必须在Node2D内才能渲染到SubViewport
 	_camera = Camera2D.new()
 	_camera.position_smoothing_enabled = true
 	_camera.position_smoothing_speed = CAMERA_SMOOTHING
 	_camera.zoom = Vector2(1, 1)
 	add_child(_camera)
 	
-	# 延迟设置当前摄像机，确保SubViewport已准备好
 	call_deferred("_make_current")
+
+
+func _exit_tree() -> void:
+	for tile in _tile_pool:
+		if is_instance_valid(tile):
+			tile.queue_free()
+	_tile_pool.clear()
+	for key in _active_tiles:
+		var tile: ColorRect = _active_tiles[key]
+		if is_instance_valid(tile):
+			tile.queue_free()
+	_active_tiles.clear()
 
 
 func _make_current() -> void:

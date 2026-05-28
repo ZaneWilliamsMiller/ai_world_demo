@@ -99,6 +99,8 @@ func _ready() -> void:
 	GameManager.map_pos_changed.connect(_update_map_player)
 	GameManager.chat_message.connect(_on_npc_reply)
 	GameManager.system_message.connect(_on_sys_msg)
+	ApiClient.stream_chunk.connect(_on_stream_chunk)
+	ApiClient.stream_done.connect(_on_stream_done)
 
 
 ## 初始化所有子模块
@@ -119,11 +121,13 @@ func _logged_in_deferred() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	for c in _game_ui.get_children():
-		if c is HSplitContainer:
-			c.split_offset = -340
-			print("[Game] HSplitContainer size=%s children=%d" % [str(c.size), c.get_child_count()])
+		if c is VBoxContainer:
 			for gc in c.get_children():
-				print("[Game]   child name=%s size=%s cm=%s sf_h=%d sf_v=%d" % [gc.name, str(gc.size), str(gc.custom_minimum_size), gc.size_flags_horizontal, gc.size_flags_vertical])
+				if gc is HSplitContainer:
+					gc.split_offset = -340
+					print("[Game] HSplitContainer size=%s children=%d" % [str(gc.size), gc.get_child_count()])
+					for hgc in gc.get_children():
+						print("[Game]   child name=%s size=%s cm=%s sf_h=%d sf_v=%d" % [hgc.name, str(hgc.size), str(hgc.custom_minimum_size), hgc.size_flags_horizontal, hgc.size_flags_vertical])
 	print("[Game] _logged_in_deferred — sizes: game_ui=%s, self=%s" % [str(_game_ui.size), str(size)])
 	print("[Game] _npc_select is null: %s" % str(_npc_select == null))
 	_update_api_mode_indicator()
@@ -177,9 +181,7 @@ func _build_game_ui() -> void:
 				"确定要退出游戏吗？\n\n[color=yellow]⚠️ 未存档的进度将丢失[/color]",
 				func():
 					await GameManager.save_game()
-					GameManager.player_id = ""
-					_game_ui.visible = false
-					_login_overlay.visible = true
+					GameManager.reset_state()
 			)
 		,
 		func(): _config_panel.toggle()
@@ -253,17 +255,9 @@ func _on_send() -> void:
 	_msg_display.add_chat(GameColors.ACCENT2, npc_name, "...")
 	var npc_msg_index: int = _msg_display.msg_count() - 1
 
-	if ApiClient.is_connected("stream_chunk", Callable(self, "_on_stream_chunk")):
-		ApiClient.disconnect("stream_chunk", Callable(self, "_on_stream_chunk"))
-	if ApiClient.is_connected("stream_done", Callable(self, "_on_stream_done")):
-		ApiClient.disconnect("stream_done", Callable(self, "_on_stream_done"))
-
 	_stream_text = ""
 	_stream_npc_msg_index = npc_msg_index
 	_stream_npc_name = npc_name
-
-	ApiClient.connect("stream_chunk", Callable(self, "_on_stream_chunk"))
-	ApiClient.connect("stream_done", Callable(self, "_on_stream_done"))
 
 	var llm_base_url := ""
 	var llm_api_key := ""
@@ -277,34 +271,27 @@ func _on_send() -> void:
 
 
 func _on_stream_chunk(text: String) -> void:
+	if not _is_streaming: return
 	_stream_text += text
-	var bb := "[b][color=#%s]%s[/color][/b]\n%s" % [GameColors.ACCENT2.to_html(false), _stream_npc_name, _stream_text.replace("[", "[lb]")]
+	var bb := "[b][color=#%s]%s[/color][/b]\n%s" % [GameColors.ACCENT2.to_html(false), _stream_npc_name.replace("[", "[lb]"), _stream_text.replace("[", "[lb]")]
 	_msg_display.update_msg(_stream_npc_msg_index, bb)
 
 
 func _on_stream_done(data: Dictionary) -> void:
-	if ApiClient.is_connected("stream_chunk", Callable(self, "_on_stream_chunk")):
-		ApiClient.disconnect("stream_chunk", Callable(self, "_on_stream_chunk"))
-	if ApiClient.is_connected("stream_done", Callable(self, "_on_stream_done")):
-		ApiClient.disconnect("stream_done", Callable(self, "_on_stream_done"))
+	if not _is_streaming: return
 
 	if data.has("error"):
 		_stream_text += "\n[错误] " + str(data.error)
-		var bb := "[b][color=#%s]%s[/color][/b]\n%s" % [GameColors.ACCENT2.to_html(false), _stream_npc_name, _stream_text.replace("[", "[lb]")]
+		var bb := "[b][color=#%s]%s[/color][/b]\n%s" % [GameColors.ACCENT2.to_html(false), _stream_npc_name.replace("[", "[lb]"), _stream_text.replace("[", "[lb]")]
 		_msg_display.update_msg(_stream_npc_msg_index, bb)
 	elif _stream_text == "":
-		_msg_display.update_msg(_stream_npc_msg_index, "[b][color=#%s]%s[/color][/b]\n（无回复）" % [GameColors.ACCENT2.to_html(false), _stream_npc_name])
+		_msg_display.update_msg(_stream_npc_msg_index, "[b][color=#%s]%s[/color][/b]\n（无回复）" % [GameColors.ACCENT2.to_html(false), _stream_npc_name.replace("[", "[lb]")])
 
 	_is_streaming = false
 	_send_btn.disabled = false
 	_msg_input.grab_focus()
 
-	if data.has("player"):
-		GameManager._apply_player(data.player)
-	if data.has("npcs_here"):
-		GameManager.npcs_here = data.npcs_here
-	if data.has("player") or data.has("npcs_here"):
-		_refresh()
+	GameManager.apply_stream_result(data)
 
 
 func _on_npc_reply(speaker: String, message: String, _npc_id: String) -> void:

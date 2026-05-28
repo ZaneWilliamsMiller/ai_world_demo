@@ -72,6 +72,8 @@ func request(path: String, method: String = "GET", body: Dictionary = {}, extra_
 		data = {"_raw": text}
 
 	data["_status"] = response_code
+	if response_code >= 400:
+		data["error"] = data.get("detail", "HTTP %d" % response_code)
 	return data
 
 

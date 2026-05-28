@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from backend.data.maps_data import MAP_AMBUSH_MARKERS
 from backend.data.npcs_data import NPCS
 from backend.data.prompts import WORLD_NAME, FIXED_INTRO
 from backend.models.player import PlayerState
@@ -15,6 +16,7 @@ from backend.systems.economy import init_npc_inventories
 from backend.systems.save_system import save_game, load_game, list_saves, delete_save
 from backend.views import player_public as _player_public, npcs_here as _npcs_here
 from backend.views import npc_catalog as _npc_catalog, maps_public as _maps_public, factions_public as _factions_public
+from backend.views import map_locations_public as _map_locations_public
 
 router = APIRouter()
 
@@ -84,7 +86,9 @@ async def load_player(body: LoadBody) -> dict[str, Any]:
         "favor": dict(loaded.favor),
         "rumors": list(loaded.rumors),
         "npc_labels": {nid: v["name"] for nid, v in NPCS.items()},
+        "ambush_markers": list(MAP_AMBUSH_MARKERS),
         "factions": _factions_public(),
+        "map_locations": _map_locations_public(),
         "events": list(loaded.events[-10:]),
     }
 

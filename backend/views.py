@@ -53,6 +53,8 @@ def player_public(p: PlayerState) -> dict[str, Any]:
         "bounties": getattr(p, "bounties", None) or [],
         "active_bounty": getattr(p, "active_bounty", None),
         "completed_bounties": getattr(p, "completed_bounties", None) or [],
+        "flags": dict(getattr(p, "flags", {}) or {}),
+        "favor": dict(getattr(p, "favor", {}) or {}),
     }
 
 

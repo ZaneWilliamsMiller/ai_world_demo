@@ -9,7 +9,7 @@ var display_name: String = ""
 var player_map_id: String = "world"
 var player_px: int = 16
 var player_py: int = 30
-var player_coins: int = 0
+var player_coins: int = 120
 var player_vigor: int = 80
 var player_vigor_max: int = 100
 var player_spirit: int = 80
@@ -24,6 +24,12 @@ var player_favor: Dictionary = {}
 var player_world_day: int = 1
 var player_world_shichen: String = "午时"
 var player_weather: String = "薄阴"
+var player_move_locked: bool = false
+var player_trap_reason: String = ""
+var player_enslaved: bool = false
+var player_death_reason: String = ""
+var player_unconscious_ticks: int = 0
+var player_bounties: Array = []
 
 # ── World Data ──
 var maps_data: Dictionary = {}
@@ -47,7 +53,7 @@ signal logged_out()
 
 
 func hello(p_name: String, p_gender: String, p_permadeath: bool) -> void:
-	"""Start a new game."""
+	## Start a new game.
 	print("[GM] hello() called: name=%s gender=%s permadeath=%s" % [p_name, p_gender, p_permadeath])
 	player_id = "godot_%d" % (Time.get_unix_time_from_system())
 	display_name = p_name
@@ -72,7 +78,7 @@ func hello(p_name: String, p_gender: String, p_permadeath: bool) -> void:
 
 
 func load_player(save_pid: String) -> void:
-	"""Load an existing save."""
+	## Load an existing save.
 	player_id = save_pid
 	var body := {"player_id": save_pid}
 	var res: Dictionary = await ApiClient.request("/api/load", "POST", body)
@@ -86,7 +92,7 @@ func load_player(save_pid: String) -> void:
 
 
 func _apply_hello_response(data: Dictionary) -> void:
-	"""Parse /api/hello or /api/load response into game state."""
+	## Parse /api/hello or /api/load response into game state.
 	display_name = data.get("display_name", display_name)
 	maps_data = data.get("maps", {})
 	map_locations = data.get("map_locations", {})
@@ -96,6 +102,8 @@ func _apply_hello_response(data: Dictionary) -> void:
 	var player_data := data.get("player", {})
 	npc_states = player_data.get("npc_states", {})
 	intro_text = data.get("intro", "")
+	player_flags = data.get("flags", player_flags)
+	player_favor = data.get("favor", player_favor)
 	_apply_player(data.get("player", {}))
 
 	system_message.emit("踏入江湖。%s" % intro_text)
@@ -123,10 +131,16 @@ func _apply_player(p: Dictionary) -> void:
 	player_world_shichen = p.get("world_shichen", player_world_shichen)
 	player_weather = p.get("weather", player_weather)
 	npc_states = p.get("npc_states", npc_states)
+	player_move_locked = p.get("move_locked", player_move_locked)
+	player_trap_reason = p.get("trap_reason", player_trap_reason)
+	player_enslaved = p.get("enslaved", player_enslaved)
+	player_death_reason = p.get("death_reason", player_death_reason)
+	player_unconscious_ticks = p.get("unconscious_ticks", player_unconscious_ticks)
+	player_bounties = p.get("bounties", player_bounties)
 
 
 func move_player(tx: int, ty: int) -> void:
-	"""Move to target tile."""
+	## Move to target tile.
 	var body := {"player_id": player_id, "to_x": tx, "to_y": ty}
 	var res: Dictionary = await ApiClient.request("/api/move", "POST", body)
 
@@ -140,8 +154,12 @@ func move_player(tx: int, ty: int) -> void:
 		return
 
 	for step in path_data:
-		player_px = step[0]
-		player_py = step[1]
+		if not step is Array and not step is PackedInt32Array:
+			continue
+		if step.size() < 2:
+			continue
+		player_px = int(step[0])
+		player_py = int(step[1])
 		map_pos_changed.emit()
 		await get_tree().create_timer(0.08).timeout
 
@@ -149,7 +167,7 @@ func move_player(tx: int, ty: int) -> void:
 	if not p.is_empty():
 		_apply_player(p)
 
-	var encounter = res.get("encounter")
+	var encounter = res.get("forced_encounter")
 	if encounter and not encounter.is_empty():
 		system_message.emit(str(encounter))
 
@@ -158,7 +176,7 @@ func move_player(tx: int, ty: int) -> void:
 
 
 func talk_to_npc(npc_id: String, message: String) -> bool:
-	"""Send message to NPC. Returns true if LLM fallback was NOT used."""
+	## Send message to NPC. Returns true if LLM fallback was NOT used.
 	# 所有模式都连接后端，自定义LLM Key模式只是传递额外参数
 	var body := {"player_id": player_id, "npc_id": npc_id, "message": message}
 	
@@ -192,22 +210,68 @@ func talk_to_npc(npc_id: String, message: String) -> bool:
 
 
 func save_game() -> bool:
-	"""Persist current game to disk."""
+	## Persist current game to disk.
 	var body := {"player_id": player_id}
 	var res: Dictionary = await ApiClient.request("/api/save", "POST", body)
 	return res.get("ok", false)
 
 
 func list_saves() -> Array:
-	"""Get all saved games."""
+	## Get all saved games.
 	var res: Dictionary = await ApiClient.request("/api/saves", "GET", {})
 	return res.get("saves", [])
 
 
 func fetch_state() -> void:
-	"""Poll server for latest player state."""
+	## Poll server for latest player state.
 	var res: Dictionary = await ApiClient.request("/api/state/" + player_id, "GET", {})
 	if not res.has("error"):
 		_apply_player(res.get("player", {}))
 		npcs_here = res.get("npcs_here", npcs_here)
+		state_updated.emit()
+
+
+func reset_state() -> void:
+	player_id = ""
+	display_name = ""
+	player_map_id = "world"
+	player_px = 16
+	player_py = 30
+	player_coins = 120
+	player_vigor = 80
+	player_vigor_max = 100
+	player_spirit = 80
+	player_spirit_max = 100
+	player_gender = ""
+	player_permadeath = false
+	player_dead = false
+	player_inventory = {}
+	player_reputation = {}
+	player_flags = {}
+	player_favor = {}
+	player_world_day = 1
+	player_world_shichen = "午时"
+	player_weather = "薄阴"
+	player_move_locked = false
+	player_trap_reason = ""
+	player_enslaved = false
+	player_death_reason = ""
+	player_unconscious_ticks = 0
+	player_bounties = []
+	maps_data = {}
+	map_locations = {}
+	npcs_here = []
+	npc_labels = {}
+	npc_catalog = []
+	npc_states = {}
+	intro_text = ""
+	logged_out.emit()
+
+
+func apply_stream_result(data: Dictionary) -> void:
+	if data.has("player"):
+		_apply_player(data.player)
+	if data.has("npcs_here"):
+		npcs_here = data.npcs_here
+	if data.has("player") or data.has("npcs_here"):
 		state_updated.emit()

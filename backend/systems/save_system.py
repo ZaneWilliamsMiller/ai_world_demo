@@ -188,7 +188,8 @@ def save_game(p: PlayerState) -> str:
 
 
 def load_game(player_id: str) -> PlayerState | None:
-    """从 JSON 文件加载角色。文件不存在返回 None。"""
+    """从 JSON 文件加载角色。文件不存在返回 None。
+    如果 permadeath=True 且 dead=True，抛出 ValueError。"""
     fp = SAVE_DIR / f"{player_id}.json"
     if not fp.is_file():
         return None
@@ -196,8 +197,12 @@ def load_game(player_id: str) -> PlayerState | None:
         with open(fp, "r", encoding="utf-8") as f:
             data = json.load(f)
         p = _deserialize_player(data)
+        if p.permadeath and p.dead:
+            raise ValueError(f"角色 {p.display_name} 已在真实江湖中身故，存档已废")
         log.info("存档加载: %s (%s, 第%d日)", p.display_name, p.player_id, p.world_day)
         return p
+    except ValueError:
+        raise
     except Exception as e:
         log.error("存档加载失败 %s: %s", player_id, e)
         return None

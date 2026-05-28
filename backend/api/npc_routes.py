@@ -253,11 +253,11 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
         parsed = None
 
         try:
-            is_light = body.message.startswith("[系统指令·问路")
+            is_light_inquiry = body.message.startswith("[系统指令·问路")
             raw = await chat_completion(
                 messages,
                 temperature=0.85,
-                max_tokens=450 if is_light else 800,
+                max_tokens=450 if is_light_inquiry else 800,
                 response_format={"type": "json_object"},
                 llm_base_url=body.llm_base_url,
                 llm_api_key=body.llm_api_key,
