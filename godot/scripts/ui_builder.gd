@@ -71,7 +71,7 @@ func build_login(parent: Control, on_start: Callable, on_load: Callable,
 
 	var start_btn := btn("踏入江湖", GameColors.ACCENT)
 	start_btn.pressed.connect(func():
-		var nm: String = name_input.get_child(1).text.strip_edges()
+		var nm: String = name_input.get_node("InputField").text.strip_edges()
 		if nm == "": nm = "江湖客"
 		var g: String = "未言"
 		var sel: int = gender_sel.get_selected_id()
@@ -507,6 +507,7 @@ static func make_input(label: String, placeholder: String) -> VBoxContainer:
 	var le := LineEdit.new()
 	le.placeholder_text = placeholder; le.max_length = 24
 	le.add_theme_font_size_override("font_size", 14)
+	le.name = "InputField"
 	vb.add_child(le)
 	return vb
 
@@ -524,6 +525,29 @@ static func btn(text: String, bg: Color) -> Button:
 	sb.content_margin_left = 14; sb.content_margin_right = 14
 	sb.content_margin_top = 6; sb.content_margin_bottom = 6
 	b.add_theme_stylebox_override("normal", sb)
+
+	# Hover: slightly brighten
+	var hover_sb := sb.duplicate()
+	hover_sb.bg_color = bg.lightened(0.15)
+	b.add_theme_stylebox_override("hover", hover_sb)
+
+	# Pressed: slightly darken
+	var pressed_sb := sb.duplicate()
+	pressed_sb.bg_color = bg.darkened(0.15)
+	b.add_theme_stylebox_override("pressed", pressed_sb)
+
+	# Disabled: grey out
+	var disabled_sb := sb.duplicate()
+	disabled_sb.bg_color = Color(0.25, 0.25, 0.25)
+	b.add_theme_stylebox_override("disabled", disabled_sb)
+
+	# Focus: subtle border highlight
+	var focus_sb := sb.duplicate()
+	focus_sb.border_width_left = 2; focus_sb.border_width_right = 2
+	focus_sb.border_width_top = 2; focus_sb.border_width_bottom = 2
+	focus_sb.border_color = GameColors.ACCENT
+	b.add_theme_stylebox_override("focus", focus_sb)
+
 	return b
 
 

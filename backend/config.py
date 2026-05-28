@@ -1,5 +1,5 @@
 from pathlib import Path
-from pydantic import validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # 相对于项目根目录（config.py 在 backend/ 下，.env 在项目根）
@@ -17,13 +17,12 @@ class Settings(BaseSettings):
     llm_base_url: str = ""
     llm_api_key: str = ""
     llm_model: str = ""
-    llm_timeout_s: float = 120.0
 
     # ── 连接池（2026 优化）──
     llm_pool_max_connections: int = 100       # HTTP 连接池最大连接数
     llm_pool_max_keepalive: int = 20          # 最大保活连接数
     llm_pool_connect_timeout: float = 10.0    # 连接建立超时（秒）
-    llm_pool_read_timeout: float = 120.0      # 读取超时（秒）
+    llm_pool_read_timeout: float = 120.0      # 读取超时（秒），替代已废弃的 llm_timeout_s
 
     # ── 熔断器（2026 优化）──
     llm_circuit_breaker: bool = True           # 是否启用熔断器
@@ -45,10 +44,13 @@ class Settings(BaseSettings):
     llm_retry_base_delay_s: float = 1.5        # 重试基础延迟（秒）
     llm_max_concurrency: int = 8               # 最大并发 LLM 请求数
 
+    # ── 自动存档 ──
+    auto_save_interval_s: float = 300.0       # 自动存档间隔（秒），默认 5 分钟
+
     # ── CORS ──
     cors_allow_origins: str = "*"
 
-    @validator('llm_api_key')
+    @field_validator('llm_api_key')
     def warn_empty_key(cls, v):
         if not v:
             import logging
@@ -57,3 +59,6 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+if not settings.llm_api_key:
+    print("WARNING: LLM_API_KEY 未配置，NPC 对话功能将不可用")

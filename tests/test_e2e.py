@@ -1,7 +1,7 @@
 """Comprehensive end-to-end test for living-paper backend."""
-import httpx, asyncio, time, json, sys
+import httpx, asyncio, os, time, json, sys
 
-BASE = "http://127.0.0.1:8766"
+BASE = os.environ.get("BACKEND_URL", "http://127.0.0.1:8765")
 OK, FAIL = 0, 0
 
 def report(name, cond, detail=""):

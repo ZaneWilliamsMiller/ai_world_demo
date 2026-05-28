@@ -16,6 +16,8 @@ import json
 import logging
 import os
 import tempfile
+import time
+import uuid
 from dataclasses import fields as dc_fields
 from pathlib import Path
 from typing import Any
@@ -107,9 +109,7 @@ def _deserialize_player(data: dict[str, Any]) -> PlayerState:
         mind.affect_updated_at = float(md.get("affect_updated_at", 0))
         mind.last_insight_at = float(md.get("last_insight_at", 0))
         mind.linked_memory_ids = set(md.get("linked_memory_ids", []))
-        import uuid
-        import time as _time
-        now_ts = _time.time()
+        now_ts = time.time()
         for item_raw in md.get("items", []):
             mem = Memory(
                 id=str(item_raw.get("id") or uuid.uuid4().hex[:10]),

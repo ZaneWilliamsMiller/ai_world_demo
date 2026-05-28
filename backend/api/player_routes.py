@@ -1,6 +1,8 @@
 """玩家交互 API 路由：hello, move, state, journal。"""
 from __future__ import annotations
 
+import asyncio
+import logging
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
@@ -53,7 +55,7 @@ class MoveBody(BaseModel):
 async def hello(body: HelloBody) -> dict[str, Any]:
     from backend.session.store import room
     from backend.systems.encounter import should_trigger_encounter
-    p = room.get_or_create(body.player_id, body.display_name, body.gender, body.permadeath)
+    p = await room.get_or_create(body.player_id, body.display_name, body.gender, body.permadeath)
     init_npc_positions(p)
     init_npc_inventories(p)
     scan = perception_scan(p)
@@ -131,8 +133,7 @@ async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
         )
 
     allow_steep = bool(getattr(p, "allow_steep_next_move", False))
-    from backend.systems.pathfinding import find_path as _find_path
-    path = _find_path(p.map_id, p.px, p.py, body.to_x, body.to_y, allow_steep=allow_steep)
+    path = find_path(p.map_id, p.px, p.py, body.to_x, body.to_y, allow_steep=allow_steep)
     if not path:
         raise HTTPException(400, "此处无路可达")
 
@@ -242,15 +243,18 @@ async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
                 p.move_locked = False
                 p.move_lock_npc_id = None
                 push_event(p, f"{p.display_name}于{MAPS[p.map_id]['name']}遭难:{reason[:24]}", scope="near", actor="天意")
-                save_game(p)
-                delete_save(p.player_id)
+                await asyncio.to_thread(save_game, p)
+                try:
+                    delete_save(p.player_id)
+                except Exception as e:
+                    logging.getLogger('move').error('delete_save failed for %s: %s', p.player_id, e)
                 room.remove_player(p.player_id)
         if not p.dead and not p.ended:
             collapsed = maybe_collapse_from_attrs(p)
             if collapsed and not p.permadeath:
                 respawn_msg = respawn_at_supply_point(p)
         try:
-            save_game(p)
+            await asyncio.to_thread(save_game, p)
         except Exception as e:
             logging.getLogger('move').error('save failed for %s: %s', p.player_id, e)
         p.last_move_map_id = p.map_id
@@ -351,6 +355,7 @@ async def get_state(player_id: str) -> dict[str, Any]:
         "events": list(p.events[-10:]),
         "factions": _factions_public(),
         "npc_catalog": _npc_catalog(p),
+        "map_locations": _map_locations_public(),
     }
 
 

@@ -1,9 +1,10 @@
 from __future__ import annotations
+import logging
+import random
 from typing import Any
 from backend import agent_brain, memory as mem
 from backend.models.player import PlayerState
-from backend.data.npcs_data import NPCS
-from backend.data.maps_data import MAPS
+from backend.data.npcs_data import NPCS, NPC_FACTION, STORY_ORDER
 from backend.data.factions import FACTIONS
 from backend.data.prompts import SOCIETY_BIBLE, MACHINE_TAIL_RULE, AUTONOMY_RULE, PERMADEATH_RULE
 from backend.data.atmosphere import scene_context
@@ -22,17 +23,17 @@ from backend.systems.core import (
     survival_action_delta,
     npc_state_for_dialogue,
     npc_weather_awareness_block,
+    update_npc_state_dynamic,
 )
 from backend.systems.economy import apply_coin_delta, add_items, remove_items, format_economy_context, format_npc_inventory, apply_npc_trade
 from backend.systems.reputation import apply_rep_delta, push_event
-from backend.systems.time_weather import shichen_name, advance_clock
-from backend.models.llm_schema import NpcResponseSchema
-from backend.game_state import get_or_init_mind
+from backend.systems.time_weather import shichen_name, advance_clock, is_night
+from backend.views import player_public, npcs_here
+from backend.llm_client import chat_completion, parse_npc_reply_json, cached_system
 from backend.systems.encounter import format_encounter_perception_block
 from backend.memory import format_insight_block
+from backend.data.relationships import relationship_context
 from backend.systems.npc_gossip import format_gossip_awareness_block
-
-import random
 
 # ── LLM 调用失败时的优雅降级响应池 ──
 _GRACEFUL_FALLBACKS = [
@@ -56,13 +57,11 @@ def build_graceful_fallback(npc_id: str, error_msg: str) -> dict[str, Any]:
         dict with keys visible_text and parsed schema for downstream.
     """
     text = random.choice(_GRACEFUL_FALLBACKS)
-    import logging
     log = logging.getLogger("talk_service")
     log.warning(
         "LLM call failed for npc=%s, graceful fallback used. Error: %s",
         npc_id, error_msg[:200],
     )
-    from backend.models.llm_schema import NpcResponseSchema
     parsed = NpcResponseSchema(visible_text=text)
     return {
         "visible_text": text,
@@ -78,7 +77,6 @@ def build_npc_messages(
     hist_slice: list[dict[str, str]],
 ) -> list[dict[str, str]]:
     # ── 动态状态评估：在构建提示词前刷新 NPC 对玩家的态度 ──
-    from backend.systems.core import update_npc_state_dynamic
     update_npc_state_dynamic(p, npc_id)
 
     npc = NPCS[npc_id]
@@ -105,13 +103,11 @@ def build_npc_messages(
     static_parts.append(npc["system"])
     static_parts.append(MACHINE_TAIL_RULE)
 
-    from backend.data.relationships import relationship_context
     rel_ctx = relationship_context(npc_id)
     if rel_ctx:
         static_parts.append(rel_ctx)
 
-    from backend.data.atmosphere import scene_context as _scene_ctx
-    scene = _scene_ctx(p)
+    scene = scene_context(p)
     if scene:
         static_parts.append(scene)
 
@@ -203,7 +199,6 @@ def build_npc_messages(
             "不要无缘无故引入「被擒/捆绑/夺舟」等结局型情节。"
         )
 
-    from backend.data.npcs_data import NPC_FACTION
     fac = NPC_FACTION.get(npc_id)
     if fac:
         rep_v = int(p.reputation.get(fac, 0))
@@ -236,7 +231,6 @@ def build_npc_messages(
     )
 
     # ── 组装 messages：system（cached）+ 动态 context + 对话历史 ──
-    from backend.llm_client import cached_system
     static_text = "\n\n".join([s for s in static_parts if s])
     dyn_text = "\n\n".join([s for s in dyn_parts if s])
 
@@ -380,7 +374,6 @@ def apply_npc_reply(
     # ── CMA认知记忆凝结（LinkedIn 2026范式）：防止记忆流膨胀 ──
     n_condensed = mem.condense_old_observations(mind, int(p.world_day), sh_now)
     if n_condensed > 0:
-        import logging
         logging.getLogger("agent_brain").info(
             "condensed %d old observations for npc=%s", n_condensed, npc_id
         )
@@ -399,8 +392,7 @@ def apply_npc_reply(
     _decay_all_npc_moods(p)
 
     # 使用共享视图模块，避免循环导入
-    from backend.views import player_public, npcs_here
-    
+
     return ({
         "visible_text": visible,
         "reply": visible,  # 向后兼容旧前端
@@ -429,7 +421,6 @@ def _decay_all_npc_moods(p: PlayerState) -> None:
 
     与 update_npc_states_from_habits（move 流程中调用）形成互补，
     确保纯对话长链中 NPC 情绪不会一直保持极端。"""
-    from backend.systems.time_weather import shichen_name
     sh_name = shichen_name(p.world_shichen)
     for nid, mind in getattr(p, "minds", {}).items():
         if mind is not None and hasattr(mind, "affect_valence"):
@@ -604,7 +595,6 @@ def _evolve_npc_mood(
         valence_d -= min(2.0, len(parsed.items_lose) * 0.7)
 
     # 深夜情绪调制
-    from backend.systems.time_weather import is_night
     if is_night(p.world_shichen):
         arousal_d -= 0.8  # 夜越深越倦
 

@@ -123,13 +123,10 @@ async def _close_client() -> None:
     await manager.close_client()
 
 
-def _get_semaphore() -> asyncio.Semaphore:
+async def _get_semaphore() -> asyncio.Semaphore:
     """向后兼容：获取并发限速信号量。"""
-    # 注意：此处同步调用，因为 Semaphore 初始化不需要 await
-    # 首次调用时可能尚未创建实例，需特殊处理
-    if LLMClientManager._instance is None:
-        LLMClientManager._instance = LLMClientManager()
-    return LLMClientManager._instance.get_semaphore()
+    manager = await LLMClientManager.get_instance()
+    return manager.get_semaphore()
 
 
 # ══════════════════════════════════════════════════════════════
@@ -365,7 +362,7 @@ async def chat_completion(
     
     cache = get_llm_cache()
     cb = get_circuit_breaker()
-    sem = _get_semaphore()
+    sem = await _get_semaphore()
 
     # ── 1. 检查缓存 ──
     cached = await cache.get(messages, temperature=temperature, model=settings.llm_model, max_tokens=max_tokens)
@@ -447,7 +444,7 @@ async def stream_chat_completion(
     
     else:
         cb = get_circuit_breaker()
-        sem = _get_semaphore()
+        sem = await _get_semaphore()
 
         if not await cb.allow():
             raise RuntimeError(

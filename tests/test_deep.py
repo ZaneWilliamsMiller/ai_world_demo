@@ -1,10 +1,11 @@
 """Deep backend test - talk multiple times, trigger reflection, test memory."""
 import asyncio
 import httpx
+import os
 import time
 import json
 
-BASE = "http://127.0.0.1:8766"
+BASE = os.environ.get("BACKEND_URL", "http://127.0.0.1:8765")
 PLAYER_ID = f"deep_test_{int(time.time())}"
 
 

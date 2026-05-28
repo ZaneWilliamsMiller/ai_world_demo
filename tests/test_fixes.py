@@ -1,6 +1,6 @@
-import httpx, asyncio, time, json, sys
+import httpx, asyncio, os, time, json, sys
 
-BASE = "http://127.0.0.1:8766"
+BASE = os.environ.get("BACKEND_URL", "http://127.0.0.1:8765")
 
 async def test():
     player_id = f"fix_test_{int(time.time())}"

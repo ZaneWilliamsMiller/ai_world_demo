@@ -23,9 +23,13 @@ class_name MessageDisplay
 var _chat_scroll: ScrollContainer
 var _messages: VBoxContainer
 var _error_style_applied := false
+var _initialized := false
 
 
 func init(dialogue_label: RichTextLabel, chat_scroll: ScrollContainer) -> void:
+	if _initialized:
+		return
+	_initialized = true
 	_chat_scroll = chat_scroll
 	_messages = VBoxContainer.new()
 	_messages.add_theme_constant_override("separation", 4)

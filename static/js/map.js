@@ -7,6 +7,7 @@ window.App = window.App || {};
   "use strict";
 
   App._isMoving = false;
+  App._playerMarkerState = "normal";
 
   // ═══════════════════════════════════════════
   //  常量 & 颜色 - 全新美观配色
@@ -338,6 +339,11 @@ window.App = window.App || {};
     var playerScreenX = playerScreen.x;
     var playerScreenY = playerScreen.y;
 
+    // 玩家主体 - 更精致
+    var playerFill = App._playerMarkerState === "locked" ? "#ff4444" : "#ffffff";
+    var playerStroke = App._playerMarkerState === "locked" ? "#cc0000" : "#50b4ff";
+    var glowColor = App._playerMarkerState === "locked" ? "rgba(255,60,60," : "rgba(80,180,255,";
+
     // 玩家投影 - 增加深度感
     ctx.fillStyle = "rgba(0,0,0,0.3)";
     ctx.beginPath();
@@ -350,22 +356,22 @@ window.App = window.App || {};
       playerScreenX, playerScreenY, 2,
       playerScreenX, playerScreenY, glowR
     );
-    grd.addColorStop(0, "rgba(80,180,255,0.7)");
-    grd.addColorStop(0.4, "rgba(80,180,255,0.35)");
-    grd.addColorStop(1, "rgba(80,180,255,0)");
+    grd.addColorStop(0, glowColor + "0.7)");
+    grd.addColorStop(0.4, glowColor + "0.35)");
+    grd.addColorStop(1, glowColor + "0)");
     ctx.fillStyle = grd;
     ctx.beginPath();
     ctx.arc(playerScreenX, playerScreenY, glowR, 0, Math.PI * 2);
     ctx.fill();
 
     // 玩家主体 - 更精致
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = playerFill;
     ctx.beginPath();
     ctx.arc(playerScreenX, playerScreenY, 7, 0, Math.PI * 2);
     ctx.fill();
     
     // 玩家外边框
-    ctx.strokeStyle = "#50b4ff";
+    ctx.strokeStyle = playerStroke;
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.arc(playerScreenX, playerScreenY, 9, 0, Math.PI * 2);
@@ -626,7 +632,6 @@ window.App = window.App || {};
       
       if (isLockError) {
         App.addMsg("system-error", errorMsg, true);
-        if (App.updatePlayerMarker) App.updatePlayerMarker(App._playerX, App._playerY, "locked");
       } else {
         App.addMsg("system", errorMsg);
       }
@@ -639,7 +644,8 @@ window.App = window.App || {};
   document.addEventListener("keydown", function(e) {
     if (!App._playerX || App._isMoving) return;
     if (document.activeElement && (document.activeElement.tagName === "INPUT" || 
-        document.activeElement.tagName === "SELECT")) return;
+        document.activeElement.tagName === "SELECT" ||
+        document.activeElement.tagName === "TEXTAREA")) return;
 
     var dx = 0, dy = 0;
     switch (e.key) {
@@ -653,6 +659,8 @@ window.App = window.App || {};
     App.moveTo(App._playerX + dx, App._playerY + dy);
   });
 
-
+  App.updatePlayerMarker = function(x, y, state) {
+    App._playerMarkerState = state || "normal";
+  };
 
 })(window.App);

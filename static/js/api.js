@@ -99,7 +99,7 @@ window.App = window.App || {};
   };
 
   App.fetchSaves = async function() {
-    if (App.apiMode !== "backend") return { saves: [] };
+    if (App.apiMode !== "backend") return [];
     return (await backendGet("/api/saves")).saves || [];
   };
 
@@ -166,7 +166,7 @@ window.App = window.App || {};
 
   App.testBackend = async function() {
     try {
-      const data = await backendGet("/health");
+      const data = await backendGet("/api/health");
       return { ok: true, detail: "model=" + data.model + " world=" + data.world };
     } catch (e) {
       return { ok: false, detail: e.message };
@@ -178,19 +178,6 @@ window.App = window.App || {};
       const data = await llmChat([{ role: "user", content: "你好" }], { maxTokens: 20 });
       const content = data.choices[0].message.content;
       return { ok: true, detail: "reply_len=" + content.length };
-    } catch (e) {
-      return { ok: false, detail: e.message };
-    }
-  };
-
-  App.testModels = async function() {
-    try {
-      const res = await fetch(App.LLM_API_URL + "/models", {
-        headers: { "Authorization": "Bearer " + App.LLM_API_KEY }
-      });
-      const data = await res.json();
-      const ids = data.data.map(function(m) { return m.id; });
-      return { ok: ids.includes(App.LLM_MODEL), detail: "models=" + ids.length + " target=" + App.LLM_MODEL };
     } catch (e) {
       return { ok: false, detail: e.message };
     }

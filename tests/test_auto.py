@@ -7,18 +7,26 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 import time
 import httpx
 from datetime import datetime
 from pathlib import Path
 
-# ── 配置 ──
-BACKEND_URL = "http://127.0.0.1:8765"
-LLM_API_URL = "https://llmapi.paratera.com/v1"
-LLM_API_KEY = "sk-o5exptybwJAro8OfIqqmjQ"
-LLM_MODEL = "DeepSeek-V4-Pro"
-REPORT_DIR = Path(__file__).parent / "test_reports"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from backend.config import settings
+
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://127.0.0.1:8765")
+REPORT_DIR = PROJECT_ROOT / "tools" / "test_reports"
+
+API_KEY = os.environ.get("LLM_API_KEY", "")
+if not API_KEY:
+    print("⚠️ 请设置环境变量 LLM_API_KEY")
+    sys.exit(1)
 
 # ── 测试结果收集 ──
 results: list[dict] = []
@@ -56,15 +64,15 @@ async def test_backend_health() -> bool:
 
 
 async def test_llm_direct() -> bool:
-    """直接测试 LLM API"""
+    """直接测试 LLM API（通过 backend.config 读取密钥）"""
     t0 = time.time()
     try:
         async with httpx.AsyncClient(timeout=60.0) as c:
             r = await c.post(
-                f"{LLM_API_URL}/chat/completions",
-                headers={"Authorization": f"Bearer {LLM_API_KEY}"},
+                f"{settings.llm_base_url.rstrip('/')}/chat/completions",
+                headers={"Authorization": f"Bearer {API_KEY}"},
                 json={
-                    "model": LLM_MODEL,
+                    "model": settings.llm_model,
                     "messages": [{"role": "user", "content": "请用一句话介绍江湖"}],
                     "max_tokens": 100,
                 },
@@ -77,29 +85,29 @@ async def test_llm_direct() -> bool:
                 detail = f"response_len={len(content)}"
             else:
                 detail = r.text[:200]
-            log_test("LLM 直连 (DeepSeek-V4-Pro)", ok, detail, time.time() - t0)
+            log_test(f"LLM 直连 ({settings.llm_model})", ok, detail, time.time() - t0)
             return ok
     except Exception as e:
-        log_test("LLM 直连 (DeepSeek-V4-Pro)", False, str(e), time.time() - t0)
+        log_test(f"LLM 直连 ({settings.llm_model})", False, str(e), time.time() - t0)
         return False
 
 
 async def test_llm_models_list() -> bool:
-    """测试 LLM 模型列表"""
+    """测试 LLM 模型列表（通过 backend.config 读取密钥）"""
     t0 = time.time()
     try:
         async with httpx.AsyncClient(timeout=15.0) as c:
             r = await c.get(
-                f"{LLM_API_URL}/models",
-                headers={"Authorization": f"Bearer {LLM_API_KEY}"},
+                f"{settings.llm_base_url.rstrip('/')}/models",
+                headers={"Authorization": f"Bearer {API_KEY}"},
             )
             ok = r.status_code == 200
             model_ids = []
             if ok:
                 data = r.json()
                 model_ids = [m["id"] for m in data.get("data", [])]
-                ok = LLM_MODEL in model_ids
-            log_test("LLM 模型列表", ok, f"models={len(model_ids)}, target={LLM_MODEL} found={LLM_MODEL in model_ids}", time.time() - t0)
+                ok = settings.llm_model in model_ids
+            log_test("LLM 模型列表", ok, f"models={len(model_ids)}, target={settings.llm_model} found={settings.llm_model in model_ids}", time.time() - t0)
             return ok
     except Exception as e:
         log_test("LLM 模型列表", False, str(e), time.time() - t0)

@@ -29,10 +29,27 @@ window.App = window.App || {};
 
     // 设置原始 HTML（仅用于可信内容，如后端已处理的富文本）
     // 注意：调用此方法前必须确保内容来源可信且已消毒
+    // 设置原始 HTML（仅用于可信内容）
     setTrustedHtml(element, html) {
       if (element) {
         element.innerHTML = html;
       }
+    },
+
+    // HTML 白名单过滤：只允许 <b> <i> <u> <br> <strong> <em> 标签，其余转义
+    sanitize(text) {
+      if (!text) return '';
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        // 恢复安全标签
+        .replace(/&lt;b&gt;/g, '<b>').replace(/&lt;\/b&gt;/g, '</b>')
+        .replace(/&lt;i&gt;/g, '<i>').replace(/&lt;\/i&gt;/g, '</i>')
+        .replace(/&lt;u&gt;/g, '<u>').replace(/&lt;\/u&gt;/g, '</u>')
+        .replace(/&lt;br\s*\/?&gt;/g, '<br>')
+        .replace(/&lt;strong&gt;/g, '<strong>').replace(/&lt;\/strong&gt;/g, '</strong>')
+        .replace(/&lt;em&gt;/g, '<em>').replace(/&lt;\/em&gt;/g, '</em>');
     }
   };
 
@@ -167,11 +184,9 @@ window.App = window.App || {};
     }
 
     if (type === "npc" && text) {
-      // NPC 对话：speaker 需要转义，text 可能包含后端生成的富文本（已消毒）
-      // 注意：text.text 如果包含 HTML 标签（如 <b>、<br>），将作为富文本显示
-      // 这是预期行为，因为后端负责内容消毒
+      // NPC 对话：speaker 必须转义，text 经白名单过滤（b/i/u/br/strong/em）
       div.innerHTML = '<div class="speaker">' + HtmlUtils.escape(text.speaker || "")
-        + '</div><div class="msg-text">' + (text.text || text) + '</div>';
+        + '</div><div class="msg-text">' + HtmlUtils.sanitize(text.text || text) + '</div>';
     } else if (type === "system-error") {
       // 错误消息：只转换换行符，其他内容转义
       div.innerHTML = HtmlUtils.escape(text).replace(/\n/g, "<br>");
@@ -210,14 +225,16 @@ window.App = window.App || {};
       div.innerHTML = '<span style="color:#555;">\u6b64\u5730\u56fe\u65e0\u754c\u95e8</span>';
       return;
     }
-    // 界门信息来自后端数据，进行转义处理
+    // 界门信息来自后端数据，坐标经 parseInt 确保数值安全
     div.innerHTML = mapInfo.portals.map(function(pt) {
       const target = App.mapsData[pt.target_map_id];
       const targetName = target ? target.name : pt.target_map_id;
+      const sx = parseInt(pt.to_x, 10);
+      const sy = parseInt(pt.to_y, 10);
       return '<div class="portal-entry" onclick="App.moveTo('
-        + pt.to_x + ',' + pt.to_y + ')">\u2197 \u5f80\u3010'
+        + sx + ',' + sy + ')">\u2197 \u5f80\u3010'
         + HtmlUtils.escape(targetName)
-        + '\u3011(' + HtmlUtils.escape(pt.to_x) + ',' + HtmlUtils.escape(pt.to_y) + ')</div>';
+        + '\u3011(' + sx + ',' + sy + ')</div>';
     }).join("");
   }
 

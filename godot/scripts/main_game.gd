@@ -288,9 +288,12 @@ func _on_stream_done(data: Dictionary) -> void:
 	if ApiClient.is_connected("stream_done", Callable(self, "_on_stream_done")):
 		ApiClient.disconnect("stream_done", Callable(self, "_on_stream_done"))
 
-	if _stream_text == "" and data.has("error"):
-		var error_bb := "[b][color=#%s]%s[/color][/b]\n[对话失败] %s" % [GameColors.ACCENT2.to_html(false), _stream_npc_name, str(data.error)]
-		_msg_display.update_msg(_stream_npc_msg_index, error_bb)
+	if data.has("error"):
+		_stream_text += "\n[错误] " + str(data.error)
+		var bb := "[b][color=#%s]%s[/color][/b]\n%s" % [GameColors.ACCENT2.to_html(false), _stream_npc_name, _stream_text.replace("[", "[lb]")]
+		_msg_display.update_msg(_stream_npc_msg_index, bb)
+	elif _stream_text == "":
+		_msg_display.update_msg(_stream_npc_msg_index, "[b][color=#%s]%s[/color][/b]\n（无回复）" % [GameColors.ACCENT2.to_html(false), _stream_npc_name])
 
 	_is_streaming = false
 	_send_btn.disabled = false

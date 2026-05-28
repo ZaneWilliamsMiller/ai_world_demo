@@ -6,11 +6,14 @@ from __future__ import annotations
 """
 import asyncio
 import logging
+import os
+import threading
 import time as _time
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+import httpx
 
 from backend.config import settings
 from backend.data.prompts import WORLD_NAME
@@ -82,13 +85,13 @@ async def _auto_save_loop():
     """每 5 分钟自动存档所有活跃玩家。"""
     _save_log = logging.getLogger("auto_save")
     while True:
-        await asyncio.sleep(300)  # 5 分钟
+        await asyncio.sleep(settings.auto_save_interval_s)
         saved = 0
         for pid, p in list(room.players.items()):
             if p.dead or p.ended:
                 continue
             try:
-                save_game(p)
+                await asyncio.to_thread(save_game, p)
                 saved += 1
             except Exception as e:
                 _save_log.error("auto-save failed %s: %s", pid, e)
@@ -114,7 +117,7 @@ async def _shutdown():
         max_save_retries = 2
         for save_attempt in range(max_save_retries):
             try:
-                save_game(p)
+                await asyncio.to_thread(save_game, p)
                 saved += 1
                 break
             except (ConnectionError, TimeoutError, OSError) as transient_err:
@@ -150,9 +153,6 @@ async def _shutdown():
 @app.post("/api/shutdown")
 async def shutdown_server(request: Request):
     """关闭后端服务（仅用于开发环境）"""
-    import os
-    import threading
-    import httpx
 
     secret = request.headers.get("X-Shutdown-Secret", "")
     expected = os.environ.get("SHUTDOWN_SECRET", "")
@@ -177,8 +177,7 @@ async def shutdown_server(request: Request):
             print(f"   📤 准备通知前端: {frontend_url}")
 
             def notify_frontend():
-                import time
-                time.sleep(0.5)  # 让后端先返回响应给浏览器
+                _time.sleep(0.5)  # 让后端先返回响应给浏览器
                 print(f"   ⏳ 等待500ms后发送通知...")
                 try:
                     with httpx.Client(timeout=5.0) as client:
@@ -205,9 +204,7 @@ async def shutdown_server(request: Request):
         print("   ⚠️ 未设置 FRONTEND_PORT 环境变量，跳过前端通知")
 
     def delayed_shutdown():
-        import time
-        import os
-        time.sleep(3.0)
+        _time.sleep(3.0)
         print(f"\n   💀 后端进程即将退出 (os._exit)...")
         os._exit(0)
 

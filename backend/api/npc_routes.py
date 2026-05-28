@@ -3,25 +3,27 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
+import traceback
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from collections import defaultdict
-from time import time as _time
 
 from backend.data.npcs_data import NPCS
 from backend.data.factions import FACTIONS
 from backend.data.prompts import WORLD_NAME, SOCIETY_BIBLE
 from backend.systems.core import npc_ids_for_player, perception_scan, danger_sense_narrative
+from backend.systems.time_weather import shichen_name
 from backend.game_state import get_or_init_mind
 from backend.services.talk_service import build_npc_messages, apply_npc_reply, build_graceful_fallback
 from backend.services.agent_service import bg_reflect
 from backend import agent_brain
 from backend.llm_client import chat_completion, parse_finale, parse_npc_reply_json
-from backend.views import player_public as _player_public, factions_public as _factions_public
+from backend.views import player_public as _player_public
 
 class _RateLimiter:
     def __init__(self, max_requests: int = 10, window_s: float = 60.0):
@@ -30,7 +32,7 @@ class _RateLimiter:
         self._requests: dict[str, list[float]] = defaultdict(list)
 
     def is_limited(self, key: str) -> bool:
-        now = _time()
+        now = time.time()
         timestamps = self._requests[key]
         self._requests[key] = [t for t in timestamps if now - t < self._window]
         if len(self._requests[key]) >= self._max:
@@ -117,9 +119,9 @@ async def player_rest(body: RestBody) -> dict[str, Any]:
         result = rest_at_location(p)
         try:
             from backend.systems.save_system import save_game
-            save_game(p)
-        except Exception:
-            pass
+            await asyncio.to_thread(save_game, p)
+        except Exception as e:
+            logging.getLogger('rest').error('save failed for %s: %s', p.player_id, e)
 
     scan = perception_scan(p)
     danger_sense = danger_sense_narrative(p, scan) if scan else None
@@ -139,7 +141,6 @@ async def player_rest(body: RestBody) -> dict[str, Any]:
 async def npc_talk(body: TalkBody, bg: BackgroundTasks) -> dict[str, Any]:
     if _talk_limiter.is_limited(body.player_id):
         raise HTTPException(429, "对话过于频繁，请稍后再试")
-    import traceback
     try:
         from backend.session.store import room
         p = room.players.get(body.player_id)
@@ -188,7 +189,7 @@ async def npc_talk(body: TalkBody, bg: BackgroundTasks) -> dict[str, Any]:
             is_fallback = True
             fallback = build_graceful_fallback(body.npc_id, f"{type(e).__name__}: {e}")
             parsed = fallback["parsed"]
-            import logging
+
             logging.getLogger("api.routes").warning(
                 "LLM fallback for npc=%s player=%s: %s",
                 body.npc_id, body.player_id, str(e)[:120]
@@ -209,7 +210,6 @@ async def npc_talk(body: TalkBody, bg: BackgroundTasks) -> dict[str, Any]:
     except HTTPException:
         raise
     except Exception as e:
-        import logging
         logging.getLogger("api.routes").error(
             "npc_talk UNHANDLED ERROR for npc=%s player=%s:\n%s",
             body.npc_id, body.player_id, traceback.format_exc()
@@ -268,7 +268,7 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
             is_fallback = True
             fb = build_graceful_fallback(body.npc_id, str(e))
             parsed = fb["parsed"]
-            import logging
+
             logging.getLogger("api.routes").warning(
                 "LLM fallback (stream) for npc=%s player=%s: %s",
                 body.npc_id, body.player_id, str(e)[:120]
@@ -291,8 +291,8 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
                 yield _sse({"chunk": vis[i : i + chunk_size]})
                 await asyncio.sleep(0.01)
 
-        if needs_reflect and not is_fallback:
-            bg.add_task(bg_reflect, p.player_id, body.npc_id)
+        if needs_reflect and not is_light_inquiry and not is_fallback:
+            bg.add_task(bg_reflect, p.player_id, body.npc_id)  # stream
 
         out["server_ms"] = int((time.perf_counter() - t0) * 1000)
         if is_fallback:
@@ -309,7 +309,6 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
 @router.get("/api/agent/{player_id}/{npc_id}/mind")
 async def agent_mind(player_id: str, npc_id: str) -> dict[str, Any]:
     from backend.session.store import room
-    from backend.systems.time_weather import shichen_name
     p = room.players.get(player_id)
     if not p:
         raise HTTPException(404, "未知 player_id")
@@ -347,7 +346,6 @@ async def agent_mind(player_id: str, npc_id: str) -> dict[str, Any]:
 @router.post("/api/agent/reflect")
 async def agent_reflect(body: AgentActBody) -> dict[str, Any]:
     from backend.session.store import room
-    from backend.systems.time_weather import shichen_name
     p = room.players.get(body.player_id)
     if not p:
         raise HTTPException(404, "未知 player_id")

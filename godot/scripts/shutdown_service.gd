@@ -152,3 +152,8 @@ func _do_shutdown(parent: Control) -> void:
 		vb.add_child(UIBuilder.lbl("", 10))
 		vb.add_child(UIBuilder.lbl("❌ 后端未能自动关闭", 14, GameColors.ACCENT_RED))
 		vb.add_child(UIBuilder.lbl("请手动关闭运行后端的终端窗口", 12, GameColors.DIM))
+		
+		# 添加强制退出按钮
+		var force_quit_btn := UIBuilder.btn("🚪 强制退出前端", GameColors.ACCENT_RED)
+		force_quit_btn.pressed.connect(get_tree().quit)
+		vb.add_child(force_quit_btn)

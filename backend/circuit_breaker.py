@@ -134,17 +134,32 @@ class CircuitBreaker:
         }
 
 
+class NoOpCircuitBreaker:
+    """禁用熔断时的空操作熔断器，始终允许所有请求。"""
+    state = CircuitState.CLOSED
+
+    async def allow(self) -> bool: return True
+    async def success(self) -> None: pass
+    async def failure(self) -> None: pass
+    @property
+    def stats(self) -> dict[str, object]:
+        return {"state": "disabled", "total_requests": 0, "total_failures": 0, "rejected": 0, "recent_failures": 0, "last_failure_age_s": None}
+
+
 # 全局单例
-_cb: CircuitBreaker | None = None
+_cb: CircuitBreaker | NoOpCircuitBreaker | None = None
 
 
-def get_circuit_breaker() -> CircuitBreaker:
+def get_circuit_breaker() -> CircuitBreaker | NoOpCircuitBreaker:
     global _cb
     if _cb is None:
         from .config import settings
-        _cb = CircuitBreaker(
-            failure_window_s=settings.llm_cb_failure_window_s,
-            failure_threshold=settings.llm_cb_failure_threshold,
-            cooldown_s=settings.llm_cb_cooldown_s,
-        )
+        if not settings.llm_circuit_breaker:
+            _cb = NoOpCircuitBreaker()
+        else:
+            _cb = CircuitBreaker(
+                failure_window_s=settings.llm_cb_failure_window_s,
+                failure_threshold=settings.llm_cb_failure_threshold,
+                cooldown_s=settings.llm_cb_cooldown_s,
+            )
     return _cb

@@ -1,10 +1,11 @@
 """Backend API test script for living-paper."""
 import asyncio
 import httpx
+import os
 import time
 import json
 
-BASE = "http://127.0.0.1:8766"
+BASE = os.environ.get("BACKEND_URL", "http://127.0.0.1:8765")
 PLAYER_ID = f"test_player_{int(time.time())}"
 
 

@@ -1,4 +1,6 @@
 from __future__ import annotations
+import asyncio
+import uuid
 from typing import Any
 
 from backend.data.factions import FACTIONS
@@ -10,33 +12,32 @@ class SessionStore:
 
     def __init__(self) -> None:
         self.players: dict[str, PlayerState] = {}
+        self._lock = asyncio.Lock()
 
-    def get_or_create(
+    async def get_or_create(
         self,
         player_id: str | None,
         display_name: str | None,
         gender: str,
         permadeath: bool,
     ) -> PlayerState:
-        import uuid
 
         # ── 1. 尝试从文件存档加载 ──
         from backend.systems.save_system import load_game
         pid = player_id or str(uuid.uuid4())
-        if pid not in self.players:
-            loaded = load_game(pid) if player_id else None
-            if loaded:
-                # 从文件恢复（不改写人设字段）
-                self.players[pid] = loaded
-            else:
-                # 全新角色
-                self.players[pid] = PlayerState(
-                    player_id=pid,
-                    display_name=(display_name or f"江湖客{pid[:6]}").strip()[:24]
-                    or f"江湖客{pid[:6]}",
-                    gender=gender if gender in ("男", "女", "未言") else "未言",
-                    permadeath=bool(permadeath),
-                )
+        async with self._lock:
+            if pid not in self.players:
+                loaded = load_game(pid) if player_id else None
+                if loaded:
+                    self.players[pid] = loaded
+                else:
+                    self.players[pid] = PlayerState(
+                        player_id=pid,
+                        display_name=(display_name or f"江湖客{pid[:6]}").strip()[:24]
+                        or f"江湖客{pid[:6]}",
+                        gender=gender if gender in ("男", "女", "未言") else "未言",
+                        permadeath=bool(permadeath),
+                    )
 
         st = self.players[pid]
 

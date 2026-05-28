@@ -37,7 +37,7 @@ var intro_text: String = ""
 # ── UI Signals ──
 signal state_updated()
 signal map_pos_changed()
-signal chat_message(speaker: String, message: String, npc_name: String)
+signal chat_message(speaker: String, message: String, npc_id: String)
 signal system_message(text: String)
 signal logged_in()
 signal logged_out()
@@ -93,7 +93,8 @@ func _apply_hello_response(data: Dictionary) -> void:
 	npcs_here = data.get("npcs_here", [])
 	npc_labels = data.get("npc_labels", {})
 	npc_catalog = data.get("npc_catalog", [])
-	npc_states = data.get("npc_states", {})
+	var player_data := data.get("player", {})
+	npc_states = player_data.get("npc_states", {})
 	intro_text = data.get("intro", "")
 	_apply_player(data.get("player", {}))
 
@@ -121,6 +122,7 @@ func _apply_player(p: Dictionary) -> void:
 	player_world_day = p.get("world_day", player_world_day)
 	player_world_shichen = p.get("world_shichen", player_world_shichen)
 	player_weather = p.get("weather", player_weather)
+	npc_states = p.get("npc_states", npc_states)
 
 
 func move_player(tx: int, ty: int) -> void:

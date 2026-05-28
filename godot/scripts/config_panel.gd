@@ -179,11 +179,31 @@ func _fill_config_values() -> void:
 
 ## 应用配置到 ApiClient 并更新指示器
 func _apply_config() -> void:
-	ApiClient.api_mode = "backend" if _cfg_api_mode.selected == 0 else "direct"
-	ApiClient.backend_url = _cfg_backend_url.text.strip_edges()
-	ApiClient.llm_api_url = _cfg_llm_url.text.strip_edges()
-	ApiClient.llm_api_key = _cfg_llm_key.text.strip_edges()
-	ApiClient.llm_model = _cfg_llm_model.text.strip_edges()
+	var new_mode := "backend" if _cfg_api_mode.selected == 0 else "direct"
+	var new_backend_url := _cfg_backend_url.text.strip_edges()
+	var new_llm_url := _cfg_llm_url.text.strip_edges()
+	var new_llm_key := _cfg_llm_key.text.strip_edges()
+	var new_llm_model := _cfg_llm_model.text.strip_edges()
+
+	# 输入验证
+	if new_mode == "backend" and new_backend_url == "":
+		_cfg_backend_url.add_theme_color_override("font_color", GameColors.ACCENT_RED)
+		return
+	if new_mode == "direct" and new_llm_url == "":
+		_cfg_llm_url.add_theme_color_override("font_color", GameColors.ACCENT_RED)
+		return
+	if new_mode == "direct" and new_llm_key == "":
+		_cfg_llm_key.add_theme_color_override("font_color", GameColors.ACCENT_RED)
+		return
+	if new_mode == "direct" and new_llm_model == "":
+		_cfg_llm_model.add_theme_color_override("font_color", GameColors.ACCENT_RED)
+		return
+
+	ApiClient.api_mode = new_mode
+	ApiClient.backend_url = new_backend_url
+	ApiClient.llm_api_url = new_llm_url
+	ApiClient.llm_api_key = new_llm_key
+	ApiClient.llm_model = new_llm_model
 
 	if _on_indicator_updated.is_valid():
 		var mode_text := "后端模式" if ApiClient.api_mode == "backend" else "独立模式"

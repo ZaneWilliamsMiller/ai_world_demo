@@ -1,6 +1,7 @@
 """存档 API 路由：save, load, delete_save, saves_list。"""
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -44,7 +45,7 @@ async def save_player(body: SaveBody) -> dict[str, Any]:
     p = room.players.get(body.player_id)
     if not p:
         raise HTTPException(404, "未知 player_id")
-    path = save_game(p)
+    path = await asyncio.to_thread(save_game, p)
     return {"ok": True, "path": path}
 
 

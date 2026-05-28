@@ -273,6 +273,13 @@
 </div>
 
 <script>
+function escapeHtml(text) {
+  if (!text) return '';
+  var div = document.createElement('div');
+  div.textContent = String(text);
+  return div.innerHTML;
+}
+
 const API_BASE = (function() {
   try {
     const cfg = JSON.parse(localStorage.getItem('lp_config') || '{}');
@@ -316,24 +323,24 @@ function createTestCard(test) {
   card.innerHTML = `
     <div class="test-header">
       <div>
-        <div class="test-name">📋 ${test.name}</div>
-        <div class="test-desc">${test.description}</div>
+        <div class="test-name">📋 ${escapeHtml(test.name)}</div>
+        <div class="test-desc">${escapeHtml(test.description)}</div>
       </div>
     </div>
     <div class="actions-row">
-      <button class="btn btn-primary" onclick="runTest('${test.name}', this)" id="btn-${test.name}">
+      <button class="btn btn-primary" onclick="runTest('${escapeHtml(test.name)}', this)" id="btn-${escapeHtml(test.name)}">
         ▶ 运行测试
       </button>
-      <button class="btn btn-secondary" onclick="toggleOutput('${test.name}')">
+      <button class="btn btn-secondary" onclick="toggleOutput('${escapeHtml(test.name)}')">
         📄 显示/隐藏输出
       </button>
     </div>
-    <div class="output-section" id="output-${test.name}">
+    <div class="output-section" id="output-${escapeHtml(test.name)}">
       <div class="output-header">
         <span class="output-label">测试输出：</span>
-        <span class="status-badge" id="status-${test.name}"></span>
+        <span class="status-badge" id="status-${escapeHtml(test.name)}"></span>
       </div>
-      <pre class="output-box" id="result-${test.name}">等待执行...</pre>
+      <pre class="output-box" id="result-${escapeHtml(test.name)}">等待执行...</pre>
     </div>
   `;
   

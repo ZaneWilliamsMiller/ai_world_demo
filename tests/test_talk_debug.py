@@ -1,6 +1,6 @@
 import httpx, asyncio, json, time, sys
 
-BASE = "http://127.0.0.1:8766"
+BASE = "http://127.0.0.1:8765"
 
 async def test():
     player_id = f"debug_{int(time.time())}"

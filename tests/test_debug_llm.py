@@ -1,7 +1,19 @@
 """Debug: trace exactly why first LLM call fails."""
-import httpx, asyncio, json, sys
+import httpx, asyncio, json, os, sys
+from pathlib import Path
 
-BASE = "http://127.0.0.1:8766"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from backend.config import settings
+
+BASE = os.environ.get("BACKEND_URL", "http://127.0.0.1:8765")
+
+API_KEY = os.environ.get("LLM_API_KEY", "")
+if not API_KEY:
+    print("⚠️ 请设置环境变量 LLM_API_KEY")
+    sys.exit(1)
 
 async def test():
     async with httpx.AsyncClient(timeout=60.0) as c:
@@ -19,13 +31,13 @@ async def test():
         try:
             async with httpx.AsyncClient(timeout=30.0) as dc:
                 r = await dc.post(
-                    "https://llmapi.paratera.com/v1/chat/completions",
+                    f"{settings.llm_base_url.rstrip('/')}/chat/completions",
                     headers={
-                        "Authorization": "Bearer sk-o5exptybwJAro8OfIqqmjQ",
+                        "Authorization": f"Bearer {API_KEY}",
                         "Content-Type": "application/json",
                     },
                     json={
-                        "model": "DeepSeek-V4-Pro",
+                        "model": settings.llm_model,
                         "messages": [
                             {"role": "system", "content": "你是一个简洁的助手。"},
                             {"role": "user", "content": "用一句话介绍自己。"},

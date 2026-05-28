@@ -6,7 +6,7 @@ window.App = window.App || {};
 (function(App) {
   "use strict";
 
-  var _statePollTimer = null;
+  let _statePollTimer = null;
 
   // ═══════════════════════════════════════════
   //  DOM 元素缓存 - 避免重复查询，提升性能
@@ -185,12 +185,12 @@ window.App = window.App || {};
 
   App.loadGame = async function() {
     const sel = document.querySelector(".saves-list div.selected");
-    if (!sel) { alert("请先选择一个存档"); return; }
+    if (!sel) { App.addMsg("system", "请先选择一个存档"); return; }
     try {
       const data = await App.loadPlayer(sel._pid);
       App.onGameReady(data, sel._pid, data.display_name);
     } catch (e) {
-      alert("读档失败：" + e.message);
+      App.addMsg("system", "读档失败：" + e.message);
     }
   };
 
@@ -207,11 +207,10 @@ window.App = window.App || {};
     if (topbar) topbar.style.display = "flex";
     if (mainUI) mainUI.style.display = "flex";
 
-    // 欢迎信息：displayName 来自用户输入，必须转义；data.intro 可能包含格式化文本
     const introMsg = DOM.introMsg || document.getElementById("introMsg");
     if (introMsg) {
       introMsg.innerHTML =
-        "<b>欢迎，" + HtmlUtils.escape(App.displayName) + "！</b><br>" + (data.intro || "江湖路远，珍重。");
+        "<b>欢迎，" + HtmlUtils.escape(App.displayName) + "！</b><br>" + HtmlUtils.escape(data.intro || "江湖路远，珍重。").replace(/\n/g, "<br>");
     }
 
     App.updateUI(data);
@@ -244,6 +243,7 @@ window.App = window.App || {};
     }
   };
 
+  // showConfirm: message 参数必须为调用方硬编码的可信 HTML（不可传入用户输入）
   App.showConfirm = function(title, message, onConfirm) {
     const overlay = DOM.confirmOverlay || document.getElementById("confirmOverlay");
     const titleEl = DOM.confirmTitle || document.getElementById("confirmTitle");
@@ -257,10 +257,14 @@ window.App = window.App || {};
 
     overlay.classList.add("show");
 
+    var _onOverlayClick, _onKeydown;
+
     function cleanup() {
       overlay.classList.remove("show");
       okBtn.removeEventListener("click", handleOk);
       cancelBtn.removeEventListener("click", handleCancel);
+      if (_onOverlayClick) overlay.removeEventListener("click", _onOverlayClick);
+      if (_onKeydown) document.removeEventListener("keydown", _onKeydown);
     }
 
     function handleOk(e) {
@@ -281,19 +285,15 @@ window.App = window.App || {};
     okBtn.addEventListener("click", handleOk);
     cancelBtn.addEventListener("click", handleCancel);
 
-    overlay.addEventListener("click", function onOverlayClick(e) {
-      if (e.target === overlay) {
-        cleanup();
-        overlay.removeEventListener("click", onOverlayClick);
-      }
-    });
+    _onOverlayClick = function(e) {
+      if (e.target === overlay) { cleanup(); }
+    };
+    overlay.addEventListener("click", _onOverlayClick);
 
-    document.addEventListener("keydown", function onEsc(e) {
-      if (e.key === "Escape") {
-        cleanup();
-        document.removeEventListener("keydown", onEsc);
-      }
-    });
+    _onKeydown = function(e) {
+      if (e.key === "Escape") { cleanup(); }
+    };
+    document.addEventListener("keydown", _onKeydown);
   };
 
   App.shutdownAll = function() {
@@ -527,7 +527,7 @@ window.App = window.App || {};
 
         } catch (e) {
           console.error("Shutdown error:", e);
-          alert("关闭过程中出现错误: " + e.message + "\n\n请手动关闭终端窗口。");
+          App.addMsg("system", "关闭过程中出现错误: " + e.message + " — 请手动关闭终端窗口。");
         }
       }
     );

@@ -301,8 +301,7 @@ func _build_npc_markers() -> void:
 
 func _update_npc_markers() -> void:
 	_build_npc_index()
-	for c in _npc_markers.get_children():
-		c.queue_free()
+	# _build_npc_markers() already clears _npc_markers children, no need to duplicate
 	_build_npc_markers()
 
 

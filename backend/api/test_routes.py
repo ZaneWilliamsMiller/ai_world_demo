@@ -1,17 +1,29 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 import sys
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-router = APIRouter(prefix="/api/tests", tags=["tests"])
+router = APIRouter(
+    prefix="/api/tests",
+    tags=["tests"],
+    dependencies=[Depends(_guard_test_routes)],
+)
 
 TESTS_DIR = Path(__file__).resolve().parents[2] / "tests"
+_run_lock = asyncio.Lock()
+
+
+def _guard_test_routes() -> None:
+    """安全守卫：生产环境默认禁用测试路由。设置 ENABLE_TEST_ROUTES=1 以启用。"""
+    if os.environ.get("ENABLE_TEST_ROUTES", "0") != "1":
+        raise HTTPException(403, "测试路由已禁用。设置环境变量 ENABLE_TEST_ROUTES=1 以启用。")
 
 
 class TestInfo(BaseModel):
@@ -64,33 +76,35 @@ async def run_test(test_name: str):
     if not test_file.exists():
         raise HTTPException(404, f"测试 {test_name} 不存在")
 
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            sys.executable,
-            str(test_file),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-            cwd=str(test_file.parent.parent)
-        )
+    if _run_lock.locked():
+        raise HTTPException(429, "已有测试正在运行，请稍后再试")
 
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300)
+    async with _run_lock:
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                sys.executable,
+                str(test_file),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                cwd=str(test_file.parent.parent)
+            )
 
-        output = stdout.decode("utf-8", errors="replace")
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
 
-        return TestResult(
-            test_name=test_name,
-            success=(proc.returncode == 0),
-            output=output,
-            exit_code=proc.returncode
-        )
+            output = stdout.decode("utf-8", errors="replace")
 
-    except asyncio.TimeoutError:
-        raise HTTPException(408, f"Test timed out: {test_name}")
-    except Exception as e:
-        raise HTTPException(500, f"Failed to run test: {str(e)}")
+            return TestResult(
+                test_name=test_name,
+                success=(proc.returncode == 0),
+                output=output,
+                exit_code=proc.returncode
+            )
+
+        except asyncio.TimeoutError:
+            raise HTTPException(408, f"Test timed out: {test_name}")
+        except Exception as e:
+            raise HTTPException(500, f"Failed to run test: {str(e)}")
 
 
-@router.get("/run/{test_name}")
-async def run_test_get(test_name: str):
-    """GET方式执行测试（方便浏览器直接访问）"""
-    return await run_test(test_name)
+# DEPRECATED: GET-based test execution removed for security (CSRF risk).
+# Use POST /api/tests/run/{test_name} instead.

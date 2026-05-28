@@ -21,7 +21,7 @@ var _req_id: int = 0
 
 ## Signal-based request — returns the parsed response Dictionary.
 ## Awaits the actual HTTPRequest completion signal.
-func request(path: String, method: String = "GET", body: Dictionary = {}) -> Dictionary:
+func request(path: String, method: String = "GET", body: Dictionary = {}, extra_headers: Dictionary = {}) -> Dictionary:
 	var http := HTTPRequest.new()
 	add_child(http)
 	http.timeout = timeout_sec
@@ -31,6 +31,8 @@ func request(path: String, method: String = "GET", body: Dictionary = {}) -> Dic
 		"Content-Type: application/json",
 		"Accept: application/json",
 	])
+	for key in extra_headers:
+		headers.append(key + ": " + str(extra_headers[key]))
 	var json_body := JSON.stringify(body) if not body.is_empty() else ""
 
 	var err: Error
@@ -142,16 +144,31 @@ func talk_stream(npc_id: String, message: String, player_id: String = "", llm_ba
 	var base_url := _base_url()
 	var host := "127.0.0.1"
 	var port := 8765
+	var use_tls := false
 
-	if base_url.begins_with("http://"):
+	if base_url.begins_with("https://"):
+		var parts := base_url.substr(8).split(":")
+		host = parts[0]
+		if parts.size() > 1:
+			port = int(parts[1])
+		else:
+			port = 443
+		use_tls = true
+	elif base_url.begins_with("http://"):
 		var parts := base_url.substr(7).split(":")
 		host = parts[0]
 		if parts.size() > 1:
 			port = int(parts[1])
 
 	var http := HTTPClient.new()
-	var err := http.connect_to_host(host, port)
+
+	# Ensure HTTPClient is closed on function exit
+	var _http_ref := http
+
+	var tls_options: TLSOptions = TLSOptions.client() if use_tls else null
+	var err := http.connect_to_host(host, port, tls_options)
 	if err != OK:
+		http.close()
 		emit_signal("stream_done", {"error": "connect_failed", "done": true})
 		return
 
@@ -160,6 +177,7 @@ func talk_stream(npc_id: String, message: String, player_id: String = "", llm_ba
 		await get_tree().process_frame
 
 	if http.get_status() != HTTPClient.STATUS_CONNECTED:
+		http.close()
 		emit_signal("stream_done", {"error": "connection_failed", "done": true})
 		return
 
@@ -172,6 +190,7 @@ func talk_stream(npc_id: String, message: String, player_id: String = "", llm_ba
 
 	err = http.request(HTTPClient.METHOD_POST, url_path, headers, body_json)
 	if err != OK:
+		http.close()
 		emit_signal("stream_done", {"error": "request_failed", "done": true})
 		return
 
@@ -180,6 +199,7 @@ func talk_stream(npc_id: String, message: String, player_id: String = "", llm_ba
 		await get_tree().process_frame
 
 	if http.get_status() != HTTPClient.STATUS_BODY:
+		http.close()
 		emit_signal("stream_done", {"error": "request_error", "done": true})
 		return
 
@@ -193,6 +213,7 @@ func talk_stream(npc_id: String, message: String, player_id: String = "", llm_ba
 			if chunk.size() > 0:
 				rb.append_array(chunk)
 			await get_tree().process_frame
+		http.close()
 		var error_text := rb.get_string_from_utf8()
 		emit_signal("stream_done", {"error": "HTTP %d: %s" % [response_code, error_text.left(200)], "done": true})
 		return
@@ -219,10 +240,12 @@ func talk_stream(npc_id: String, message: String, player_id: String = "", llm_ba
 				if d.has("error"):
 					emit_signal("stream_chunk", "[错误] " + str(d.error))
 				if d.has("done") and d.done:
+					http.close()
 					emit_signal("stream_done", d)
 					return
 		await get_tree().process_frame
 
+	http.close()
 	emit_signal("stream_done", {"done": true})
 
 
@@ -259,5 +282,9 @@ func run_test(test_name: String) -> Dictionary:
 
 ## Shutdown backend server.
 func shutdown_backend() -> Dictionary:
-	var res: Dictionary = await request("/api/shutdown", "POST", {})
-	return {"success": res.get("_status", 0) == 200, "_status": res.get("_status", 0)}
+	var secret := OS.get_environment("SHUTDOWN_SECRET")
+	var extra := {}
+	if secret != "":
+		extra["X-Shutdown-Secret"] = secret
+	var res: Dictionary = await request("/api/shutdown", "POST", {}, extra)
+	return {"success": res.get("_status", 0) == 200}

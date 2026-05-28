@@ -65,6 +65,23 @@ window.App = window.App || {};
           } catch (e) { /* 忽略解析错误 */ }
         }
       }
+
+      // 处理流结束后的残留数据
+      if (buf.trim()) {
+        var lastLine = buf.trim();
+        if (lastLine.indexOf("data: ") === 0) {
+          try {
+            var lastD = JSON.parse(lastLine.slice(6).trim());
+            if (lastD.chunk) {
+              visibleText += lastD.chunk;
+              textEl.textContent = visibleText;
+              App.scrollToBottom();
+            }
+          } catch (e) { /* 忽略 */ }
+        }
+      }
+
+      reader.releaseLock();
     } catch (e) {
       // 游戏内情境提示（如身陷险局）作为系统消息显示
       var errorMsg = e.message || "对话中断，请重试";
