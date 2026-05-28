@@ -20,7 +20,7 @@ from typing import Any
 
 log = logging.getLogger("memory")
 
-# ─── 从子模块重新导出（保持向后兼容）───
+# ─── 从子模块重新导出（保持向后兼容；新代码请直接从子模块导入）───
 from backend.memory.entities import (           # noqa: F401
     MOOD_LABELS,
     ANCHOR_VALENCE_THRESHOLD,

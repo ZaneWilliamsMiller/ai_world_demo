@@ -195,9 +195,12 @@ def check_retrieval_cache(key: str) -> list[str] | None:
 
 
 def set_retrieval_cache(key: str, ids: list[str]) -> None:
-    """写入检索结果缓存。"""
     _RETRIEVAL_CACHE[key] = (time.time() + _RETRIEVAL_CACHE_TTL, ids)
-    # 限制缓存大小
     if len(_RETRIEVAL_CACHE) > 256:
-        oldest = min(_RETRIEVAL_CACHE, key=lambda k: _RETRIEVAL_CACHE[k][0])
-        del _RETRIEVAL_CACHE[oldest]
+        now = time.time()
+        expired = [k for k, (exp, _) in _RETRIEVAL_CACHE.items() if now > exp]
+        for k in expired:
+            del _RETRIEVAL_CACHE[k]
+        if len(_RETRIEVAL_CACHE) > 256:
+            oldest = min(_RETRIEVAL_CACHE, key=lambda k: _RETRIEVAL_CACHE[k][0])
+            del _RETRIEVAL_CACHE[oldest]

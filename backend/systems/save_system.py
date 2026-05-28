@@ -1,14 +1,14 @@
 """
-save_system.py �?局外存档：每个角色独立 JSON 存档文件
+save_system.py —局外存档：每个角色独立 JSON 存档文件
 ========================================================
 
-功能�?
-  - save_game(p)      �?序列�?PlayerState �?saves/<player_id>.json
-  - load_game(pid)    �?�?saves/<player_id>.json 还原 PlayerState
-  - list_saves()      �?列出全部存档的摘�?
-  - delete_save(pid)  �?删除存档文件（真实江湖死�?手动弃档�?
+功能：
+  - save_game(p)      →序列化PlayerState →saves/<player_id>.json
+  - load_game(pid)    →从saves/<player_id>.json 还原 PlayerState
+  - list_saves()      →列出全部存档的摘要
+  - delete_save(pid)  →删除存档文件（真实江湖死亡手动弃档）
 
-存档文件路径�?项目�?/saves/
+存档文件路径：项目根/saves/
 """
 from __future__ import annotations
 
@@ -42,11 +42,11 @@ def _ensure_dir() -> None:
 
 
 def _serialize_player(p: PlayerState) -> dict[str, Any]:
-    """�?PlayerState 转为�?JSON 可序列化�?dict�?
+    """将PlayerState 转为纯JSON 可序列化的dict。
 
-    跳过 lock（asyncio.Lock 不可序列化）�?
-    minds 中的 AgentMind 转为 dict�?
-    npc_positions 中的 tuple 转为 list�?""
+    跳过 lock（asyncio.Lock 不可序列化）；
+    minds 中的 AgentMind 转为 dict；
+    npc_positions 中的 tuple 转为 list。"""
     data: dict[str, Any] = {}
     for fld in dc_fields(p):
         key = fld.name
@@ -62,7 +62,7 @@ def _serialize_player(p: PlayerState) -> dict[str, Any]:
 
 
 def _mind_to_dict(mind: Any) -> dict[str, Any]:
-    """AgentMind �?dict�?""
+    """AgentMind →dict。"""
     return {
         "items": [item.to_dict() for item in getattr(mind, "items", [])],
         "importance_since_reflect": float(getattr(mind, "importance_since_reflect", 0)),
@@ -81,10 +81,10 @@ def _mind_to_dict(mind: Any) -> dict[str, Any]:
 
 
 def _deserialize_player(data: dict[str, Any]) -> PlayerState:
-    """�?dict 还原 PlayerState�?""
-    # 特殊字段：minds 需要重�?AgentMind
+    """从dict 还原 PlayerState。"""
+    # 特殊字段：minds 需要重建AgentMind
     minds_raw = data.pop("minds", {}) or {}
-    # npc_positions �?list �?tuple
+    # npc_positions 的list →tuple
     npc_pos_raw = data.pop("npc_positions", {}) or {}
 
     # 确保 reputation 完整（老存档兼容）
@@ -133,7 +133,7 @@ def _deserialize_player(data: dict[str, Any]) -> PlayerState:
             mind.items.append(mem)
         p.minds[nid] = mind
 
-    # 还原 npc_positions：list �?tuple
+    # 还原 npc_positions：list →tuple
     p.npc_positions = {}
     for nid, val in npc_pos_raw.items():
         if isinstance(val, (list, tuple)) and len(val) >= 3:
@@ -142,12 +142,12 @@ def _deserialize_player(data: dict[str, Any]) -> PlayerState:
             except (ValueError, TypeError):
                 continue
 
-    # 兼容：没有这些字段的老存�?
+    # 兼容：没有这些字段的老存档
     if not hasattr(p, "vigor_max") or not p.vigor_max:
         p.vigor_max = 100
     if not hasattr(p, "spirit_max") or not p.spirit_max:
         p.spirit_max = 100
-    # 体力永远不应�?0 开始（新角色保�?80�?
+    # 体力永远不应从0 开始（新角色保底80）
     if int(getattr(p, "vigor", 0)) <= 0:
         p.vigor = 80
     if int(getattr(p, "spirit", 0)) <= 0:
@@ -165,9 +165,9 @@ def _deserialize_player(data: dict[str, Any]) -> PlayerState:
     return p
 
 
-# ══════════════════════════════════════════════════════�?
+# ═══════════════════════════════════════════════════════
 #  公开 API
-# ══════════════════════════════════════════════════════�?
+# ═══════════════════════════════════════════════════════
 
 def save_game(p: PlayerState) -> str:
     _validate_player_id(p.player_id)
@@ -186,7 +186,7 @@ def save_game(p: PlayerState) -> str:
             except Exception:
                 pass
             raise
-        log.info("存档成功: %s (%s, �?d�? 制钱%d)", p.display_name, p.player_id,
+        log.info("存档成功: %s (%s, 第d日 制钱%d)", p.display_name, p.player_id,
                   p.world_day, p.coins)
         return str(fp)
     except Exception as e:
@@ -205,7 +205,7 @@ def load_game(player_id: str) -> PlayerState | None:
         p = _deserialize_player(data)
         if p.permadeath and p.dead:
             raise ValueError(f"角色 {p.display_name} 已在真实江湖中身故，存档已废")
-        log.info("存档加载: %s (%s, �?d�?", p.display_name, p.player_id, p.world_day)
+        log.info("存档加载: %s (%s, 第d日", p.display_name, p.player_id, p.world_day)
         return p
     except ValueError:
         raise
@@ -246,7 +246,7 @@ def delete_save(player_id: str) -> bool:
         return False
     try:
         fp.unlink()
-        log.info("存档已删�? %s", player_id)
+        log.info("存档已删除 %s", player_id)
         return True
     except Exception as e:
         log.error("删除存档失败 %s: %s", player_id, e)
@@ -254,20 +254,20 @@ def delete_save(player_id: str) -> bool:
 
 
 def respawn_at_supply_point(p: PlayerState) -> str:
-    """非真实江湖模式下，重伤后返回最近补给点�?
+    """非真实江湖模式下，重伤后返回最近补给点。
 
-    补给�?= {T: 客栈, Y: 驿站, I: 黑店, M: 市集, B: 兵站}
+    补给点= {T: 客栈, Y: 驿站, I: 黑店, M: 市集, B: 兵站}
 
-    在当前地图找最近的补给点格子；找不到则�?county 客栈 (4,2)�?
-    恢复 50% 体力/心气，清�?debuff�?
-    返回一句文本描述�?""
+    在当前地图找最近的补给点格子；找不到则回county 客栈 (4,2)。
+    恢复 50% 体力/心气，清除debuff。
+    返回一句文本描述。"""
     from backend.data.maps_data import MAPS
     from backend.systems.pathfinding import walkable
 
     supply_tiles = {"T", "Y", "I", "M", "B"}
     candidates: list[tuple[int, int, str]] = []  # (manhattan_dist, x, y)
 
-    # 先在当前地图�?
+    # 先在当前地图找
     m = MAPS.get(p.map_id)
     if m:
         rows = m["rows"]
@@ -304,8 +304,8 @@ def respawn_at_supply_point(p: PlayerState) -> str:
     p.unconscious_ticks = 0
 
     map_name = MAPS.get(p.map_id, {}).get("name", p.map_id)
-    msg = f"重伤苏醒，被江湖路人拖至{map_name}补给处。气力心神恢复一半�?
-    log.info("respawn: %s (%s,%s)�?%s,%s)", p.display_name, old_x, old_y, nx, ny)
+    msg = f"重伤苏醒，被江湖路人拖至{map_name}补给处。气力心神恢复一半。"
+    log.info("respawn: %s (%s,%s)→%s,%s)", p.display_name, old_x, old_y, nx, ny)
 
     # 触发事件
     from backend.systems.reputation import push_event

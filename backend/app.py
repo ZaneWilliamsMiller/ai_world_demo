@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "static"
 
 def _cors_allow_origins() -> tuple[list[str], bool]:
-    """返回 (origins, allow_credentials)。origins �?* 时凭证必须为 False（浏览器规范）�?""
+    """返回 (origins, allow_credentials)。origins 为 * 时凭证必须为 False（浏览器规范）。"""
     raw = (settings.cors_allow_origins or "").strip()
     if not raw or raw == "*":
         return ["*"], False
@@ -42,7 +42,7 @@ _origins, _creds = _cors_allow_origins()
 _auto_save_task = None
 
 async def _auto_save_loop():
-    """�?5 分钟自动存档所有活跃玩家�?""
+    """每 5 分钟自动存档所有活跃玩家。"""
     _save_log = logging.getLogger("auto_save")
     while True:
         await asyncio.sleep(settings.auto_save_interval_s)
@@ -119,14 +119,14 @@ async def log_requests(request: Request, call_next):
 
     if request.url.path.startswith("/api/"):
         _log.info(
-            "%s %s �?%d (%dms)",
+            "%s %s → %d (%dms)",
             request.method, request.url.path,
             response.status_code, duration_ms,
         )
 
     return response
 
-# 真正的前后端分离：后端只提供API，不提供静态文�?
+# 真正的前后端分离：后端只提供API，不提供静态文件
 # if STATIC.exists():
 #     app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
 
@@ -138,7 +138,7 @@ async def shutdown_server(request: Request):
     secret = request.headers.get("X-Shutdown-Secret", "")
     expected = os.environ.get("SHUTDOWN_SECRET", "")
     if not expected:
-        raise HTTPException(403, "未配�?SHUTDOWN_SECRET，拒绝远程关�?)
+        raise HTTPException(403, "未配置 SHUTDOWN_SECRET，拒绝远程关闭")
     if secret != expected:
         raise HTTPException(403, "无权关闭服务")
 
@@ -148,11 +148,11 @@ async def shutdown_server(request: Request):
     shutdown_log.info("收到关闭请求")
     shutdown_log.info("前端端口: %s", frontend_port)
 
-    # 通知前端服务器关�?
+    # 通知前端服务器关闭
     if frontend_port:
         try:
             frontend_url = f"http://127.0.0.1:{frontend_port}/__shutdown__"
-            shutdown_log.info("通知前端服务器关�? %s", frontend_url)
+            shutdown_log.info("通知前端服务器关闭: %s", frontend_url)
 
             def notify_frontend():
                 _time.sleep(0.5)
@@ -166,13 +166,13 @@ async def shutdown_server(request: Request):
             notifier = threading.Thread(target=notify_frontend, daemon=True)
             notifier.start()
         except Exception as e:
-            shutdown_log.warning("准备通知前端时出�? %s", e)
+            shutdown_log.warning("准备通知前端时出错: %s", e)
     else:
-        shutdown_log.info("未设�?FRONTEND_PORT，跳过前端通知")
+        shutdown_log.info("未设置 FRONTEND_PORT，跳过前端通知")
 
     def delayed_shutdown():
         _time.sleep(3.0)
-        _log.info("后端进程即将退�?..")
+        _log.info("后端进程即将退出...")
 
         try:
             saved = 0
@@ -205,11 +205,11 @@ async def shutdown_server(request: Request):
         "message": "服务正在关闭",
         "frontend_port": frontend_port,
         "method": "http_notification",
-        "hint": "检查后端终端窗口查看详细日�?
+        "hint": "检查后端终端窗口查看详细日志"
     }
 
 
-# 真正的前后端分离：后端只提供API，不提供静态文�?
+# 真正的前后端分离：后端只提供API，不提供静态文件
 # @app.get("/")
 # async def index() -> FileResponse:
 #     index_path = STATIC / "index.html"

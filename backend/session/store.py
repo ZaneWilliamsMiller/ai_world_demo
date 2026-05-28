@@ -92,5 +92,13 @@ class SessionStore:
         async with self._lock:
             self.players.pop(player_id, None)
 
+    async def set_player(self, player_id: str, player: PlayerState) -> None:
+        async with self._lock:
+            self.players[player_id] = player
+
+    async def pop_player(self, player_id: str) -> PlayerState | None:
+        async with self._lock:
+            return self.players.pop(player_id, None)
+
 
 room = SessionStore()

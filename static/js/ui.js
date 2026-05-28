@@ -24,19 +24,24 @@ window.App = window.App || {};
       }
     },
 
+    _ALLOWED_TAGS: new Set(['b', 'i', 'u', 'strong', 'em', 'br']),
+
     sanitize(text) {
       if (!text) return '';
-      return String(text)
+      var escaped = String(text)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/&lt;b&gt;/g, '<b>').replace(/&lt;\/b&gt;/g, '</b>')
-        .replace(/&lt;i&gt;/g, '<i>').replace(/&lt;\/i&gt;/g, '</i>')
-        .replace(/&lt;u&gt;/g, '<u>').replace(/&lt;\/u&gt;/g, '</u>')
-        .replace(/&lt;br\s*\/?&gt;/g, '<br>')
-        .replace(/&lt;strong&gt;/g, '<strong>').replace(/&lt;\/strong&gt;/g, '</strong>')
-        .replace(/&lt;em&gt;/g, '<em>').replace(/&lt;\/em&gt;/g, '</em>');
-    }
+        .replace(/>/g, '&gt;');
+      escaped = escaped.replace(/&lt;(\/?)(b|i|u|strong|em|br)\s*\/?&gt;/gi, function(match, slash, tag) {
+        tag = tag.toLowerCase();
+        if (HtmlUtils._ALLOWED_TAGS.has(tag)) {
+          if (tag === 'br') return '<br>';
+          return '<' + slash + tag + '>';
+        }
+        return match;
+      });
+      return escaped;
+    },
   };
 
   App.HtmlUtils = HtmlUtils;

@@ -17,7 +17,7 @@ from backend.data.maps_data import MAPS, MAP_LOCATIONS, LOCATION_KEYWORDS
 from backend.systems.pathfinding import tile_at, can_step_between, find_path, apply_portal, is_dangerous
 from backend.systems.time_weather import is_night, shichen_name
 
-# ── 从子模块 re-export（保持向后兼容）──
+# ── 从子模块 re-export（保持向后兼容；新代码请直接从子模块导入）──
 from backend.systems.trap import (                    # noqa: F401
     apply_vigor_delta,
     apply_spirit_delta,

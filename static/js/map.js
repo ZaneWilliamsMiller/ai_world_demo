@@ -98,6 +98,28 @@ window.App = window.App || {};
   var _resizeBound = false;
   var _keyHandler = null;
 
+  var _npcGradientCache = {};
+  var _npcGradientCacheKey = "";
+
+  function getNpcGradient(ctx, colorKey, innerColor, outerColor) {
+    var cacheKey = viewW + "x" + viewH;
+    if (_npcGradientCacheKey !== cacheKey) {
+      _npcGradientCache = {};
+      _npcGradientCacheKey = cacheKey;
+    }
+    if (_npcGradientCache[colorKey]) {
+      return _npcGradientCache[colorKey];
+    }
+    var g = ctx.createRadialGradient(
+      TILE / 2, TILE / 2, 0,
+      TILE / 2, TILE / 2, TILE * 0.8
+    );
+    g.addColorStop(0, innerColor);
+    g.addColorStop(1, outerColor);
+    _npcGradientCache[colorKey] = g;
+    return g;
+  }
+
   function markDirty() {
     _dirty = true;
     if (!_rafId) {
@@ -300,32 +322,28 @@ window.App = window.App || {};
         var sx = (nx - cam.x) * TILE;
         var sy = (ny - cam.y) * TILE;
         
-        // NPC 光晕 - 更柔和
-        var gradient = ctx.createRadialGradient(
-          sx + TILE/2, sy + TILE/2, 0,
-          sx + TILE/2, sy + TILE/2, TILE * 0.8
-        );
-        gradient.addColorStop(0, "rgba(255,140,100,0.4)");
-        gradient.addColorStop(1, "rgba(255,140,100,0)");
+        ctx.save();
+        ctx.translate(sx, sy);
+
+        var gradient = getNpcGradient(ctx, "npc_glow", "rgba(255,140,100,0.4)", "rgba(255,140,100,0)");
         ctx.fillStyle = gradient;
-        ctx.fillRect(sx - TILE/3, sy - TILE/3, TILE * 1.7, TILE * 1.7);
+        ctx.fillRect(-TILE/3, -TILE/3, TILE * 1.7, TILE * 1.7);
         
-        // NPC 投影 - 增加深度感
         ctx.fillStyle = "rgba(0,0,0,0.25)";
         ctx.beginPath();
-        ctx.arc(sx + TILE/2 + 2, sy + TILE/2 + 2, 6, 0, Math.PI * 2);
+        ctx.arc(TILE/2 + 2, TILE/2 + 2, 6, 0, Math.PI * 2);
         ctx.fill();
         
-        // NPC 点 - 更精致
         ctx.fillStyle = "#ff8c64";
         ctx.beginPath();
-        ctx.arc(sx + TILE/2, sy + TILE/2, 6, 0, Math.PI * 2);
+        ctx.arc(TILE/2, TILE/2, 6, 0, Math.PI * 2);
         ctx.fill();
         
-        // NPC 边框
         ctx.strokeStyle = "#fff";
         ctx.lineWidth = 2;
         ctx.stroke();
+
+        ctx.restore();
       }
     }
 

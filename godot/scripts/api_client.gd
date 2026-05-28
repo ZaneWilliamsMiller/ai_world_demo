@@ -19,6 +19,7 @@ var api_mode: String = "backend"
 # ── Internal ──
 var _req_id: int = 0
 var _active_stream_http: HTTPClient = null
+var _streaming: bool = false
 
 ## Signal-based request — returns the parsed response Dictionary.
 ## Awaits the actual HTTPRequest completion signal.
@@ -129,7 +130,23 @@ func _base_url() -> String:
 	return backend_url.rstrip("/")
 
 
+func _end_stream() -> void:
+	_active_stream_http = null
+	_streaming = false
+
+
+func cancel_stream() -> void:
+	if _active_stream_http:
+		_active_stream_http.close()
+	_end_stream()
+	emit_signal("stream_done", {"done": true, "cancelled": true})
+
+
 func talk_stream(npc_id: String, message: String, player_id: String = "") -> void:
+	if _streaming:
+		emit_signal("stream_done", {"error": "已有流式对话进行中，请等待完成或取消", "done": true})
+		return
+	_streaming = true
 	var url_path := "/api/npc/talk_stream"
 	var body_dict := {
 		"player_id": player_id if player_id else GameManager.player_id,
@@ -167,7 +184,7 @@ func talk_stream(npc_id: String, message: String, player_id: String = "") -> voi
 	var err := http.connect_to_host(host, port, tls_options)
 	if err != OK:
 		http.close()
-		_active_stream_http = null
+		_end_stream()
 		emit_signal("stream_done", {"error": "connect_failed", "done": true})
 		return
 
@@ -176,14 +193,14 @@ func talk_stream(npc_id: String, message: String, player_id: String = "") -> voi
 		http.poll()
 		if (Time.get_ticks_msec() - _connect_start_msec) > 15000:
 			http.close()
-			_active_stream_http = null
+			_end_stream()
 			emit_signal("stream_done", {"error": "连接超时(15s)", "done": true})
 			return
 		await get_tree().process_frame
 
 	if http.get_status() != HTTPClient.STATUS_CONNECTED:
 		http.close()
-		_active_stream_http = null
+		_end_stream()
 		emit_signal("stream_done", {"error": "connection_failed", "done": true})
 		return
 
@@ -195,7 +212,7 @@ func talk_stream(npc_id: String, message: String, player_id: String = "") -> voi
 	err = http.request(HTTPClient.METHOD_POST, url_path, headers, body_json)
 	if err != OK:
 		http.close()
-		_active_stream_http = null
+		_end_stream()
 		emit_signal("stream_done", {"error": "request_failed", "done": true})
 		return
 
@@ -204,14 +221,14 @@ func talk_stream(npc_id: String, message: String, player_id: String = "") -> voi
 		http.poll()
 		if (Time.get_ticks_msec() - _request_start_msec) > 30000:
 			http.close()
-			_active_stream_http = null
+			_end_stream()
 			emit_signal("stream_done", {"error": "请求超时(30s)", "done": true})
 			return
 		await get_tree().process_frame
 
 	if http.get_status() != HTTPClient.STATUS_BODY:
 		http.close()
-		_active_stream_http = null
+		_end_stream()
 		emit_signal("stream_done", {"error": "request_error", "done": true})
 		return
 
@@ -226,7 +243,7 @@ func talk_stream(npc_id: String, message: String, player_id: String = "") -> voi
 				rb.append_array(chunk)
 			await get_tree().process_frame
 		http.close()
-		_active_stream_http = null
+		_end_stream()
 		var error_text := rb.get_string_from_utf8()
 		emit_signal("stream_done", {"error": "HTTP %d: %s" % [response_code, error_text.left(200)], "done": true})
 		return
@@ -238,7 +255,7 @@ func talk_stream(npc_id: String, message: String, player_id: String = "") -> voi
 		frame_count += 1
 		if frame_count > max_frames:
 			http.close()
-			_active_stream_http = null
+			_end_stream()
 			emit_signal("stream_done", {"error": "流式响应超时", "done": true})
 			return
 		var chunk := http.read_response_body_chunk()
@@ -262,20 +279,20 @@ func talk_stream(npc_id: String, message: String, player_id: String = "") -> voi
 					emit_signal("stream_chunk", "[错误] " + str(d.error))
 				if d.has("done") and d.done:
 					http.close()
-					_active_stream_http = null
+					_end_stream()
 					emit_signal("stream_done", d)
 					return
 		await get_tree().process_frame
 
 	http.close()
-	_active_stream_http = null
+	_end_stream()
 	emit_signal("stream_done", {"done": true})
 
 
 func _exit_tree() -> void:
 	if _active_stream_http:
 		_active_stream_http.close()
-		_active_stream_http = null
+		_end_stream()
 
 
 ## Test backend connection.

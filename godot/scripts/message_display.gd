@@ -24,6 +24,7 @@ var _chat_scroll: ScrollContainer
 var _messages: VBoxContainer
 var _error_style_applied := false
 var _initialized := false
+var _max_messages: int = 200
 
 
 func init(dialogue_label: RichTextLabel, chat_scroll: ScrollContainer) -> void:
@@ -54,6 +55,7 @@ func _create_msg_label() -> RichTextLabel:
 
 func add_chat(color: Color, speaker: String, body: String) -> void:
 	if not is_instance_valid(_messages): return
+	_prune_messages()
 	var label := _create_msg_label()
 	var bb := ""
 	if speaker != "":
@@ -116,3 +118,10 @@ func _scroll_to_bottom() -> void:
 	if not is_instance_valid(_chat_scroll): return
 	await get_tree().process_frame
 	_chat_scroll.get_v_scroll_bar().value = _chat_scroll.get_v_scroll_bar().max_value
+
+
+func _prune_messages() -> void:
+	if not is_instance_valid(_messages): return
+	while _messages.get_child_count() >= _max_messages:
+		var oldest: Node = _messages.get_child(0)
+		oldest.queue_free()

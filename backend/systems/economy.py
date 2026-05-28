@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from backend.models.player import PlayerState
 from backend.data.maps_data import MAPS
+from backend.data.zones import zone_price_mod
 
 # ════════════════════════════════════════════════════════════════════
 #  物品定价表 — 江湖百业行情（单位：制钱/文）
@@ -80,35 +81,8 @@ ITEM_USE_EFFECTS: dict[str, dict[str, object]] = {
     "火折":     {"vigor": 0,   "spirit": 0,   "sleep_debt": 0,  "note": "你点亮了火折，一圈昏黄的光推开黑暗——能看清周围几步了。", "max_per_day": 3},
 }
 
-# 统一地图地区系数：根据格子位置判断所属商圈
-# 返回 (溢价倍率, 说明)
-def zone_price_mod(player_or_px: Any, py: int | None = None) -> tuple[float, str]:
-    """根据玩家位置判断地区价格倍率。支持传入 PlayerState 或 (px, py) 坐标。"""
-    if hasattr(player_or_px, 'px'):
-        px = player_or_px.px
-        py = player_or_px.py
-    else:
-        px = int(player_or_px)
-        py = int(py or 0)
-    # 县域城区 (x:5-20, y:12-20) → 市口平价
-    if 5 <= px <= 20 and 12 <= py <= 20:
-        return (1.00, "县城市口，价稳")
-    # 野径荒野 (x:5-24, y:21-32) → 荒野价高
-    if 5 <= px <= 24 and 21 <= py <= 32:
-        return (1.25, "荒野难得，货价偏高")
-    # 渡口船坞 (x:33-44, y:22-29) → 渡口溢价
-    if 33 <= px <= 44 and 22 <= py <= 29:
-        return (1.08, "渡口客多，坐地起价")
-    # 卧佛寺 (x:22-31, y:5-11) → 佛寺随缘
-    if 22 <= px <= 31 and 5 <= py <= 11:
-        return (0.80, "佛寺随缘施价")
-    # 碾坊 (x:25-35, y:33-40) → 碾坊自产
-    if 25 <= px <= 35 and 33 <= py <= 40:
-        return (0.85, "碾坊自产自销，粮食贱")
-    # 厘卡哨 (x:52-62, y:34-41) → 卡吏抽头
-    if 52 <= px <= 62 and 34 <= py <= 41:
-        return (1.35, "卡吏抽头，往来皆贵")
-    return (1.00, "市口平价")
+# zone_price_mod 已迁移至 backend.data.zones，此处保留引用以兼容
+# 原硬编码坐标范围已统一至 ECONOMY_ZONES 配置
 
 # 保留字典键以兼容（已废弃，改用 zone_price_mod）
 MAP_PRICE_MOD: dict[str, tuple[float, str]] = {

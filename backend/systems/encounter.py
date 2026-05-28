@@ -34,6 +34,7 @@ from backend.data.factions import FACTIONS
 from backend.data.atmosphere import tile_atmosphere, WORLD_REGIONS
 from backend.systems.pathfinding import tile_at
 from backend.systems.time_weather import shichen_name, is_night
+from backend.data.zones import is_safe_zone
 
 log = logging.getLogger("encounter")
 
@@ -50,19 +51,8 @@ BAD_WEATHERS = {"骤雨", "湿瘴", "重雾", "风急"}
 # 非城区为野外（触发奇遇概率更高）
 def _is_wild(p: PlayerState) -> bool:
     """判断玩家是否在野外（非安全城区）。"""
-    # 县城区域 (x:10-50, y:25-45) 视作安全区
-    if 10 <= p.px <= 50 and 25 <= p.py <= 45:
-        return False
-    # 寺庙区域 (x:40-65, y:10-25) 视作安全区
-    if 40 <= p.px <= 65 and 10 <= p.py <= 25:
-        return False
-    # 关塞区域 (x:60-90, y:4-14) 视作安全区
-    if 60 <= p.px <= 90 and 4 <= p.py <= 14:
-        return False
-    # 渡口区域 (x:70-100, y:42-62) 视作安全区
-    if 70 <= p.px <= 100 and 42 <= p.py <= 62:
-        return False
-    return True
+    map_id = getattr(p, 'map_id', 'jianghu')
+    return not is_safe_zone(map_id, p.px, p.py)
 
 # ── 奇遇感知注入到对话的标记词 ──
 ENCOUNTER_PERCEPTION_PREFIX = "方才在"  # 记忆流中奇遇感知记忆的识别前缀

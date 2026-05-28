@@ -48,6 +48,11 @@ var _npc_at: Dictionary = {}
 # ── 缓存瓦片 ──
 var _active_tiles: Dictionary = {}  # key = "x,y" -> ColorRect
 var _last_player_pos := Vector2i(-1, -1)
+var _dirty: bool = true
+
+
+func mark_dirty() -> void:
+	_dirty = true
 
 
 func _ready() -> void:
@@ -105,13 +110,15 @@ func _make_current() -> void:
 
 
 func _process(_delta: float) -> void:
-	# 即使没有地图数据也要更新摄像机位置
 	if not _current_map_id.is_empty() and not _map_rows.is_empty():
 		_update_camera()
-		_update_visible_tiles()
-		_update_player_marker()
+		if _dirty:
+			_update_visible_tiles()
+			_update_player_marker()
+			_dirty = false
+		elif _last_player_pos != Vector2i(GameManager.player_px, GameManager.player_py):
+			_update_player_marker()
 	elif _camera:
-		# 没有地图时，摄像机跟随默认位置
 		var px: float = GameManager.player_px * TILE_SIZE + TILE_SIZE / 2.0
 		var py: float = GameManager.player_py * TILE_SIZE + TILE_SIZE / 2.0
 		_camera.position = Vector2(px, py)
@@ -260,6 +267,7 @@ func build_map() -> void:
 
 	# 强制刷新可见范围
 	_visible_range = {"x0": -1, "y0": -1, "x1": -1, "y1": -1}
+	_dirty = true
 
 	# 构建 NPC 标记和地点标签
 	_build_npc_index()

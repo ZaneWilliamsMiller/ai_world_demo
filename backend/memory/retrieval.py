@@ -43,6 +43,15 @@ REFLECTION_MIN_INTERVAL_S = 30.0
 
 # ── Fast Memory Index ──
 _mind_indexes: dict[int, MemoryIndex] = {}
+_MIND_INDEX_MAX = 64
+
+
+def _prune_mind_indexes() -> None:
+    if len(_mind_indexes) <= _MIND_INDEX_MAX:
+        return
+    sorted_keys = sorted(_mind_indexes.keys(), reverse=True)
+    for k in sorted_keys[_MIND_INDEX_MAX:]:
+        _mind_indexes.pop(k, None)
 
 # ─── 工具:分词与相似度 ─────────────────────
 _PUNCT_RE = re.compile(r"[\s,。、,.;;::!?!?\"'「」『』《》()【】]+")
@@ -71,16 +80,19 @@ def _decay_recency(seconds_since: float, half_life_s: float = 3600.0 * 6) -> flo
 
 
 def ensure_mind_index(mind: Any) -> MemoryIndex:
-    """延迟初始化记忆索引。"""
     mind_id = id(mind)
     if mind_id not in _mind_indexes:
         _mind_indexes[mind_id] = MemoryIndex()
+        _prune_mind_indexes()
     return _mind_indexes[mind_id]
 
 
 def get_mind_index(mind_id: int) -> MemoryIndex | None:
-    """获取已有索引（不创建）。"""
     return _mind_indexes.get(mind_id)
+
+
+def remove_mind_index(mind: Any) -> None:
+    _mind_indexes.pop(id(mind), None)
 
 
 def mark_index_dirty(mind: Any) -> None:

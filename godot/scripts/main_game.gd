@@ -456,7 +456,7 @@ func _refresh() -> void:
 					existing_fav[c_name].queue_free()
 
 	# Portals — 仅在地图变化时重建（界门与地图绑定）
-	if _portal_list_container and gm.player_map_id != current_renderer_map or _portal_list_container.get_child_count() == 0:
+	if _portal_list_container and (gm.player_map_id != current_renderer_map or _portal_list_container.get_child_count() == 0):
 		for c in _portal_list_container.get_children():
 			c.queue_free()
 		var map_info: Dictionary = gm.maps_data.get(gm.player_map_id, {})

@@ -52,7 +52,16 @@ ATTITUDE_MULT = {
 }
 
 # ─── 内部状态 ──────────────────────────────────────────
-_last_gossip: dict[str, float] = {}  # "npc_a+npc_b" → epoch 秒
+_last_gossip: dict[str, float] = {}
+_GOSSIP_CACHE_MAX = 256
+
+
+def _prune_gossip_cache() -> None:
+    if len(_last_gossip) <= _GOSSIP_CACHE_MAX:
+        return
+    sorted_keys = sorted(_last_gossip, key=_last_gossip.get, reverse=True)
+    for k in sorted_keys[_GOSSIP_CACHE_MAX:]:
+        del _last_gossip[k]
 
 
 def _gossip_key(npc_a: str, npc_b: str) -> str:
@@ -177,6 +186,7 @@ def maybe_npc_gossip(p, *, ticks: int = 1) -> int:
 
     gossip_count = 0
     now = time.time()
+    _prune_gossip_cache()
 
     for cell, nids in cell_npcs.items():
         if len(nids) < 2:
