@@ -85,7 +85,7 @@ async def test():
         r = await c.get(f"{BASE}/api/health")
         d = r.json()
         report("health 200", r.status_code == 200)
-        report("health model=DeepSeek", "DeepSeek" in d.get("model",""))
+        report("health has model", bool(d.get("model")))
         
         # 10. Delete save (cleanup)
         r = await c.post(f"{BASE}/api/delete-save", json={"player_id": pid})

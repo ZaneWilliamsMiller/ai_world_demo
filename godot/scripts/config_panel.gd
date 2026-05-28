@@ -77,7 +77,7 @@ func build(parent: Control, on_indicator_updated: Callable) -> void:
 	backend_vb.add_theme_constant_override("separation", 4)
 	backend_vb.add_child(UIBuilder.lbl("后端 API 地址", 13, GameColors.DIM))
 	_cfg_backend_url = LineEdit.new()
-	_cfg_backend_url.placeholder_text = "http://127.0.0.1:8765"
+	_cfg_backend_url.placeholder_text = "http://localhost:8765"
 	_cfg_backend_url.add_theme_font_size_override("font_size", 13)
 	backend_vb.add_child(_cfg_backend_url)
 	vb.add_child(backend_vb)
@@ -87,7 +87,7 @@ func build(parent: Control, on_indicator_updated: Callable) -> void:
 	llm_url_vb.add_theme_constant_override("separation", 4)
 	llm_url_vb.add_child(UIBuilder.lbl("LLM API 地址", 13, GameColors.DIM))
 	_cfg_llm_url = LineEdit.new()
-	_cfg_llm_url.placeholder_text = "https://llmapi.paratera.com/v1"
+	_cfg_llm_url.placeholder_text = "https://api.example.com/v1"
 	_cfg_llm_url.add_theme_font_size_override("font_size", 13)
 	llm_url_vb.add_child(_cfg_llm_url)
 	vb.add_child(llm_url_vb)
@@ -108,7 +108,7 @@ func build(parent: Control, on_indicator_updated: Callable) -> void:
 	llm_model_vb.add_theme_constant_override("separation", 4)
 	llm_model_vb.add_child(UIBuilder.lbl("LLM 模型", 13, GameColors.DIM))
 	_cfg_llm_model = LineEdit.new()
-	_cfg_llm_model.placeholder_text = "DeepSeek-V4-Pro"
+	_cfg_llm_model.placeholder_text = "your-model-name"
 	_cfg_llm_model.add_theme_font_size_override("font_size", 13)
 	llm_model_vb.add_child(_cfg_llm_model)
 	vb.add_child(llm_model_vb)

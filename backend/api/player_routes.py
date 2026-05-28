@@ -1,4 +1,4 @@
-"""玩家交互 API 路由：hello, move, state, journal。"""
+"""玩家交互 API 路由：hello, move, state, journal�?""
 from __future__ import annotations
 
 import asyncio
@@ -69,15 +69,15 @@ async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
     if not p:
         raise HTTPException(404, "未知 player_id")
     if p.ended:
-        raise HTTPException(400, "本局已收束")
+        raise HTTPException(400, "本局已收�?)
     if p.dead:
-        raise HTTPException(400, "角色已身故")
+        raise HTTPException(400, "角色已身�?)
     if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
         unconscious_remaining = getattr(p, "unconscious_ticks", 0)
-        raise HTTPException(409, f"⚠️ 你正处于昏迷状态，无法移动。\n   剩余恢复时间: 约{unconscious_remaining}个时辰\n   💡 建议: 在原地等待，或寻找医馆治疗")
+        raise HTTPException(409, f"⚠️ 你正处于昏迷状态，无法移动。\n   剩余恢复时间: 约{unconscious_remaining}个时辰\n   💡 建议: 在原地等待，或寻找医馆治�?)
 
     if getattr(p, "enslaved", False):
-        raise HTTPException(400, "你已沦为囚役,难以再自行迁徙。")
+        raise HTTPException(400, "你已沦为囚役,难以再自行迁徙�?)
 
     if getattr(p, "move_locked", False):
         lock_reason = getattr(p, "trap_reason", "未知险情")
@@ -89,16 +89,16 @@ async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
         if attempts == 0:
             hint = "💡 先试着和对方交谈，了解对方意图"
         elif attempts < 3:
-            hint = f"💡 已尝试{attempts}次，继续对话或考虑其他方式（贿赂/求援/硬闯）"
+            hint = f"💡 已尝试{attempts}次，继续对话或考虑其他方式（贿�?求援/硬闯�?
         else:
-            hint = "💡 多次尝试未果？试试完全不同的策略，或者等待时机变化"
+            hint = "💡 多次尝试未果？试试完全不同的策略，或者等待时机变�?
         
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             f"🚫 【移动被锁定】\n"
             f"   原因: {lock_reason}\n"
             f"   对手: {lock_npc_name}\n"
-            f"   已尝试: {attempts}次\n"
+            f"   已尝�? {attempts}次\n"
             f"\n"
             f"   {hint}\n"
             f"   ⚔️ 解除方法: 与该NPC对话，选择合适的应对策略"
@@ -150,10 +150,10 @@ async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
                             "npc_id": "jiang",
                             "user_line": (
                                 "<user_input>[际遇·系统指令] "
-                                f"过路客一脚踏入险地:{reason} "
-                                "请以「风闻子」第三方旁观的口吻描出此刻危境,"
-                                "并暗示玩家可如何挣脱(硬闯、后退、求援、投石问路皆可)。"
-                                "中文 4~8 句。</user_input>"
+                                f"过路客一脚踏入险�?{reason} "
+                                "请以「风闻子」第三方旁观的口吻描出此刻危�?"
+                                "并暗示玩家可如何挣脱(硬闯、后退、求援、投石问路皆�?�?
+                                "中文 4~8 句�?/user_input>"
                             ),
                             "blurb": reason,
                         }
@@ -176,9 +176,9 @@ async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
                         "user_line": (
                             "<user_input>[际遇·系统指令] "
                             f"过路客骤入此局:{hazard_reason} "
-                            "请以「风闻子」第三方旁观的口吻描出此刻光景,"
-                            "并暗示玩家可如何挣脱(贿赂、求援、跳水、硬冲、谈判皆可)。"
-                            "中文 6~10 句。</user_input>"
+                            "请以「风闻子」第三方旁观的口吻描出此刻光�?"
+                            "并暗示玩家可如何挣脱(贿赂、求援、跳水、硬冲、谈判皆�?�?
+                            "中文 6~10 句�?/user_input>"
                         ),
                         "blurb": hazard_reason,
                     }

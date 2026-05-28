@@ -252,9 +252,9 @@ cp .env.example .env
 **关键配置项**：
 ```env
 # LLM 服务配置（必填）
-LLM_BASE_URL=https://llmapi.paratera.com/v1
+LLM_BASE_URL=https://your-llm-api.example.com/v1
 LLM_API_KEY=sk-your-api-key-here
-LLM_MODEL=DeepSeek-V4-Pro
+LLM_MODEL=your-model-name
 
 # 服务端口（可选，有默认值）
 BACKEND_PORT=8765

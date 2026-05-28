@@ -37,7 +37,7 @@ class Settings(BaseSettings):
 
     # ── Prompt Cache（OpenAI 兼容）──
     llm_enable_prompt_cache: bool = False      # 是否启用 prompt_cache（cache_control 标记）
-                                     # 非 OpenAI API（如 Paratera）不支持时设为 False
+                                     # 非 OpenAI API 不支持时设为 False
 
     # ── 智能重试（2026 优化）──
     llm_max_retries: int = 3                   # 最大重试次数

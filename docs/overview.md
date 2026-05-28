@@ -23,8 +23,8 @@ D:\linving\repo\
 ```
 
 ## API 配置
-- **LLM API**: https://llmapi.paratera.com/v1
-- **模型**: DeepSeek-V4-Pro
+- **LLM API**: 参见 .env.example
+- **模型**: 参见 .env.example
 - **后端端口**: 8765
 
 ## 双前端架构

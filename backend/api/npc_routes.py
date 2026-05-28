@@ -1,4 +1,4 @@
-"""NPC 对话 API 路由：npc_talk, npc_talk_stream, item/use, rest, agent, finale, bounty。"""
+"""NPC 对话 API 路由：npc_talk, npc_talk_stream, item/use, rest, agent, finale, bounty�?""
 from __future__ import annotations
 
 import asyncio
@@ -57,7 +57,7 @@ class TalkBody(BaseModel):
 
 class UseItemBody(BaseModel):
     player_id: str = Field(..., min_length=1)
-    item: str = Field(..., min_length=1, max_length=20, description="物品名")
+    item: str = Field(..., min_length=1, max_length=20, description="物品�?)
 
 class RestBody(BaseModel):
     player_id: str = Field(..., min_length=1)
@@ -81,17 +81,17 @@ def _validate_talk_request(body: TalkBody):
     if not p:
         raise HTTPException(404, "未知 player_id")
     if p.ended:
-        raise HTTPException(400, "本局已收束")
+        raise HTTPException(400, "本局已收�?)
     if p.dead:
-        raise HTTPException(400, "角色已身故,无法交谈")
+        raise HTTPException(400, "角色已身�?无法交谈")
     if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
-        raise HTTPException(409, "你正处于昏迷状态，无法开口交谈。")
+        raise HTTPException(409, "你正处于昏迷状态，无法开口交谈�?)
     npc = NPCS.get(body.npc_id)
     if not npc:
         raise HTTPException(400, "未知 npc")
     allowed = set(npc_ids_for_player(p))
     if body.npc_id not in allowed:
-        raise HTTPException(400, "此人不在你当前这一格(或不可交谈)。请先移动贴近。")
+        raise HTTPException(400, "此人不在你当前这一�?或不可交�?。请先移动贴近�?)
     return p, npc
 
 
@@ -102,11 +102,11 @@ async def use_item(body: UseItemBody) -> dict[str, Any]:
     if not p:
         raise HTTPException(404, f"未知 player_id: {body.player_id}")
     if getattr(p, "dead", False):
-        raise HTTPException(400, "角色已故，物无所用。")
+        raise HTTPException(400, "角色已故，物无所用�?)
     if p.ended:
-        raise HTTPException(400, "本局已收束")
+        raise HTTPException(400, "本局已收�?)
     if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
-        raise HTTPException(409, "你正处于昏迷状态，无法使用物品。")
+        raise HTTPException(409, "你正处于昏迷状态，无法使用物品�?)
 
     from backend.systems.economy import use_player_item
     async with p.lock:
@@ -133,13 +133,13 @@ async def player_rest(body: RestBody) -> dict[str, Any]:
     if not p:
         raise HTTPException(404, f"未知 player_id: {body.player_id}")
     if getattr(p, "dead", False):
-        raise HTTPException(400, "魂已归西，无足歇矣。")
+        raise HTTPException(400, "魂已归西，无足歇矣�?)
     if p.ended:
-        raise HTTPException(400, "本局已收束")
+        raise HTTPException(400, "本局已收�?)
     if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
-        raise HTTPException(400, "昏迷之中，身不由己。")
+        raise HTTPException(400, "昏迷之中，身不由己�?)
     if getattr(p, "move_locked", False):
-        raise HTTPException(409, "身陷险局，须先周旋脱身方可歇息。")
+        raise HTTPException(409, "身陷险局，须先周旋脱身方可歇息�?)
 
     from backend.systems.core import rest_at_location
     async with p.lock:
@@ -283,7 +283,7 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
             yield _sse({"done": True, "cancelled": True})
             return
         except Exception as e:
-            out = {"error": f"状态写入失败:{e}"}
+            out = {"error": f"状态写入失�?{e}"}
 
         try:
             vis = (parsed.visible_text or "").strip() if parsed else ""
@@ -356,9 +356,9 @@ async def agent_reflect(body: AgentActBody) -> dict[str, Any]:
     if not p:
         raise HTTPException(404, "未知 player_id")
     if p.dead:
-        raise HTTPException(400, "角色已故，无法进行反思。")
+        raise HTTPException(400, "角色已故，无法进行反思�?)
     if p.ended:
-        raise HTTPException(400, "本局已收束，无法操作。")
+        raise HTTPException(400, "本局已收束，无法操作�?)
     npc = NPCS.get(body.npc_id)
     if not npc:
         raise HTTPException(404, "未知 npc_id")
@@ -384,9 +384,9 @@ async def agent_plan(body: AgentActBody) -> dict[str, Any]:
     if not p:
         raise HTTPException(404, "未知 player_id")
     if p.dead:
-        raise HTTPException(400, "角色已故，无法制定计划。")
+        raise HTTPException(400, "角色已故，无法制定计划�?)
     if p.ended:
-        raise HTTPException(400, "本局已收束，无法操作。")
+        raise HTTPException(400, "本局已收束，无法操作�?)
     npc = NPCS.get(body.npc_id)
     if not npc:
         raise HTTPException(404, "未知 npc_id")
@@ -414,7 +414,7 @@ async def finale(body: FinaleBody) -> dict[str, Any]:
     if not p:
         raise HTTPException(404, "未知 player_id")
     if p.dead:
-        raise HTTPException(400, "已身故,无法收束成文。请新开周目。")
+        raise HTTPException(400, "已身�?无法收束成文。请新开周目�?)
     if p.ended:
         return {
             "ending_label": p.ending_label,
@@ -424,19 +424,19 @@ async def finale(body: FinaleBody) -> dict[str, Any]:
         }
 
     # 构建 story digest
-    inv_line = "身无长物" if not p.inventory else "随身:" + "、".join(
+    inv_line = "身无长物" if not p.inventory else "随身:" + "�?.join(
         (f"{n}×{c}" if c > 1 else n) for n, c in sorted(p.inventory.items())
     )
     rep_line = " ".join(f"{FACTIONS[k]}{v:+d}" for k, v in p.reputation.items() if v != 0) or "声望未起"
     from backend.data.maps_data import MAPS
     lines = [
         FIXED_INTRO, "",
-        f"玩家性别:{p.gender};真实江湖(永久死亡):{'开' if p.permadeath else '关'}。",
-        f"终局前最后位置:地图「{MAPS[p.map_id]['name']}」坐标 ({p.px},{p.py});约 {p.coins} 文。",
-        f"江湖行迹至第 {p.world_day} 日 · {shichen_name(p.world_shichen)}(天气「{p.weather}」)。",
+        f"玩家性别:{p.gender};真实江湖(永久死亡):{'开' if p.permadeath else '�?}�?,
+        f"终局前最后位�?地图「{MAPS[p.map_id]['name']}」坐�?({p.px},{p.py});�?{p.coins} 文�?,
+        f"江湖行迹至第 {p.world_day} �?· {shichen_name(p.world_shichen)}(天气「{p.weather}�?�?,
         f"{inv_line}。{rep_line}", "",
         SOCIETY_BIBLE, "",
-        "-- 本局对话摘录(按角色)--", "",
+        "-- 本局对话摘录(按角�?--", "",
     ]
     from backend.data.npcs_data import STORY_ORDER
     any_talk = False
@@ -451,19 +451,19 @@ async def finale(body: FinaleBody) -> dict[str, Any]:
             a = turn["assistant"][:1400]
             stamp = ""
             if turn.get("day") and turn.get("shichen"):
-                stamp = f"〔第{turn['day']}日·{turn['shichen']}〕 "
-            lines.append(f"{stamp}【{name}】玩家:{u}")
-            lines.append(f"{stamp}【{name}】:{a}")
+                stamp = f"〔第{turn['day']}日·{turn['shichen']}�?"
+            lines.append(f"{stamp}【{name}】玩�?{u}")
+            lines.append(f"{stamp}【{name}�?{a}")
             lines.append("")
     if p.events:
-        lines.append("-- 本局世界事件(节选)--")
+        lines.append("-- 本局世界事件(节�?--")
         for e in p.events[-12:]:
-            lines.append(f"〔第{e.get('day','?')}日·{e.get('shichen','?')}〕 {e.get('text','')}")
+            lines.append(f"〔第{e.get('day','?')}日·{e.get('shichen','?')}�?{e.get('text','')}")
         lines.append("")
     if not any_talk:
-        lines.append("(尚未产生对话;请据社会总览与开场写收束。)")
+        lines.append("(尚未产生对话;请据社会总览与开场写收束�?")
     lines.append(
-        f"-- 叙事参考数值(勿在正文复述数字)--\n"
+        f"-- 叙事参考数�?勿在正文复述数字)--\n"
         f"秩序 {p.flags['order']}  求真 {p.flags['truth']}  "
         f"希望 {p.flags['hope']}  混乱 {p.flags['chaos']}"
     )
@@ -479,10 +479,10 @@ async def finale(body: FinaleBody) -> dict[str, Any]:
             "role": "system",
             "content": (
                 f"你是「{WORLD_NAME}」江湖的终局叙事者。\n"
-                "尊重社会总览、世界事件流与对话摘录;收束时世界仍可继续运转。\n"
-                "正文 220~420 字,第二人称「你」;不要列出数值;不要出现 STATE_UPDATE / PERMADEATH / EVENT 等机读行。\n"
-                "落笔时把【世态此刻】(时辰、天气)与玩家身上钱物落到环境笔触里,让结局有此地此夜的呼吸。\n"
-                "正文结束后**另起一行**:ENDING_TITLE: 六字到十四字标题(无书名号)"
+                "尊重社会总览、世界事件流与对话摘�?收束时世界仍可继续运转。\n"
+                "正文 220~420 �?第二人称「你�?不要列出数�?不要出现 STATE_UPDATE / PERMADEATH / EVENT 等机读行。\n"
+                "落笔时把【世态此刻�?时辰、天�?与玩家身上钱物落到环境笔触里,让结局有此地此夜的呼吸。\n"
+                "正文结束�?*另起一�?*:ENDING_TITLE: 六字到十四字标题(无书名号)"
             ),
         },
         {"role": "user", "content": user_block},
@@ -506,7 +506,7 @@ async def finale(body: FinaleBody) -> dict[str, Any]:
     }
 
 
-# ── 悬赏榜 API ──
+# ── 悬赏�?API ──
 from backend.systems.bounty_board import (
     generate_bounties,
     can_accept_bounty,
@@ -539,11 +539,11 @@ async def bounty_refresh(body: RefreshBountyBody) -> dict[str, Any]:
     if not p:
         raise HTTPException(404, "未知 player_id")
     if p.dead:
-        raise HTTPException(400, "角色已故，无法操作悬赏。")
+        raise HTTPException(400, "角色已故，无法操作悬赏�?)
     if p.ended:
-        raise HTTPException(400, "本局已收束，无法操作悬赏。")
+        raise HTTPException(400, "本局已收束，无法操作悬赏�?)
     if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
-        raise HTTPException(409, "你正处于昏迷状态，无法操作悬赏。")
+        raise HTTPException(409, "你正处于昏迷状态，无法操作悬赏�?)
     refresh_bounties(p)
     if not p.bounties:
         p.bounties = generate_bounties(p, count=3)
@@ -558,11 +558,11 @@ async def bounty_accept(body: AcceptBountyBody) -> dict[str, Any]:
     if not p:
         raise HTTPException(404, "未知 player_id")
     if p.dead:
-        raise HTTPException(400, "角色已故，无法操作悬赏。")
+        raise HTTPException(400, "角色已故，无法操作悬赏�?)
     if p.ended:
-        raise HTTPException(400, "本局已收束，无法操作悬赏。")
+        raise HTTPException(400, "本局已收束，无法操作悬赏�?)
     if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
-        raise HTTPException(409, "你正处于昏迷状态，无法操作悬赏。")
+        raise HTTPException(409, "你正处于昏迷状态，无法操作悬赏�?)
     ok, msg = accept_bounty(p, body.bounty_id)
     return {"ok": ok, "message": msg}
 
@@ -574,11 +574,11 @@ async def bounty_check(body: CompleteBountyBody) -> dict[str, Any]:
     if not p:
         raise HTTPException(404, "未知 player_id")
     if p.dead:
-        raise HTTPException(400, "角色已故，无法操作悬赏。")
+        raise HTTPException(400, "角色已故，无法操作悬赏�?)
     if p.ended:
-        raise HTTPException(400, "本局已收束，无法操作悬赏。")
+        raise HTTPException(400, "本局已收束，无法操作悬赏�?)
     if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
-        raise HTTPException(409, "你正处于昏迷状态，无法操作悬赏。")
+        raise HTTPException(409, "你正处于昏迷状态，无法操作悬赏�?)
     progress = check_bounty_progress(p)
     if progress is None:
         return {"has_active": False}
@@ -592,11 +592,11 @@ async def bounty_complete(body: CompleteBountyBody) -> dict[str, Any]:
     if not p:
         raise HTTPException(404, "未知 player_id")
     if p.dead:
-        raise HTTPException(400, "角色已故，无法操作悬赏。")
+        raise HTTPException(400, "角色已故，无法操作悬赏�?)
     if p.ended:
-        raise HTTPException(400, "本局已收束，无法操作悬赏。")
+        raise HTTPException(400, "本局已收束，无法操作悬赏�?)
     if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
-        raise HTTPException(409, "你正处于昏迷状态，无法操作悬赏。")
+        raise HTTPException(409, "你正处于昏迷状态，无法操作悬赏�?)
     ok, msg, reward = complete_bounty(p)
     return {"ok": ok, "message": msg, "reward": reward}
 
@@ -608,10 +608,10 @@ async def bounty_abandon(body: AbandonBountyBody) -> dict[str, Any]:
     if not p:
         raise HTTPException(404, "未知 player_id")
     if p.dead:
-        raise HTTPException(400, "角色已故，无法操作悬赏。")
+        raise HTTPException(400, "角色已故，无法操作悬赏�?)
     if p.ended:
-        raise HTTPException(400, "本局已收束，无法操作悬赏。")
+        raise HTTPException(400, "本局已收束，无法操作悬赏�?)
     if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
-        raise HTTPException(409, "你正处于昏迷状态，无法操作悬赏。")
+        raise HTTPException(409, "你正处于昏迷状态，无法操作悬赏�?)
     ok, msg = abandon_bounty(p)
     return {"ok": ok, "message": msg}

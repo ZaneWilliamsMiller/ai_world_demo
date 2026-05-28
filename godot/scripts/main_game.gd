@@ -276,15 +276,7 @@ func _on_send() -> void:
 	_stream_npc_msg_index = npc_msg_index
 	_stream_npc_name = npc_name
 
-	var llm_base_url := ""
-	var llm_api_key := ""
-	var llm_model := ""
-	if ApiClient.api_mode == "direct":
-		llm_base_url = ApiClient.llm_api_url
-		llm_api_key = ApiClient.llm_api_key
-		llm_model = ApiClient.llm_model
-
-	ApiClient.talk_stream(npc_id, text, "", llm_base_url, llm_api_key, llm_model)
+	ApiClient.talk_stream(npc_id, text)
 
 
 func _on_stream_chunk(text: String) -> void:

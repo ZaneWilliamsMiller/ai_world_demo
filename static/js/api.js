@@ -245,9 +245,9 @@ window.App = window.App || {};
   App.testBackend = async function() {
     try {
       const data = await backendGet("/api/health");
-      var model = data.model || "(unknown)";
+      var llmConfigured = data.llm_configured || "false";
       var world = data.world || "(unknown)";
-      return { ok: true, detail: "model=" + model + " world=" + world };
+      return { ok: true, detail: "llm_configured=" + llmConfigured + " world=" + world };
     } catch (e) {
       return { ok: false, detail: e.message };
     }

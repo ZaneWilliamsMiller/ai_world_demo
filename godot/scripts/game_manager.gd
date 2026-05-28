@@ -223,18 +223,7 @@ func move_player(tx: int, ty: int) -> void:
 
 
 func talk_to_npc(npc_id: String, message: String) -> bool:
-	## Send message to NPC. Returns true if LLM fallback was NOT used.
-	# 所有模式都连接后端，自定义LLM Key模式只是传递额外参数
 	var body := {"player_id": player_id, "npc_id": npc_id, "message": message}
-	
-	# 如果是自定义LLM Key模式，添加自定义配置
-	if ApiClient.api_mode == "direct":
-		if not ApiClient.llm_api_url.is_empty():
-			body["llm_base_url"] = ApiClient.llm_api_url
-		if not ApiClient.llm_api_key.is_empty():
-			body["llm_api_key"] = ApiClient.llm_api_key
-		if not ApiClient.llm_model.is_empty():
-			body["llm_model"] = ApiClient.llm_model
 	
 	var res: Dictionary = await ApiClient.request("/api/npc/talk", "POST", body)
 

@@ -1,6 +1,8 @@
 # 环境与密钥
 .env
 .env.local
+.env.production
+.env.*.local
 
 # Python
 __pycache__/
@@ -36,3 +38,10 @@ NVIDIA Corporation/
 dist/
 build/
 *.egg-info/
+
+# 密钥文件
+*.pem
+*.key
+*.p12
+credentials.json
+service-account*.json

@@ -283,8 +283,8 @@ function escapeHtml(text) {
 const API_BASE = (function() {
   try {
     const cfg = JSON.parse(localStorage.getItem('lp_config') || '{}');
-    return cfg.backendUrl || 'http://127.0.0.1:8765';
-  } catch(e) { return 'http://127.0.0.1:8765'; }
+    return cfg.backendUrl || (window.location.port === '8765' ? window.location.origin : 'http://localhost:8765');
+  } catch(e) { return 'http://localhost:8765'; }
 })();
 let stats = { total: 0, running: 0, success: 0, error: 0 };
 

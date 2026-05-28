@@ -7,8 +7,19 @@ window.App = window.App || {};
   "use strict";
 
   // ── API 配置（可切换后端/独立模式）──
-  // 默认地址为示例值，请通过配置面板设置正确的后端地址
-  App.BACKEND_URL = "http://127.0.0.1:8765";
+  // 自动推导后端地址：同源时使用当前 host，否则默认 localhost:8765
+  // 用户可通过配置面板覆盖此值
+  (function() {
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem("lp_config") || "{}"); } catch(e) {}
+    if (saved && saved.backendUrl) {
+      App.BACKEND_URL = saved.backendUrl;
+    } else if (window.location.port === "8765") {
+      App.BACKEND_URL = window.location.origin;
+    } else {
+      App.BACKEND_URL = "http://localhost:8765";
+    }
+  })();
   // 敏感配置请通过配置面板设置，不要硬编码在代码中！
   // 安全警告：以下敏感信息仅存储在内存中（App 对象属性），
   // 不会持久化到 localStorage，以防止密钥泄露风险。

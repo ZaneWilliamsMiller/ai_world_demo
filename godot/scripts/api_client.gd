@@ -4,12 +4,12 @@ extends Node
 ##
 ## Supports two modes:
 ##   "backend"  — all requests go through Python backend
-##   "direct"   — LLM calls go directly to Paratera API
+##   "direct"   — LLM calls go directly to LLM API
 
 # ── Config (exported for editor-time override) ──
-@export var backend_url: String = "http://127.0.0.1:8765"
+@export var backend_url: String = ""
 @export var llm_api_url: String = ""
-@export var llm_api_key: String = ""
+var llm_api_key: String = ""
 @export var llm_model: String = ""
 @export var timeout_sec: float = 30.0
 
@@ -129,39 +129,35 @@ func _base_url() -> String:
 	return backend_url.rstrip("/")
 
 
-func talk_stream(npc_id: String, message: String, player_id: String = "", llm_base_url: String = "", llm_api_key: String = "", llm_model: String = "") -> void:
+func talk_stream(npc_id: String, message: String, player_id: String = "") -> void:
 	var url_path := "/api/npc/talk_stream"
 	var body_dict := {
 		"player_id": player_id if player_id else GameManager.player_id,
 		"npc_id": npc_id,
 		"message": message,
 	}
-	if llm_base_url != "":
-		body_dict["llm_base_url"] = llm_base_url
-	if llm_api_key != "":
-		body_dict["llm_api_key"] = llm_api_key
-	if llm_model != "":
-		body_dict["llm_model"] = llm_model
 
 	var body_json := JSON.stringify(body_dict)
 	var base_url := _base_url()
 	var host := "127.0.0.1"
-	var port := 8765
+	var port := 80
 	var use_tls := false
 
 	if base_url.begins_with("https://"):
-		var parts := base_url.substr(8).split(":")
-		host = parts[0]
-		if parts.size() > 1:
-			port = int(parts[1])
+		var parts := base_url.substr(8).split("/")
+		var hostport := parts[0].split(":")
+		host = hostport[0]
+		if hostport.size() > 1:
+			port = int(hostport[1])
 		else:
 			port = 443
 		use_tls = true
 	elif base_url.begins_with("http://"):
-		var parts := base_url.substr(7).split(":")
-		host = parts[0]
-		if parts.size() > 1:
-			port = int(parts[1])
+		var parts := base_url.substr(7).split("/")
+		var hostport := parts[0].split(":")
+		host = hostport[0]
+		if hostport.size() > 1:
+			port = int(hostport[1])
 
 	var http := HTTPClient.new()
 
@@ -195,8 +191,6 @@ func talk_stream(npc_id: String, message: String, player_id: String = "", llm_ba
 		"Content-Type: application/json",
 		"Accept: text/event-stream",
 	])
-	if llm_api_key != "":
-		headers.append("Authorization: Bearer " + llm_api_key)
 
 	err = http.request(HTTPClient.METHOD_POST, url_path, headers, body_json)
 	if err != OK:
