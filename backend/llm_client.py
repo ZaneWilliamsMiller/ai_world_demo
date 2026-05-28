@@ -13,6 +13,7 @@ from .config import settings
 from .models.llm_schema import NpcResponseSchema
 from .llm_cache import get_llm_cache
 from .circuit_breaker import get_circuit_breaker
+from .systems.constants import RETRYABLE_HTTP_STATUSES, RETRY_JITTER_MAX, RETRY_BACKOFF_JITTER_MAX
 
 log = logging.getLogger("llm_client")
 
@@ -238,10 +239,10 @@ async def _execute_with_retry(
 
         except httpx.HTTPStatusError as e:
             status = e.response.status_code
-            is_retryable_status = status in (429, 502, 503, 504)
+            is_retryable_status = status in RETRYABLE_HTTP_STATUSES
 
             if is_retryable_status and attempt < max_retries - 1:
-                delay = base_delay * (2 ** attempt) + (time.time() % 1.0) * 0.5
+                delay = base_delay * (2 ** attempt) + (time.time() % 1.0) * RETRY_JITTER_MAX
                 log.warning(
                     f"{operation_name} API {status} error (attempt {attempt + 1}/{max_retries}), "
                     f"retrying in {delay:.1f}s: {e.response.text[:128]}"
@@ -256,7 +257,7 @@ async def _execute_with_retry(
         except Exception as e:
             # 修复 Major #5：区分可重试和不可重试异常
             if _is_retryable_error(e) and attempt < max_retries - 1:
-                delay = base_delay * (2 ** attempt) + (time.time() % 1.0) * 0.3
+                delay = base_delay * (2 ** attempt) + (time.time() % 1.0) * RETRY_BACKOFF_JITTER_MAX
                 log.warning(
                     f"{operation_name} request failed (attempt {attempt + 1}/{max_retries}), "
                     f"retrying in {delay:.1f}s: {e}"
@@ -520,10 +521,10 @@ async def stream_chat_completion(
 
                 except httpx.HTTPStatusError as e:
                     status = e.response.status_code
-                    is_retryable_status = status in (429, 502, 503, 504)
+                    is_retryable_status = status in RETRYABLE_HTTP_STATUSES
 
                     if is_retryable_status and attempt < max_retries - 1:
-                        delay = base_delay * (2 ** attempt) + (time.time() % 1.0) * 0.5
+                        delay = base_delay * (2 ** attempt) + (time.time() % 1.0) * RETRY_JITTER_MAX
                         log.warning(
                             f"LLM Stream {status} error (attempt {attempt + 1}/{max_retries}), "
                             f"retrying in {delay:.1f}s"
@@ -538,7 +539,7 @@ async def stream_chat_completion(
                 except Exception as e:
                     # 修复 Major #5：区分可重试和不可重试异常
                     if _is_retryable_error(e) and attempt < max_retries - 1:
-                        delay = base_delay * (2 ** attempt) + (time.time() % 1.0) * 0.3
+                        delay = base_delay * (2 ** attempt) + (time.time() % 1.0) * RETRY_BACKOFF_JITTER_MAX
                         log.warning(
                             f"LLM stream failed (attempt {attempt + 1}/{max_retries}), "
                             f"retrying in {delay:.1f}s: {e}"

@@ -17,7 +17,7 @@ window.App = window.App || {};
     } else if (window.location.port === "8765") {
       App.BACKEND_URL = window.location.origin;
     } else {
-      App.BACKEND_URL = "http://localhost:8765";
+      App.BACKEND_URL = window.location.origin;
     }
   })();
   // 敏感配置请通过配置面板设置，不要硬编码在代码中！

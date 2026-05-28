@@ -108,7 +108,7 @@ async def _llm_summarize(dialog_text: str, npc_name: str) -> str:
             "content": f"请摘要以下{npc_name}的对话：\n{dialog_text}",
         },
     ]
-    raw = await chat_completion(messages, temperature=0.3, max_tokens=150)
+    raw = await chat_completion(messages, temperature=COMPRESS_TEMPERATURE, max_tokens=COMPRESS_MAX_TOKENS)
     summary = raw.strip()
     # 清理可能出现的引号
     for ch in ('"', '"', '"', "'", "'", "'"):

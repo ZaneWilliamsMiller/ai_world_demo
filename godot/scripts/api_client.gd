@@ -156,7 +156,11 @@ func talk_stream(npc_id: String, message: String, player_id: String = "") -> voi
 
 	var body_json := JSON.stringify(body_dict)
 	var base_url := _base_url()
-	var host := "127.0.0.1"
+	if base_url.is_empty():
+		emit_signal("stream_done", {"error": "后端地址未配置", "done": true})
+		_streaming = false
+		return
+	var host := ""
 	var port := 80
 	var use_tls := false
 

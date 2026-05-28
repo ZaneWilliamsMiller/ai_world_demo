@@ -121,7 +121,7 @@ def apply_coin_delta(p: PlayerState, delta: int | None) -> int:
     """安全更新身上制钱；返回真正生效的 delta（钱不够时缩水到 -coins）。"""
     if not delta:
         return 0
-    d = max(-99999, min(99999, int(delta)))
+    d = max(-MAX_COIN_DELTA, min(MAX_COIN_DELTA, int(delta)))
     if d < 0 and -d > p.coins:
         d = -p.coins
     p.coins = max(0, p.coins + d)
@@ -131,7 +131,7 @@ def apply_coin_delta(p: PlayerState, delta: int | None) -> int:
 def add_items(p: PlayerState, names: list[str]) -> list[str]:
     out: list[str] = []
     for raw in names:
-        name = (raw or "").strip().strip("「」『」\"'")[:12]
+        name = (raw or "").strip().strip("「」『」\"'")[:MAX_ITEM_NAME_LEN]
         if not name:
             continue
         p.inventory[name] = int(p.inventory.get(name, 0)) + 1
@@ -142,7 +142,7 @@ def add_items(p: PlayerState, names: list[str]) -> list[str]:
 def remove_items(p: PlayerState, names: list[str]) -> list[str]:
     out: list[str] = []
     for raw in names:
-        name = (raw or "").strip().strip("「」『」\"'")[:12]
+        name = (raw or "").strip().strip("「」『」\"'")[:MAX_ITEM_NAME_LEN]
         if not name:
             continue
         if name in p.inventory:
@@ -302,7 +302,7 @@ def apply_npc_trade(
 
     # NPC 失去的物（卖/送给玩家的）
     for raw in items_given_by_npc:
-        name = (raw or "").strip().strip("「」『」\"'")[:12]
+        name = (raw or "").strip().strip("「」『」\"'")[:MAX_ITEM_NAME_LEN]
         if not name:
             continue
         current = inv.get(name, 0)
@@ -312,7 +312,7 @@ def apply_npc_trade(
 
     # NPC 得到的物（从玩家收的）
     for raw in items_given_by_player:
-        name = (raw or "").strip().strip("「」『」\"'")[:12]
+        name = (raw or "").strip().strip("「」『」\"'")[:MAX_ITEM_NAME_LEN]
         if not name:
             continue
         inv[name] = inv.get(name, 0) + 1
@@ -505,7 +505,7 @@ def use_player_item(p: "PlayerState", item_name: str) -> dict[str, object]:
     - 超每日上限 → 告知今日已用足
     - 生命燃烧中自动解除（进食效果）
     """
-    name = (item_name or "").strip().strip("「」『」\"'")[:12]
+    name = (item_name or "").strip().strip("「」『」\"'")[:MAX_ITEM_NAME_LEN]
     if not name:
         return {"success": False, "note": "空无一物。", "delta": {"vigor": 0, "spirit": 0, "sleep_debt": 0}}
 

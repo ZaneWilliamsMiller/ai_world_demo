@@ -12,6 +12,15 @@ from typing import Any
 
 from backend.models.player import PlayerState
 from backend.systems.pathfinding import tile_at
+from backend.systems.constants import (
+    LIFE_BURN_TICKS, MAX_TRAP_ATTEMPTS,
+    SAFE_ZONE_X_RANGE, SAFE_ZONE_Y_RANGE,
+    SAFE_REST_VIGOR, SAFE_REST_SPIRIT, SAFE_REST_SLEEP_DEBT,
+    WILD_REST_VIGOR, WILD_REST_SPIRIT, WILD_REST_SLEEP_DEBT,
+    DRY_RATION_VIGOR, DRY_RATION_SPIRIT,
+    FISH_VIGOR, FISH_SPIRIT,
+    WILD_FRUIT_VIGOR, WILD_FRUIT_SPIRIT,
+)
 
 
 # ────────────────────── 体力 / 心气:带上限的可耗资源 ──────────────────────
@@ -110,8 +119,8 @@ def maybe_collapse_from_attrs(p: PlayerState) -> dict[str, Any] | None:
         return {"outcome": "dead", "reason": p.death_reason}
     if v <= 0:
         if int(getattr(p, "life_burn_ticks", 0)) <= 0:
-            p.life_burn_max = 6
-            p.life_burn_ticks = 6
+            p.life_burn_max = LIFE_BURN_TICKS
+            p.life_burn_ticks = LIFE_BURN_TICKS
             p.move_locked = True
             p.move_lock_npc_id = "jiang"
             p.trap_reason = "体力枯竭,生命在燃烧;尽快进食。"
@@ -169,7 +178,7 @@ def try_clear_move_lock(
         return {"outcome": "escaped", "reason": "终得脱身,可再行旅。"}
 
     if llm_outcome == "fail":
-        if p.trap_attempts >= 3:
+        if p.trap_attempts >= MAX_TRAP_ATTEMPTS:
             p.enslaved = True
             p.enslaved_reason = "周旋已尽,被人押作苦役。"
             p.ended = True
@@ -213,31 +222,31 @@ def survival_action_delta(p: PlayerState, user_message: str) -> dict[str, Any]:
         p.inventory["干粮"] = max(0, int(p.inventory.get("干粮", 0)) - 1)
         if p.inventory["干粮"] <= 0:
             p.inventory.pop("干粮", None)
-        vigor += apply_vigor_delta(p, +18)
-        spirit += apply_spirit_delta(p, +6)
+        vigor += apply_vigor_delta(p, DRY_RATION_VIGOR)
+        spirit += apply_spirit_delta(p, DRY_RATION_SPIRIT)
         items_lose.append("干粮")
         note = "你嚼了几口干粮,气力略回。"
     elif any(k in msg for k in ("打鱼", "捕鱼", "下网", "摸鱼")) and ch in ("~", "B"):
-        vigor += apply_vigor_delta(p, -4)
-        spirit += apply_spirit_delta(p, +2)
+        vigor += apply_vigor_delta(p, FISH_VIGOR)
+        spirit += apply_spirit_delta(p, FISH_SPIRIT)
         p.inventory["鲜鱼"] = int(p.inventory.get("鲜鱼", 0)) + 1
         items_gain.append("鲜鱼")
         note = "你就着水势摸得一尾鲜鱼。"
     elif any(k in msg for k in ("野果", "采果", "摘果", "吃果")) and ch in ("F", "&", ","):
-        vigor += apply_vigor_delta(p, +10)
-        spirit += apply_spirit_delta(p, +4)
+        vigor += apply_vigor_delta(p, WILD_FRUIT_VIGOR)
+        spirit += apply_spirit_delta(p, WILD_FRUIT_SPIRIT)
         note = "你在林地寻得野果,勉强充饥。"
     elif any(k in msg for k in ("睡", "歇息", "打盹", "合眼")):
-        safe = (ch in ("T", "Y")) or (p.map_id == "world" and p.px >= 22 and p.px <= 28 and p.py >= 5 and p.py <= 10)
+        safe = (ch in ("T", "Y")) or (p.map_id == "world" and SAFE_ZONE_X_RANGE[0] <= p.px <= SAFE_ZONE_X_RANGE[1] and SAFE_ZONE_Y_RANGE[0] <= p.py <= SAFE_ZONE_Y_RANGE[1])
         if safe:
-            vigor += apply_vigor_delta(p, -2)
-            spirit += apply_spirit_delta(p, +36)
-            p.sleep_debt = max(0, int(getattr(p, "sleep_debt", 0)) - 14)
+            vigor += apply_vigor_delta(p, SAFE_REST_VIGOR)
+            spirit += apply_spirit_delta(p, SAFE_REST_SPIRIT)
+            p.sleep_debt = max(0, int(getattr(p, "sleep_debt", 0)) - SAFE_REST_SLEEP_DEBT)
             note = "你在较安全处合眼调息,心气大幅回升。"
         else:
-            vigor += apply_vigor_delta(p, -7)
-            spirit += apply_spirit_delta(p, +12)
-            p.sleep_debt = max(0, int(getattr(p, "sleep_debt", 0)) - 5)
+            vigor += apply_vigor_delta(p, WILD_REST_VIGOR)
+            spirit += apply_spirit_delta(p, WILD_REST_SPIRIT)
+            p.sleep_debt = max(0, int(getattr(p, "sleep_debt", 0)) - WILD_REST_SLEEP_DEBT)
             note = "荒野露宿,寒湿与警惕反噬了体力,只回了一点心气。"
     elif any(k in msg for k in ("攀爬", "爬坡", "翻越", "跳崖", "下崖")):
         p.allow_steep_next_move = True

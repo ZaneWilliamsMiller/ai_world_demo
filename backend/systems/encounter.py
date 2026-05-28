@@ -35,6 +35,7 @@ from backend.data.atmosphere import tile_atmosphere, WORLD_REGIONS
 from backend.systems.pathfinding import tile_at
 from backend.systems.time_weather import shichen_name, is_night
 from backend.data.zones import is_safe_zone
+from backend.llm_params import ENCOUNTER_TEMPERATURE, ENCOUNTER_MAX_TOKENS
 
 log = logging.getLogger("encounter")
 
@@ -172,8 +173,8 @@ async def generate_dynamic_encounter(p: PlayerState) -> dict[str, Any] | None:
         from backend.llm_client import chat_completion
         raw = await chat_completion(
             messages,
-            temperature=0.92,
-            max_tokens=200,
+            temperature=ENCOUNTER_TEMPERATURE,
+            max_tokens=ENCOUNTER_MAX_TOKENS,
             response_format={"type": "json_object"},
         )
         parsed = json.loads(raw)

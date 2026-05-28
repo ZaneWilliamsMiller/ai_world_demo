@@ -17,6 +17,11 @@ from backend import memory as mem
 from backend.llm_client import chat_completion
 from backend.data.relationships import NPC_RELATIONSHIPS
 from backend.data.npcs_data import NPCS
+from backend.llm_params import (
+    REFLECT_TEMPERATURE, REFLECT_MAX_TOKENS,
+    CROSS_REFLECT_TEMPERATURE, CROSS_REFLECT_MAX_TOKENS,
+    PLAN_TEMPERATURE, PLAN_MAX_TOKENS,
+)
 
 log = logging.getLogger("agent_brain")
 
@@ -178,8 +183,8 @@ async def reflect(
     try:
         raw = await chat_completion(
             [{"role": "system", "content": sys}, {"role": "user", "content": user}],
-            temperature=0.7,
-            max_tokens=400,
+            temperature=REFLECT_TEMPERATURE,
+            max_tokens=REFLECT_MAX_TOKENS,
             response_format={"type": "json_object"}
         )
         data = json.loads(raw)
@@ -397,8 +402,8 @@ async def cross_reflect(
             raw = await chat_completion(
                 [{"role": "system", "content": sys},
                  {"role": "user", "content": user}],
-                temperature=0.7,
-                max_tokens=250,
+                temperature=CROSS_REFLECT_TEMPERATURE,
+                max_tokens=CROSS_REFLECT_MAX_TOKENS,
                 response_format={"type": "json_object"},
             )
             data = json.loads(raw)
@@ -458,8 +463,8 @@ async def plan_day(
     try:
         raw = await chat_completion(
             [{"role": "system", "content": sys}, {"role": "user", "content": user}],
-            temperature=0.7,
-            max_tokens=500,
+            temperature=PLAN_TEMPERATURE,
+            max_tokens=PLAN_MAX_TOKENS,
             response_format={"type": "json_object"}
         )
         data = json.loads(raw)

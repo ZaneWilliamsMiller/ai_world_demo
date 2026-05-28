@@ -16,6 +16,10 @@ from backend.data.factions import FACTIONS
 from backend.data.maps_data import MAPS, MAP_LOCATIONS, LOCATION_KEYWORDS
 from backend.systems.pathfinding import tile_at, can_step_between, find_path, apply_portal, is_dangerous
 from backend.systems.time_weather import is_night, shichen_name
+from backend.systems.constants import (
+    MAX_STATE_DELTA, MAX_FAVOR_DELTA, MAX_FAVOR,
+    MAX_RUMOR_LEN, MAX_RUMORS,
+)
 
 # ── 从子模块 re-export（保持向后兼容；新代码请直接从子模块导入）──
 from backend.systems.trap import (                    # noqa: F401
@@ -59,18 +63,18 @@ def clamp_delta(d: dict[str, int]) -> dict[str, int]:
     out: dict[str, int] = {}
     for k in keys:
         v = int(d.get(k, 0))
-        if v > 3:
-            v = 3
-        if v < -3:
-            v = -3
+        if v > MAX_STATE_DELTA:
+            v = MAX_STATE_DELTA
+        if v < -MAX_STATE_DELTA:
+            v = -MAX_STATE_DELTA
         out[k] = v
     return out
 
 def clamp_favor_delta(d: int) -> int:
-    if d > 3:
-        return 3
-    if d < -3:
-        return -3
+    if d > MAX_FAVOR_DELTA:
+        return MAX_FAVOR_DELTA
+    if d < -MAX_FAVOR_DELTA:
+        return -MAX_FAVOR_DELTA
     return d
 
 def apply_favor(p: PlayerState, npc_id: str, delta: int | None) -> None:
@@ -79,21 +83,21 @@ def apply_favor(p: PlayerState, npc_id: str, delta: int | None) -> None:
     d = clamp_favor_delta(delta)
     cur = int(p.favor.get(npc_id, 0))
     nxt = cur + d
-    if nxt > 100:
-        nxt = 100
-    if nxt < -100:
-        nxt = -100
+    if nxt > MAX_FAVOR:
+        nxt = MAX_FAVOR
+    if nxt < -MAX_FAVOR:
+        nxt = -MAX_FAVOR
     p.favor[npc_id] = nxt
 
 def push_rumor(p: PlayerState, snippet: str) -> None:
     s = snippet.strip().replace("\n", " ")
-    if len(s) > 180:
-        s = s[:180] + "..."
+    if len(s) > MAX_RUMOR_LEN:
+        s = s[:MAX_RUMOR_LEN] + "..."
     if not s:
         return
     p.rumors.append(s)
-    if len(p.rumors) > 8:
-        p.rumors = p.rumors[-8:]
+    if len(p.rumors) > MAX_RUMORS:
+        p.rumors = p.rumors[-MAX_RUMORS:]
 
 def npc_ids_for_player(p: PlayerState) -> list[str]:
     out: list[str] = []

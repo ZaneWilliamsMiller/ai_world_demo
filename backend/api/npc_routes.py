@@ -18,6 +18,10 @@ from backend.data.factions import FACTIONS
 from backend.data.prompts import WORLD_NAME, SOCIETY_BIBLE
 from backend.systems.core import npc_ids_for_player, perception_scan, danger_sense_narrative
 from backend.systems.time_weather import shichen_name
+from backend.llm_params import (
+    TALK_TEMPERATURE, TALK_LIGHT_MAX_TOKENS, TALK_FULL_MAX_TOKENS,
+    FINALE_TEMPERATURE, FINALE_MAX_TOKENS,
+)
 from backend.game_state import get_or_init_mind
 from backend.services.talk_service import build_npc_messages, apply_npc_reply, build_graceful_fallback
 from backend.services.agent_service import bg_reflect
@@ -204,8 +208,8 @@ async def npc_talk(body: TalkBody, bg: BackgroundTasks) -> dict[str, Any]:
         try:
             raw = await chat_completion(
                 messages,
-                temperature=0.85,
-                max_tokens=450 if is_light_inquiry else 800,
+                temperature=TALK_TEMPERATURE,
+                max_tokens=TALK_LIGHT_MAX_TOKENS if is_light_inquiry else TALK_FULL_MAX_TOKENS,
                 response_format={"type": "json_object"},
             )
             parsed = parse_npc_reply_json(raw)
@@ -267,8 +271,8 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
             is_light_inquiry = body.message.startswith("[系统指令·问路")
             raw = await chat_completion(
                 messages,
-                temperature=0.85,
-                max_tokens=450 if is_light_inquiry else 800,
+                temperature=TALK_TEMPERATURE,
+                max_tokens=TALK_LIGHT_MAX_TOKENS if is_light_inquiry else TALK_FULL_MAX_TOKENS,
                 response_format={"type": "json_object"},
             )
             parsed = parse_npc_reply_json(raw)
@@ -505,7 +509,7 @@ async def finale(body: FinaleBody) -> dict[str, Any]:
         {"role": "user", "content": user_block},
     ]
     t0 = time.perf_counter()
-    raw = await chat_completion(messages, temperature=0.95, max_tokens=900)
+    raw = await chat_completion(messages, temperature=FINALE_TEMPERATURE, max_tokens=FINALE_MAX_TOKENS)
     epilogue, title = parse_finale(raw)
     if not title:
         title = "无名之夜"
