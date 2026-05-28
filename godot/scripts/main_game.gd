@@ -50,6 +50,9 @@ var _npc_select: OptionButton
 var _msg_input: LineEdit
 var _send_btn: Button
 var _is_streaming: bool = false
+var _stream_text: String = ""
+var _stream_npc_msg_index: int = -1
+var _stream_npc_name: String = ""
 
 # HUD
 var _vigor_bar: ProgressBar ; var _vigor_label: Label
@@ -247,10 +250,58 @@ func _on_send() -> void:
 	_is_streaming = true
 	_send_btn.disabled = true
 
-	var ok: bool = await GameManager.talk_to_npc(npc_id, text)
+	_msg_display.add_chat(GameColors.ACCENT2, npc_name, "...")
+	var npc_msg_index: int = _msg_display.msg_count() - 1
+
+	if ApiClient.is_connected("stream_chunk", Callable(self, "_on_stream_chunk")):
+		ApiClient.disconnect("stream_chunk", Callable(self, "_on_stream_chunk"))
+	if ApiClient.is_connected("stream_done", Callable(self, "_on_stream_done")):
+		ApiClient.disconnect("stream_done", Callable(self, "_on_stream_done"))
+
+	_stream_text = ""
+	_stream_npc_msg_index = npc_msg_index
+	_stream_npc_name = npc_name
+
+	ApiClient.connect("stream_chunk", Callable(self, "_on_stream_chunk"))
+	ApiClient.connect("stream_done", Callable(self, "_on_stream_done"))
+
+	var llm_base_url := ""
+	var llm_api_key := ""
+	var llm_model := ""
+	if ApiClient.api_mode == "direct":
+		llm_base_url = ApiClient.llm_api_url
+		llm_api_key = ApiClient.llm_api_key
+		llm_model = ApiClient.llm_model
+
+	ApiClient.talk_stream(npc_id, text, "", llm_base_url, llm_api_key, llm_model)
+
+
+func _on_stream_chunk(text: String) -> void:
+	_stream_text += text
+	var bb := "[b][color=#%s]%s[/color][/b]\n%s" % [GameColors.ACCENT2.to_html(false), _stream_npc_name, _stream_text.replace("[", "[lb]")]
+	_msg_display.update_msg(_stream_npc_msg_index, bb)
+
+
+func _on_stream_done(data: Dictionary) -> void:
+	if ApiClient.is_connected("stream_chunk", Callable(self, "_on_stream_chunk")):
+		ApiClient.disconnect("stream_chunk", Callable(self, "_on_stream_chunk"))
+	if ApiClient.is_connected("stream_done", Callable(self, "_on_stream_done")):
+		ApiClient.disconnect("stream_done", Callable(self, "_on_stream_done"))
+
+	if _stream_text == "" and data.has("error"):
+		var error_bb := "[b][color=#%s]%s[/color][/b]\n[对话失败] %s" % [GameColors.ACCENT2.to_html(false), _stream_npc_name, str(data.error)]
+		_msg_display.update_msg(_stream_npc_msg_index, error_bb)
+
 	_is_streaming = false
 	_send_btn.disabled = false
 	_msg_input.grab_focus()
+
+	if data.has("player"):
+		GameManager._apply_player(data.player)
+	if data.has("npcs_here"):
+		GameManager.npcs_here = data.npcs_here
+	if data.has("player") or data.has("npcs_here"):
+		_refresh()
 
 
 func _on_npc_reply(speaker: String, message: String, _npc_id: String) -> void:

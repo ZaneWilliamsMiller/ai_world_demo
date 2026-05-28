@@ -53,6 +53,11 @@ window.App = window.App || {};
               textEl.textContent = visibleText;
               App.scrollToBottom();
             }
+            if (d.error) {
+              visibleText += "\n[错误] " + d.error;
+              textEl.textContent = visibleText;
+              if (d.fatal) break;
+            }
             if (d.done) {
               if (d.player) App.fetchState().then(App.updateUI);
               break;

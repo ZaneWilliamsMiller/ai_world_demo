@@ -6,6 +6,7 @@ from __future__ import annotations
 """
 import asyncio
 import logging
+import time as _time
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -44,6 +45,21 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = _time.perf_counter()
+    response = await call_next(request)
+    duration_ms = int((_time.perf_counter() - start) * 1000)
+
+    if request.url.path.startswith("/api/"):
+        _log.info(
+            "%s %s → %d (%dms)",
+            request.method, request.url.path,
+            response.status_code, duration_ms,
+        )
+
+    return response
 
 # 真正的前后端分离：后端只提供API，不提供静态文件
 # if STATIC.exists():

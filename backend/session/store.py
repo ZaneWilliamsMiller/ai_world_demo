@@ -90,5 +90,8 @@ class SessionStore:
 
         return st
 
+    def remove_player(self, player_id: str) -> None:
+        self.players.pop(player_id, None)
+
 
 room = SessionStore()

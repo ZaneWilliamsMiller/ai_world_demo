@@ -244,6 +244,7 @@ async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
                 push_event(p, f"{p.display_name}于{MAPS[p.map_id]['name']}遭难:{reason[:24]}", scope="near", actor="天意")
                 save_game(p)
                 delete_save(p.player_id)
+                room.remove_player(p.player_id)
         if not p.dead and not p.ended:
             collapsed = maybe_collapse_from_attrs(p)
             if collapsed and not p.permadeath:

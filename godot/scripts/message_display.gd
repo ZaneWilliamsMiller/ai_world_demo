@@ -7,6 +7,7 @@ class_name MessageDisplay
 ##   2. 显示系统消息 (居中、灰色)
 ##   3. 错误消息高亮 (红色背景 + 闪烁效果)
 ##   4. 自动滚动到底部
+##   5. 支持流式对话：按索引更新单条消息
 ##
 ## 使用方式:
 ##   var msg := MessageDisplay.new()
@@ -14,49 +15,60 @@ class_name MessageDisplay
 ##   msg.add_chat(color, speaker, body)        # 聊天消息
 ##   msg.add_system_msg(text)                   # 系统消息
 ##   msg.add_system_msg(text, true)             # 错误消息
+##   msg.update_msg(index, text)                # 流式更新指定消息
+##   msg.msg_count()                            # 消息条数
 ##
 ## 依赖: GameColors (Autoload)
 
-var _dialogue_label: RichTextLabel
 var _chat_scroll: ScrollContainer
+var _messages: VBoxContainer
 var _error_style_applied := false
 
 
-## 初始化消息显示系统
-## [param dialogue_label] 对话文本 RichTextLabel 节点
-## [param chat_scroll] 包含对话的 ScrollContainer 节点
 func init(dialogue_label: RichTextLabel, chat_scroll: ScrollContainer) -> void:
-	_dialogue_label = dialogue_label
 	_chat_scroll = chat_scroll
+	_messages = VBoxContainer.new()
+	_messages.add_theme_constant_override("separation", 4)
+	_messages.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if dialogue_label.get_parent():
+		dialogue_label.get_parent().remove_child(dialogue_label)
+	dialogue_label.queue_free()
+	_chat_scroll.add_child(_messages)
 
 
-## 追加聊天消息到对话框
-## [param color] 发言者颜色
-## [param speaker] 发言者名称 (空则不显示前缀)
-## [param body] 消息内容 (支持 BBCode)
+func _create_msg_label() -> RichTextLabel:
+	var label := RichTextLabel.new()
+	label.bbcode_enabled = true
+	label.fit_content = true
+	label.selection_enabled = true
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.scroll_following = false
+	label.add_theme_font_size_override("normal_font_size", 13)
+	label.add_theme_color_override("default_color", Color(0.90, 0.90, 0.92))
+	return label
+
+
 func add_chat(color: Color, speaker: String, body: String) -> void:
-	if not is_instance_valid(_dialogue_label): return
+	if not is_instance_valid(_messages): return
+	var label := _create_msg_label()
 	var bb := ""
 	if speaker != "":
 		bb += "[b][color=#%s]%s[/color][/b]\n" % [color.to_html(false), speaker]
 	bb += body.replace("[", "[lb]")
-	_dialogue_label.append_text(bb + "\n\n")
+	label.bbcode_text = bb
+	_messages.add_child(label)
 	await get_tree().process_frame
 	_scroll_to_bottom()
 
 
-## 显示系统消息 (居中显示)
-## [param text] 消息文本
 func add_system_msg(text: String) -> void:
 	add_chat(GameColors.DIM, "", "[center]%s[/center]" % text)
 
 
-## 显示系统/错误消息（支持自动错误检测 + 高亮）
-## [param text] 消息文本
-## [param is_error] 是否强制标记为错误
 func add_system_msg_ex(text: String, is_error: bool = false) -> void:
-	if not _dialogue_label: return
+	if not is_instance_valid(_messages): return
 
+	var label := _create_msg_label()
 	var prefix := ""
 	var suffix := ""
 
@@ -71,16 +83,31 @@ func add_system_msg_ex(text: String, is_error: bool = false) -> void:
 	else:
 		_error_style_applied = false
 
-	_dialogue_label.append_text("\n%s%s%s" % [prefix, text, suffix])
+	label.bbcode_text = "%s%s%s" % [prefix, text, suffix]
+	_messages.add_child(label)
 	_scroll_to_bottom()
 
 	if is_error or _error_style_applied:
-		_dialogue_label.modulate = Color(1.2, 0.9, 0.9)
+		label.modulate = Color(1.2, 0.9, 0.9)
 		await get_tree().create_timer(0.3).timeout
-		_dialogue_label.modulate = Color.WHITE
+		label.modulate = Color.WHITE
 
 
-## 将聊天区域滚动到底部
+func msg_count() -> int:
+	if not is_instance_valid(_messages): return 0
+	return _messages.get_child_count()
+
+
+func update_msg(index: int, text: String) -> void:
+	if not is_instance_valid(_messages): return
+	if index < 0 or index >= _messages.get_child_count():
+		return
+	var label: RichTextLabel = _messages.get_child(index)
+	if label:
+		label.bbcode_text = text
+		_scroll_to_bottom()
+
+
 func _scroll_to_bottom() -> void:
 	if not is_instance_valid(_chat_scroll): return
 	await get_tree().process_frame

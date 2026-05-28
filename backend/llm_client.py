@@ -34,6 +34,8 @@ class LLMClientManager:
         self._client: httpx.AsyncClient | None = None
         self._client_lock = asyncio.Lock()
         self._semaphore: asyncio.Semaphore | None = None
+        self._custom_clients: dict[str, httpx.AsyncClient] = {}
+        self._custom_lock = asyncio.Lock()
 
     @classmethod
     async def get_instance(cls) -> LLMClientManager:
@@ -64,11 +66,41 @@ class LLMClientManager:
                     )
         return self._client
 
+    async def get_custom_client(self, base_url: str, api_key: str) -> httpx.AsyncClient:
+        cache_key = f"{base_url}:{api_key}"
+        if cache_key in self._custom_clients:
+            client = self._custom_clients[cache_key]
+            if not client.is_closed:
+                return client
+
+        async with self._custom_lock:
+            if cache_key in self._custom_clients:
+                client = self._custom_clients[cache_key]
+                if not client.is_closed:
+                    return client
+
+            timeout = httpx.Timeout(
+                connect=settings.llm_pool_connect_timeout,
+                read=settings.llm_pool_read_timeout,
+                write=10.0,
+                pool=5.0,
+            )
+            client = httpx.AsyncClient(
+                timeout=timeout,
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+            self._custom_clients[cache_key] = client
+            return client
+
     async def close_client(self) -> None:
-        """关闭共享 client（用于优雅退出）。"""
+        """关闭所有 client（共享 + 自定义）。"""
         if self._client and not self._client.is_closed:
             await self._client.aclose()
             self._client = None
+        for key, client in list(self._custom_clients.items()):
+            if not client.is_closed:
+                await client.aclose()
+        self._custom_clients.clear()
 
     def get_semaphore(self) -> asyncio.Semaphore:
         """获取并发限速信号量（懒初始化）。"""
@@ -217,9 +249,14 @@ async def _handle_llm_response(response_data: dict[str, Any], cache, circuit_bre
     """
     usage = response_data.get("usage", {})
     if isinstance(usage, dict):
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+        total_tokens = usage.get("total_tokens", 0)
         cached_tokens = usage.get("prompt_tokens_details", {}).get("cached_tokens", 0)
-        if cached_tokens:
-            log.info(f"Prompt cache hit: {cached_tokens} cached tokens")
+        log.info(
+            "LLM usage: prompt=%d completion=%d total=%d cached=%d",
+            prompt_tokens, completion_tokens, total_tokens, cached_tokens,
+        )
 
     content = response_data["choices"][0]["message"]["content"] or ""
 
@@ -315,16 +352,16 @@ async def chat_completion(
             "Authorization": f"Bearer {llm_api_key or settings.llm_api_key}",
         }
 
-        # 修复 Major #8：使用 try/finally 确保 AsyncClient 关闭，防止内存泄漏
-        client = httpx.AsyncClient(timeout=httpx.Timeout(connect=settings.llm_pool_connect_timeout, read=settings.llm_pool_read_timeout, write=10.0, pool=5.0))
-        try:
-            r = await client.post(url, json=body, headers=headers)
-            r.raise_for_status()
-            data = r.json()
-            content = data["choices"][0]["message"]["content"] or ""
-            return content
-        finally:
-            await client.aclose()
+        manager = await LLMClientManager.get_instance()
+        client = await manager.get_custom_client(
+            llm_base_url or settings.llm_base_url,
+            llm_api_key or settings.llm_api_key,
+        )
+        r = await client.post(url, json=body, headers=headers)
+        r.raise_for_status()
+        data = r.json()
+        content = data["choices"][0]["message"]["content"] or ""
+        return content
     
     cache = get_llm_cache()
     cb = get_circuit_breaker()
@@ -391,22 +428,21 @@ async def stream_chat_completion(
             "Authorization": f"Bearer {llm_api_key or settings.llm_api_key}",
         }
 
-        # 修复 Major #8：使用 try/finally 确保 AsyncClient 关闭
-        client = httpx.AsyncClient(timeout=httpx.Timeout(connect=settings.llm_pool_connect_timeout, read=settings.llm_pool_read_timeout, write=10.0, pool=5.0))
-        try:
-            # 修复 Major #6：使用 try/finally 确保流在异常时优雅关闭
-            async with client.stream("POST", url, json=body, headers=headers) as r:
-                try:
-                    r.raise_for_status()
-                    async for line in r.aiter_lines():
-                        piece = _parse_stream_line(line)
-                        if piece:
-                            yield piece
-                except Exception as stream_err:
-                    log.error(f"Custom config stream error: {stream_err}")
-                    yield f"[STREAM_ERROR] {stream_err}"
-        finally:
-            await client.aclose()
+        manager = await LLMClientManager.get_instance()
+        client = await manager.get_custom_client(
+            llm_base_url or settings.llm_base_url,
+            llm_api_key or settings.llm_api_key,
+        )
+        async with client.stream("POST", url, json=body, headers=headers) as r:
+            try:
+                r.raise_for_status()
+                async for line in r.aiter_lines():
+                    piece = _parse_stream_line(line)
+                    if piece:
+                        yield piece
+            except Exception as stream_err:
+                log.error(f"Custom config stream error: {stream_err}")
+                yield f"[STREAM_ERROR] {stream_err}"
         return
     
     else:

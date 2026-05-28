@@ -9,6 +9,8 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from collections import defaultdict
+from time import time as _time
 
 from backend.data.npcs_data import NPCS
 from backend.data.factions import FACTIONS
@@ -20,6 +22,23 @@ from backend.services.agent_service import bg_reflect
 from backend import agent_brain
 from backend.llm_client import chat_completion, parse_finale, parse_npc_reply_json
 from backend.views import player_public as _player_public, factions_public as _factions_public
+
+class _RateLimiter:
+    def __init__(self, max_requests: int = 10, window_s: float = 60.0):
+        self._max = max_requests
+        self._window = window_s
+        self._requests: dict[str, list[float]] = defaultdict(list)
+
+    def is_limited(self, key: str) -> bool:
+        now = _time()
+        timestamps = self._requests[key]
+        self._requests[key] = [t for t in timestamps if now - t < self._window]
+        if len(self._requests[key]) >= self._max:
+            return True
+        self._requests[key].append(now)
+        return False
+
+_talk_limiter = _RateLimiter(max_requests=10, window_s=60.0)
 
 router = APIRouter()
 
@@ -118,6 +137,8 @@ async def player_rest(body: RestBody) -> dict[str, Any]:
 
 @router.post("/api/npc/talk")
 async def npc_talk(body: TalkBody, bg: BackgroundTasks) -> dict[str, Any]:
+    if _talk_limiter.is_limited(body.player_id):
+        raise HTTPException(429, "对话过于频繁，请稍后再试")
     import traceback
     try:
         from backend.session.store import room
@@ -198,6 +219,8 @@ async def npc_talk(body: TalkBody, bg: BackgroundTasks) -> dict[str, Any]:
 
 @router.post("/api/npc/talk_stream")
 async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingResponse:
+    if _talk_limiter.is_limited(body.player_id):
+        raise HTTPException(429, "对话过于频繁，请稍后再试")
     from backend.session.store import room
     p = room.players.get(body.player_id)
     if not p:
@@ -226,6 +249,9 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
 
     async def event_gen():
         t0 = time.perf_counter()
+        is_fallback = False
+        parsed = None
+
         try:
             is_light = body.message.startswith("[系统指令·问路")
             raw = await chat_completion(
@@ -239,6 +265,7 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
             )
             parsed = parse_npc_reply_json(raw)
         except Exception as e:
+            is_fallback = True
             fb = build_graceful_fallback(body.npc_id, str(e))
             parsed = fb["parsed"]
             import logging
@@ -246,42 +273,30 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
                 "LLM fallback (stream) for npc=%s player=%s: %s",
                 body.npc_id, body.player_id, str(e)[:120]
             )
-            vis = (parsed.visible_text or "").strip()
-            if vis:
-                for i in range(0, len(vis), 16):
-                    yield _sse({"chunk": vis[i : i + 16]})
-                    await asyncio.sleep(0.01)
-            try:
-                async with p.lock:
-                    out, _ = apply_npc_reply(p, body.npc_id, body.message, parsed, is_fallback=True)
-                    p.last_talk_npc_id = body.npc_id
-                    p.last_talk_message = body.message
-            except Exception:
-                out = {}
-            out["server_ms"] = int((time.perf_counter() - t0) * 1000)
-            out["llm_fallback"] = True
-            yield _sse({"done": True, **out})
-            return
 
-        vis = (parsed.visible_text or "").strip()
+        out = {}
+        needs_reflect = False
+        try:
+            async with p.lock:
+                out, needs_reflect = apply_npc_reply(p, body.npc_id, body.message, parsed, is_fallback=is_fallback)
+                p.last_talk_npc_id = body.npc_id
+                p.last_talk_message = body.message
+        except Exception as e:
+            out = {"error": f"状态写入失败:{e}"}
+
+        vis = (parsed.visible_text or "").strip() if parsed else ""
         if vis:
             chunk_size = 16
             for i in range(0, len(vis), chunk_size):
                 yield _sse({"chunk": vis[i : i + chunk_size]})
                 await asyncio.sleep(0.01)
 
-        try:
-            async with p.lock:
-                out, needs_reflect = apply_npc_reply(p, body.npc_id, body.message, parsed)
-                p.last_talk_npc_id = body.npc_id
-                p.last_talk_message = body.message
-        except Exception as e:
-            yield _sse({"error": f"状态写入失败:{e}", "fatal": True})
-            return
-
-        if needs_reflect:
+        if needs_reflect and not is_fallback:
             bg.add_task(bg_reflect, p.player_id, body.npc_id)
+
         out["server_ms"] = int((time.perf_counter() - t0) * 1000)
+        if is_fallback:
+            out["llm_fallback"] = True
         yield _sse({"done": True, **out})
 
     return StreamingResponse(

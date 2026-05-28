@@ -120,56 +120,110 @@ func llm_chat(messages: Array[Dictionary], temperature: float = 0.7, max_tokens:
 signal stream_chunk(chunk: String)
 signal stream_done(data: Dictionary)
 
-func talk_stream(player_id: String, npc_id: String, message: String) -> void:
-	var http := HTTPRequest.new()
-	add_child(http)
-	http.timeout = timeout_sec
+func _base_url() -> String:
+	return backend_url.rstrip("/")
 
-	var full_url := backend_url.rstrip("/") + "/api/npc/talk_stream"
+
+func talk_stream(npc_id: String, message: String, player_id: String = "", llm_base_url: String = "", llm_api_key: String = "", llm_model: String = "") -> void:
+	var url_path := "/api/npc/talk_stream"
+	var body_dict := {
+		"player_id": player_id if player_id else GameManager.player_id,
+		"npc_id": npc_id,
+		"message": message,
+	}
+	if llm_base_url != "":
+		body_dict["llm_base_url"] = llm_base_url
+	if llm_api_key != "":
+		body_dict["llm_api_key"] = llm_api_key
+	if llm_model != "":
+		body_dict["llm_model"] = llm_model
+
+	var body_json := JSON.stringify(body_dict)
+	var base_url := _base_url()
+	var host := "127.0.0.1"
+	var port := 8765
+
+	if base_url.begins_with("http://"):
+		var parts := base_url.substr(7).split(":")
+		host = parts[0]
+		if parts.size() > 1:
+			port = int(parts[1])
+
+	var http := HTTPClient.new()
+	var err := http.connect_to_host(host, port)
+	if err != OK:
+		emit_signal("stream_done", {"error": "connect_failed", "done": true})
+		return
+
+	while http.get_status() == HTTPClient.STATUS_CONNECTING or http.get_status() == HTTPClient.STATUS_RESOLVING:
+		http.poll()
+		await get_tree().process_frame
+
+	if http.get_status() != HTTPClient.STATUS_CONNECTED:
+		emit_signal("stream_done", {"error": "connection_failed", "done": true})
+		return
+
 	var headers := PackedStringArray([
 		"Content-Type: application/json",
 		"Accept: text/event-stream",
 	])
-	var json_body := JSON.stringify({
-		"player_id": player_id,
-		"npc_id": npc_id,
-		"message": message
-	})
+	if llm_api_key != "":
+		headers.append("Authorization: Bearer " + llm_api_key)
 
-	http.request_completed.connect(_on_stream_complete.bind(http))
-	var err: int = http.request(full_url, headers, HTTPClient.METHOD_POST, json_body)
+	err = http.request(HTTPClient.METHOD_POST, url_path, headers, body_json)
 	if err != OK:
-		http.queue_free()
 		emit_signal("stream_done", {"error": "request_failed", "done": true})
 		return
 
+	while http.get_status() == HTTPClient.STATUS_REQUESTING:
+		http.poll()
+		await get_tree().process_frame
 
-func _on_stream_complete(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray, http: HTTPRequest) -> void:
-	http.queue_free()
+	if http.get_status() != HTTPClient.STATUS_BODY:
+		emit_signal("stream_done", {"error": "request_error", "done": true})
+		return
 
-	var text := body.get_string_from_utf8()
-	var lines := text.split("\n")
-	var full_text := ""
-	var done_data: Dictionary = {}
+	var buf := ""
+	var response_code := http.get_response_code()
+	if response_code != 200:
+		var rb := PackedByteArray()
+		while http.get_status() == HTTPClient.STATUS_BODY:
+			http.poll()
+			var chunk := http.read_response_body_chunk()
+			if chunk.size() > 0:
+				rb.append_array(chunk)
+			await get_tree().process_frame
+		var error_text := rb.get_string_from_utf8()
+		emit_signal("stream_done", {"error": "HTTP %d: %s" % [response_code, error_text.left(200)], "done": true})
+		return
 
-	for line in lines:
-		if line.begins_with("data: "):
-			var payload := line.substr(6)
-			var json := JSON.new()
-			if json.parse(payload) == OK:
+	while http.get_status() == HTTPClient.STATUS_BODY:
+		http.poll()
+		var chunk := http.read_response_body_chunk()
+		if chunk.size() > 0:
+			buf += chunk.get_string_from_utf8()
+			var lines := buf.split("\n")
+			buf = lines.pop_back()
+			for line in lines:
+				if not line.begins_with("data: "):
+					continue
+				var payload := line.substr(6).strip_edges()
+				if payload == "":
+					continue
+				var json := JSON.new()
+				if json.parse(payload) != OK:
+					continue
 				var d: Dictionary = json.data
 				if d.has("chunk"):
-					full_text += d["chunk"]
-					stream_chunk.emit(d["chunk"])
-				if d.get("done", false):
-					done_data = d
-				else:
-					if not d.has("chunk") and d.has("visible_text"):
-						full_text = d.get("visible_text", "")
-						stream_chunk.emit(full_text)
-						done_data = d
+					emit_signal("stream_chunk", d.chunk)
+				if d.has("error"):
+					emit_signal("stream_chunk", "[错误] " + str(d.error))
+				if d.has("done") and d.done:
+					emit_signal("stream_done", d)
+					return
+		await get_tree().process_frame
 
-	stream_done.emit(done_data)
+	emit_signal("stream_done", {"done": true})
 
 
 ## Test backend connection.
