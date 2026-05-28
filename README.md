@@ -334,22 +334,37 @@ python start.py --serve-only 8766
 |------|------|------|
 | GET | `/api/health` | 健康检查 |
 | POST | `/api/hello` | 创建/恢复角色 |
-| POST | `/api/move` | 移动（含锁定检测） |
+| POST | `/api/move` | 移动（含锁定检测、遭遇、陷阱） |
 | GET | `/api/state/{pid}` | 玩家完整状态 |
-| POST | `/api/npc/talk` | NPC 对话（非流式） |
-| POST | `/api/npc/talk_stream` | NPC 对话（SSE 流式） |
+| GET | `/api/journal/{pid}` | 江湖史册查询 |
 
-#### 系统 API
+#### NPC 交互 API
 
 | 方法 | 端点 | 说明 |
 |------|------|------|
-| GET | `/api/journal/{pid}` | 江湖史册查询 |
-| POST | `/api/rest` | 休息/回复 |
-| POST | `/api/finale` | 终局判定 |
-| GET | `/api/bounty/{pid}` | 悬赏榜列表 |
+| POST | `/api/npc/talk` | NPC 对话（非流式） |
+| POST | `/api/npc/talk_stream` | NPC 对话（SSE 流式） |
+| POST | `/api/item/use` | 使用背包物品 |
+| POST | `/api/rest` | 休息恢复 |
+| POST | `/api/finale` | 终局收束 |
+
+#### 悬赏系统 API
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| POST | `/api/bounty/refresh` | 刷新悬赏榜 |
 | POST | `/api/bounty/accept` | 接受悬赏 |
+| POST | `/api/bounty/check` | 检查悬赏进度 |
 | POST | `/api/bounty/complete` | 完成悬赏 |
 | POST | `/api/bounty/abandon` | 放弃悬赏 |
+
+#### AI 调试 API
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| GET | `/api/agent/{pid}/{npc}/mind` | NPC 心迹查询 |
+| POST | `/api/agent/reflect` | 手动触发反思 |
+| POST | `/api/agent/plan` | 手动触发计划 |
 
 #### 存档 API
 
@@ -360,15 +375,7 @@ python start.py --serve-only 8766
 | POST | `/api/load` | 读档恢复 |
 | POST | `/api/delete-save` | 删除存档 |
 
-#### AI 调试 API
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| GET | `/api/agent/{pid}/{npc}/mind` | NPC 心迹查询 |
-| POST | `/api/agent/reflect` | 手动触发反思 |
-| POST | `/api/agent/plan` | 手动触发计划 |
-
-#### 🔧 新增 API
+#### 管理 API
 
 | 方法 | 端点 | 说明 |
 |------|------|------|
@@ -543,7 +550,7 @@ LLM Client.chat()
 |------|------|
 | **地图尺寸** | 150×100 = 15,000 格子 |
 | **NPC 数量** | 19 个（各有独立 AI） |
-| **API 端点数** | 26+ 个 |
+| **API 端点数** | 25 个 |
 | **测试脚本数** | 18+ 个 |
 | **代码总量** | ~15,000 行 Python + ~5,000 行 GDScript + ~3,000 行 JS |
 | **Prompt Cache 命中率** | ~80%（降低延迟 50%） |

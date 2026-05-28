@@ -108,8 +108,8 @@ window.App = window.App || {};
   // ═══════════════════════════════════════════
 
   App.doMove = async function(tx, ty) {
-    if (App.isMoving) return null;
-    App.isMoving = true;
+    if (App._isMoving) return null;
+    App._isMoving = true;
     App.setLoading(true, "行走中...");
     try {
       return await backendPost("/api/move", {
@@ -118,7 +118,7 @@ window.App = window.App || {};
         to_y: ty
       });
     } finally {
-      App.isMoving = false;
+      App._isMoving = false;
       App.setLoading(false);
     }
   };

@@ -355,10 +355,11 @@ func _refresh() -> void:
 		var npc_idx := 0
 		for n in gm.npcs_here:
 			var idx := npc_idx
-			var entry := UIBuilder.npc_entry(n.get("name", n.get("id","?")), n.get("id",""), func():
+			var npc_id := n.get("id", "")
+			var entry := UIBuilder.npc_entry(n.get("name", n.get("id","?")), npc_id, func():
 				if idx < _npc_select.item_count:
 					_npc_select.select(idx)
-					gm.selected_npc_id = n.get("id", "")
+					gm.selected_npc_id = npc_id
 					_msg_input.grab_focus()
 			)
 			_npc_list_container.add_child(entry)
@@ -421,6 +422,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not _game_ui.visible or _is_streaming or GameManager._is_moving:
 		return
 	if _msg_input and _msg_input.has_focus():
+		return
+	if _npc_select and _npc_select.has_focus():
 		return
 	var dx := 0
 	var dy := 0

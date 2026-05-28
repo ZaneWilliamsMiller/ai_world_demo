@@ -8,11 +8,8 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from pydantic import BaseModel, Field
 
-from backend.data.maps_data import MAPS, MAP_AMBUSH_MARKERS
+from backend.data.maps_data import MAPS
 from backend.data.npcs_data import NPCS, STORY_ORDER
-from backend.data.factions import FACTIONS
-from backend.data.prompts import WORLD_NAME, FIXED_INTRO
-from backend.models.player import PlayerState
 from backend.systems.pathfinding import find_path, tile_at, tile_elevation, tile_cost, check_danger_and_injure, is_dangerous
 from backend.systems.time_weather import shichen_name, is_night, advance_clock
 from backend.data.atmosphere import scene_context

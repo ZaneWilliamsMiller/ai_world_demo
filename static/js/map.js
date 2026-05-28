@@ -44,6 +44,24 @@ window.App = window.App || {};
     return (TERRAIN[ch] || TERRAIN[" "]).fill;
   }
 
+  if (typeof CanvasRenderingContext2D !== "undefined" && !CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+      if (typeof r === "number") r = [r, r, r, r];
+      var tl = r[0] || 0, tr = r[1] || r[0] || 0, br = r[2] || r[0] || 0, bl = r[3] || r[0] || 0;
+      this.moveTo(x + tl, y);
+      this.lineTo(x + w - tr, y);
+      this.quadraticCurveTo(x + w, y, x + w, y + tr);
+      this.lineTo(x + w, y + h - br);
+      this.quadraticCurveTo(x + w, y + h, x + w - br, y + h);
+      this.lineTo(x + bl, y + h);
+      this.quadraticCurveTo(x, y + h, x, y + h - bl);
+      this.lineTo(x, y + tl);
+      this.quadraticCurveTo(x, y, x + tl, y);
+      this.closePath();
+      return this;
+    };
+  }
+
   // ═══════════════════════════════════════════
   //  摄像机状态 - 优化平滑度
   // ═══════════════════════════════════════════
@@ -71,13 +89,14 @@ window.App = window.App || {};
   var _pathSet = {};
   var _animPath = [];
   var _animIdx = 0;
-  var _animTimer = null;
 
   // ─── 悬停瓦片 ───
   var _hoverX = -1, _hoverY = -1;
 
   var _dirty = true;
   var _rafId = null;
+  var _resizeBound = false;
+  var _keyHandler = null;
 
   function markDirty() {
     _dirty = true;
@@ -125,7 +144,10 @@ window.App = window.App || {};
     miniCtx = miniCanvas.getContext("2d");
 
     resizeCanvas();
-    window.addEventListener("resize", resizeCanvas);
+    if (!_resizeBound) {
+      window.addEventListener("resize", resizeCanvas);
+      _resizeBound = true;
+    }
 
     // 鼠标事件
     mainCanvas.addEventListener("click", onMapClick);
@@ -191,10 +213,6 @@ window.App = window.App || {};
     } else {
       _rafId = null;
     }
-  }
-
-  function startRender() {
-    markDirty();
   }
 
   function stopRender() {
@@ -533,7 +551,6 @@ window.App = window.App || {};
     _pathSet = {};
     _animPath = [];
     _animIdx = 0;
-    if (_animTimer) { clearInterval(_animTimer); _animTimer = null; }
     markDirty();
   }
 
@@ -600,7 +617,6 @@ window.App = window.App || {};
     }
     playerScreen.initialized = false;
     markDirty();
-    startRender();
   };
 
   // ─── 步行动画
@@ -667,7 +683,7 @@ window.App = window.App || {};
   };
 
   // ─── 键盘控制
-  document.addEventListener("keydown", function(e) {
+  _keyHandler = function(e) {
     if (!App._playerX || App._isMoving) return;
     if (document.activeElement && (document.activeElement.tagName === "INPUT" || 
         document.activeElement.tagName === "SELECT" ||
@@ -683,7 +699,8 @@ window.App = window.App || {};
     }
     e.preventDefault();
     App.moveTo(App._playerX + dx, App._playerY + dy);
-  });
+  };
+  document.addEventListener("keydown", _keyHandler);
 
   App.updatePlayerMarker = function(x, y, state) {
     App._playerMarkerState = state || "normal";

@@ -473,14 +473,25 @@ def main():
     # 3. 监控循环（仅 web 模式）
     if frontend_mode == "web":
         print("📡 监控服务运行中 (Ctrl+C 退出)...")
+        restart_count = 0
+        max_restarts = 5
         try:
             while True:
                 time.sleep(10)
                 if not is_backend_running(port=backend_port):
-                    print("⚠️ 后端已停止，尝试重启...")
+                    restart_count += 1
+                    if restart_count > max_restarts:
+                        print(f"❌ 后端已连续重启 {max_restarts} 次失败，放弃重启")
+                        print("   请检查后端日志排查问题")
+                        break
+                    delay = min(10 * restart_count, 60)
+                    print(f"⚠️ 后端已停止，{delay}秒后尝试重启 ({restart_count}/{max_restarts})...")
+                    time.sleep(delay)
                     new_proc = start_backend(backend_port, frontend_port=web_port)
                     if new_proc:
                         print("✅ 后端已重启")
+                    else:
+                        print("❌ 后端重启失败")
         except KeyboardInterrupt:
             print("\n👋 正在停止所有服务...")
             _cleanup_children()

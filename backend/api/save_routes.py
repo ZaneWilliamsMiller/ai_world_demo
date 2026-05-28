@@ -7,16 +7,10 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from backend.data.maps_data import MAP_AMBUSH_MARKERS
-from backend.data.npcs_data import NPCS
-from backend.data.prompts import WORLD_NAME, FIXED_INTRO
-from backend.models.player import PlayerState
-from backend.systems.core import init_npc_positions, perception_scan, danger_sense_narrative
+from backend.systems.core import init_npc_positions
 from backend.systems.economy import init_npc_inventories
 from backend.systems.save_system import save_game, load_game, list_saves, delete_save
-from backend.views import player_public as _player_public, npcs_here as _npcs_here
-from backend.views import npc_catalog as _npc_catalog, maps_public as _maps_public, factions_public as _factions_public
-from backend.views import map_locations_public as _map_locations_public, build_init_response
+from backend.views import build_init_response
 
 router = APIRouter()
 

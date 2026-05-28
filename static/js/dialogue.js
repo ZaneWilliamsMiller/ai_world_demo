@@ -95,22 +95,20 @@ window.App = window.App || {};
         }
       }
 
-      reader.releaseLock();
-
       if (!receivedDone) {
         visibleText += "\n[连接中断，回复可能不完整]";
         textEl.textContent = visibleText;
         App.fetchState().then(function(data) { if (data) App.updateUI(data); });
       }
     } catch (e) {
-      // 游戏内情境提示（如身陷险局）作为系统消息显示
       var errorMsg = e.message || "对话中断，请重试";
-      // 移除之前创建的空NPC消息
       var lastMsg = document.querySelector(".msg:last-child");
       if (lastMsg && lastMsg.classList.contains("npc") && lastMsg.textContent === "...") {
         lastMsg.remove();
       }
       App.addMsg("system", errorMsg);
+    } finally {
+      try { reader.releaseLock(); } catch (e) { /* already released */ }
     }
 
     App.isStreaming = false;

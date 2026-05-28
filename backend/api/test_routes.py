@@ -10,20 +10,20 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-router = APIRouter(
-    prefix="/api/tests",
-    tags=["tests"],
-    dependencies=[Depends(_guard_test_routes)],
-)
-
 TESTS_DIR = Path(__file__).resolve().parents[2] / "tests"
 _run_lock = asyncio.Lock()
 
 
 def _guard_test_routes() -> None:
-    """安全守卫：生产环境默认禁用测试路由。设置 ENABLE_TEST_ROUTES=1 以启用。"""
     if os.environ.get("ENABLE_TEST_ROUTES", "0") != "1":
         raise HTTPException(403, "测试路由已禁用。设置环境变量 ENABLE_TEST_ROUTES=1 以启用。")
+
+
+router = APIRouter(
+    prefix="/api/tests",
+    tags=["tests"],
+    dependencies=[Depends(_guard_test_routes)],
+)
 
 
 class TestInfo(BaseModel):

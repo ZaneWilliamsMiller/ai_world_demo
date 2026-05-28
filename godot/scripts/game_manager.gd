@@ -195,6 +195,28 @@ func move_player(tx: int, ty: int) -> void:
 	if encounter and not encounter.is_empty():
 		system_message.emit(str(encounter))
 
+	var trap = res.get("trap_state", {})
+	if trap.get("active", false):
+		player_move_locked = true
+		player_trap_reason = str(trap.get("reason", ""))
+		system_message.emit("🚫 移动被锁定: %s" % player_trap_reason)
+
+	var injuries_data: Array = res.get("injuries", [])
+	for inj in injuries_data:
+		system_message.emit("⚠️ 受伤: %s" % str(inj))
+
+	var danger = res.get("danger_sense", {})
+	if danger.get("alert"):
+		system_message.emit("👁️ 感知: %s" % str(danger.get("alert")))
+
+	var atmo: String = res.get("atmosphere", "")
+	if not atmo.is_empty():
+		system_message.emit(atmo)
+
+	var respawn_msg: String = res.get("respawn_msg", "")
+	if not respawn_msg.is_empty():
+		system_message.emit(respawn_msg)
+
 	npcs_here = res.get("npcs_here", npcs_here)
 	_is_moving = false
 	state_updated.emit()
@@ -291,6 +313,9 @@ func reset_state() -> void:
 	npc_catalog = []
 	npc_states = {}
 	intro_text = ""
+	_is_moving = false
+	is_streaming = false
+	selected_npc_id = ""
 	logged_out.emit()
 
 

@@ -291,7 +291,7 @@ func _refresh_tile_at(x: int, y: int) -> void:
 	if not _active_tiles.has(key):
 		return
 	var tile: ColorRect = _active_tiles[key]
-	if y >= _map_rows.size() or x >= _map_rows[y].length():
+	if y < 0 or y >= _map_rows.size() or x < 0 or x >= _map_rows[y].length():
 		return
 	var ch: String = _map_rows[y][x]
 	tile.color = _get_tile_color(x, y, ch)

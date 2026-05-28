@@ -220,6 +220,7 @@ func talk_stream(npc_id: String, message: String, player_id: String = "", llm_ba
 				rb.append_array(chunk)
 			await get_tree().process_frame
 		http.close()
+		_active_stream_http = null
 		var error_text := rb.get_string_from_utf8()
 		emit_signal("stream_done", {"error": "HTTP %d: %s" % [response_code, error_text.left(200)], "done": true})
 		return
