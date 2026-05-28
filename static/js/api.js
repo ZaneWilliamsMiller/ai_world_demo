@@ -108,11 +108,17 @@ window.App = window.App || {};
   // ═══════════════════════════════════════════
 
   App.doMove = async function(tx, ty) {
-    return await backendPost("/api/move", {
-      player_id: App.playerId,
-      to_x: tx,
-      to_y: ty
-    });
+    if (App.isMoving) return null;
+    App.isMoving = true;
+    try {
+      return await backendPost("/api/move", {
+        player_id: App.playerId,
+        to_x: tx,
+        to_y: ty
+      });
+    } finally {
+      App.isMoving = false;
+    }
   };
 
   App.fetchState = async function() {

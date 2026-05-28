@@ -47,6 +47,7 @@ var _npc_at: Dictionary = {}
 
 # ── 缓存瓦片 ──
 var _active_tiles: Dictionary = {}  # key = "x,y" -> ColorRect
+var _last_player_pos := Vector2i(-1, -1)
 
 
 func _ready() -> void:
@@ -177,6 +178,10 @@ func _update_visible_tiles() -> void:
 
 	_visible_range = {"x0": x0, "y0": y0, "x1": x1, "y1": y1}
 
+	var sub_viewport = get_parent().get_node_or_null("MapSubViewport")
+	if sub_viewport:
+		sub_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+
 	var keys_to_remove: Array[String] = []
 	for key in _active_tiles:
 		var parts: PackedStringArray = key.split(",")
@@ -267,17 +272,29 @@ func build_map() -> void:
 	var tile_count := _active_tiles.size()
 	print("[MapRenderer] build_map complete, active tiles: %d" % tile_count)
 
+	var sub_viewport = get_parent().get_node_or_null("MapSubViewport")
+	if sub_viewport:
+		sub_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+
 
 func update_player_position() -> void:
-	_build_npc_index()
-	for key in _active_tiles:
-		var tile: ColorRect = _active_tiles[key]
-		var parts: PackedStringArray = key.split(",")
-		var x: int = int(parts[0])
-		var y: int = int(parts[1])
-		var ch: String = " " if x >= _map_rows[y].length() else _map_rows[y][x]
-		tile.color = _get_tile_color(x, y, ch)
+	var new_pos := Vector2i(GameManager.player_px, GameManager.player_py)
+	if _last_player_pos != Vector2i(-1, -1) and _last_player_pos != new_pos:
+		_refresh_tile_at(_last_player_pos.x, _last_player_pos.y)
+	_refresh_tile_at(new_pos.x, new_pos.y)
+	_last_player_pos = new_pos
 	_update_npc_markers()
+
+
+func _refresh_tile_at(x: int, y: int) -> void:
+	var key := "%d,%d" % [x, y]
+	if not _active_tiles.has(key):
+		return
+	var tile: ColorRect = _active_tiles[key]
+	if y >= _map_rows.size() or x >= _map_rows[y].length():
+		return
+	var ch: String = _map_rows[y][x]
+	tile.color = _get_tile_color(x, y, ch)
 
 
 # ═══════════════════════════════════════════
@@ -376,6 +393,15 @@ func _on_tile_gui_input(ev: InputEvent, tile: ColorRect) -> void:
 				npc_clicked.emit(npc.get("id", ""), npc.get("name", ""))
 			else:
 				tile_clicked.emit(tx, ty)
+	elif ev is InputEventScreenTouch and ev.pressed:
+		var tx: int = int(tile.position.x) / TILE_SIZE
+		var ty: int = int(tile.position.y) / TILE_SIZE
+		var pos: Vector2i = Vector2i(tx, ty)
+		if _npc_at.has(pos):
+			var npc: Dictionary = _npc_at[pos]
+			npc_clicked.emit(npc.get("id", ""), npc.get("name", ""))
+		else:
+			tile_clicked.emit(tx, ty)
 
 
 func get_current_map_id() -> String:

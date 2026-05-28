@@ -255,7 +255,7 @@ func build_game_ui(parent: Control, on_tile_click: Callable, on_npc_map_click: C
 
 	refs["map_sub"] = SubViewport.new()
 	refs["map_sub"].name = "MapSubViewport"
-	refs["map_sub"].render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	refs["map_sub"].render_target_update_mode = SubViewport.UPDATE_ONCE
 	refs["map_sub"].transparent_bg = true
 	refs["map_sub_vp"].add_child(refs["map_sub"])
 

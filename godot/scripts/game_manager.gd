@@ -30,6 +30,7 @@ var player_enslaved: bool = false
 var player_death_reason: String = ""
 var player_unconscious_ticks: int = 0
 var player_bounties: Array = []
+var _is_moving: bool = false
 
 # ── World Data ──
 var maps_data: Dictionary = {}
@@ -141,15 +142,19 @@ func _apply_player(p: Dictionary) -> void:
 
 func move_player(tx: int, ty: int) -> void:
 	## Move to target tile.
+	if _is_moving: return
+	_is_moving = true
 	var body := {"player_id": player_id, "to_x": tx, "to_y": ty}
 	var res: Dictionary = await ApiClient.request("/api/move", "POST", body)
 
 	if res.has("error"):
+		_is_moving = false
 		system_message.emit("移动失败")
 		return
 
 	var path_data: Array = res.get("path", [])
 	if path_data.is_empty():
+		_is_moving = false
 		system_message.emit("此路不通")
 		return
 
@@ -172,6 +177,7 @@ func move_player(tx: int, ty: int) -> void:
 		system_message.emit(str(encounter))
 
 	npcs_here = res.get("npcs_here", npcs_here)
+	_is_moving = false
 	state_updated.emit()
 
 

@@ -94,13 +94,23 @@ class LLMClientManager:
 
     async def close_client(self) -> None:
         """关闭所有 client（共享 + 自定义）。"""
+        errors = []
         if self._client and not self._client.is_closed:
-            await self._client.aclose()
-            self._client = None
+            try:
+                await self._client.aclose()
+            except Exception as e:
+                errors.append(e)
+            finally:
+                self._client = None
         for key, client in list(self._custom_clients.items()):
             if not client.is_closed:
-                await client.aclose()
+                try:
+                    await client.aclose()
+                except Exception as e:
+                    errors.append(e)
         self._custom_clients.clear()
+        if errors:
+            log.warning("close_client encountered %d error(s): %s", len(errors), errors)
 
     def get_semaphore(self) -> asyncio.Semaphore:
         """获取并发限速信号量（懒初始化）。"""
@@ -564,20 +574,29 @@ def _cleanup() -> None:
     此处直接同步关闭 client 即可。
     """
     import asyncio
-    # 修复 Critical #1：使用单例类替代全局变量
-    if LLMClientManager._instance and LLMClientManager._instance._client:
-        client = LLMClientManager._instance._client
+    if LLMClientManager._instance is None:
+        return
+    mgr = LLMClientManager._instance
+    if mgr._client and not mgr._client.is_closed:
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                pass
+            else:
+                loop.run_until_complete(mgr._client.aclose())
+        except Exception:
+            pass
+        finally:
+            mgr._client = None
+    for key, client in list(mgr._custom_clients.items()):
         if not client.is_closed:
             try:
                 loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    pass
-                else:
+                if not loop.is_running():
                     loop.run_until_complete(client.aclose())
             except Exception:
                 pass
-            finally:
-                LLMClientManager._instance._client = None
+    mgr._custom_clients.clear()
 
 
 atexit.register(_cleanup)

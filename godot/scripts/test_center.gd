@@ -32,6 +32,7 @@ func show_test_center(parent: Control, on_system_msg: Callable) -> void:
 
 	if _overlay and is_instance_valid(_overlay):
 		_overlay.queue_free()
+		_overlay = null
 		return
 
 	_overlay = UIBuilder.overlay(parent)
@@ -55,7 +56,7 @@ func show_test_center(parent: Control, on_system_msg: Callable) -> void:
 	var title_hb := HBoxContainer.new()
 	title_hb.add_child(UIBuilder.lbl("🧪 测试中心", 20, GameColors.ACCENT_RED))
 	var close_btn := UIBuilder.btn("✕", GameColors.ACCENT_RED)
-	close_btn.pressed.connect(func(): _overlay.queue_free())
+	close_btn.pressed.connect(func(): _overlay.queue_free(); _overlay = null)
 	title_hb.add_child(Control.new())
 	title_hb.add_child(close_btn)
 	main_vb.add_child(title_hb)

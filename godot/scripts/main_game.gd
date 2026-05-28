@@ -240,7 +240,9 @@ func _on_send() -> void:
 	if text == "": return
 
 	var idx := _npc_select.selected
-	if idx < 0: return
+	if idx < 0:
+		_msg_display.add_system_msg("请先选择一位人物")
+		return
 	var npcs := GameManager.npcs_here
 	if idx >= npcs.size(): return
 
@@ -292,6 +294,9 @@ func _on_stream_done(data: Dictionary) -> void:
 	_msg_input.grab_focus()
 
 	GameManager.apply_stream_result(data)
+
+	if not data.has("player"):
+		GameManager.fetch_state()
 
 
 func _on_npc_reply(speaker: String, message: String, _npc_id: String) -> void:

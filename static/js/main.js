@@ -131,6 +131,12 @@ window.App = window.App || {};
       const saves = await App.fetchSaves();
       const list = DOM.savesList || document.getElementById("savesList");
       list.innerHTML = "";
+      if (saves.length === 0) {
+        const emptyDiv = document.createElement("div");
+        emptyDiv.textContent = "暂无存档";
+        emptyDiv.style.cssText = "color:#888;padding:12px;text-align:center;";
+        list.appendChild(emptyDiv);
+      }
       saves.forEach(function(s) {
         const div = document.createElement("div");
         // 使用 textContent 设置文本，自动防止 XSS
@@ -244,7 +250,12 @@ window.App = window.App || {};
   };
 
   // showConfirm: message 参数必须为调用方硬编码的可信 HTML（不可传入用户输入）
+  var _confirmActive = false;
+
   App.showConfirm = function(title, message, onConfirm) {
+    if (_confirmActive) return;
+    _confirmActive = true;
+
     const overlay = DOM.confirmOverlay || document.getElementById("confirmOverlay");
     const titleEl = DOM.confirmTitle || document.getElementById("confirmTitle");
     const msgEl = DOM.confirmMessage || document.getElementById("confirmMessage");
@@ -260,6 +271,7 @@ window.App = window.App || {};
     var _onOverlayClick, _onKeydown;
 
     function cleanup() {
+      _confirmActive = false;
       overlay.classList.remove("show");
       okBtn.removeEventListener("click", handleOk);
       cancelBtn.removeEventListener("click", handleCancel);
@@ -533,13 +545,21 @@ window.App = window.App || {};
     );
   };
 
+  let _pollErrorCount = 0;
+
   _statePollTimer = setInterval(function() {
     if (App.playerId && !App.isStreaming && App.apiMode === "backend") {
       App.fetchState().then(function(data) {
-        if (data) App.updateUI(data);
+        if (data) {
+          _pollErrorCount = 0;
+          App.updateUI(data);
+        }
       }).catch(function(err) {
+        _pollErrorCount++;
         if (err.message && err.message.includes('404')) {
           App.doLogout();
+        } else if (_pollErrorCount >= 3) {
+          App.addMsg("system", "⚠️ 与服务器连接中断，正在尝试重连...");
         }
       });
     }

@@ -139,6 +139,10 @@ async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
 
     from backend.systems.pathfinding import path_cost, cost_to_ticks, apply_portal
     async with p.lock:
+        if (p.px, p.py) != (path[0][0], path[0][1]):
+            path = find_path(p.map_id, p.px, p.py, body.to_x, body.to_y, allow_steep=allow_steep)
+            if not path:
+                raise HTTPException(400, "此处无路可达")
         prev_map = p.map_id
         prev_day = int(p.world_day)
         vigor_cost_applied = 0
@@ -248,7 +252,7 @@ async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
                     delete_save(p.player_id)
                 except Exception as e:
                     logging.getLogger('move').error('delete_save failed for %s: %s', p.player_id, e)
-                room.remove_player(p.player_id)
+                await room.remove_player(p.player_id)
         if not p.dead and not p.ended:
             collapsed = maybe_collapse_from_attrs(p)
             if collapsed and not p.permadeath:

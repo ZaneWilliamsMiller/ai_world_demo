@@ -18,6 +18,7 @@ var api_mode: String = "backend"
 
 # ── Internal ──
 var _req_id: int = 0
+var _active_stream_http: HTTPClient = null
 
 ## Signal-based request — returns the parsed response Dictionary.
 ## Awaits the actual HTTPRequest completion signal.
@@ -164,13 +165,13 @@ func talk_stream(npc_id: String, message: String, player_id: String = "", llm_ba
 
 	var http := HTTPClient.new()
 
-	# Ensure HTTPClient is closed on function exit
-	var _http_ref := http
+	_active_stream_http = http
 
 	var tls_options: TLSOptions = TLSOptions.client() if use_tls else null
 	var err := http.connect_to_host(host, port, tls_options)
 	if err != OK:
 		http.close()
+		_active_stream_http = null
 		emit_signal("stream_done", {"error": "connect_failed", "done": true})
 		return
 
@@ -180,6 +181,7 @@ func talk_stream(npc_id: String, message: String, player_id: String = "", llm_ba
 
 	if http.get_status() != HTTPClient.STATUS_CONNECTED:
 		http.close()
+		_active_stream_http = null
 		emit_signal("stream_done", {"error": "connection_failed", "done": true})
 		return
 
@@ -193,6 +195,7 @@ func talk_stream(npc_id: String, message: String, player_id: String = "", llm_ba
 	err = http.request(HTTPClient.METHOD_POST, url_path, headers, body_json)
 	if err != OK:
 		http.close()
+		_active_stream_http = null
 		emit_signal("stream_done", {"error": "request_failed", "done": true})
 		return
 
@@ -202,6 +205,7 @@ func talk_stream(npc_id: String, message: String, player_id: String = "", llm_ba
 
 	if http.get_status() != HTTPClient.STATUS_BODY:
 		http.close()
+		_active_stream_http = null
 		emit_signal("stream_done", {"error": "request_error", "done": true})
 		return
 
@@ -220,8 +224,16 @@ func talk_stream(npc_id: String, message: String, player_id: String = "", llm_ba
 		emit_signal("stream_done", {"error": "HTTP %d: %s" % [response_code, error_text.left(200)], "done": true})
 		return
 
+	var frame_count := 0
+	var max_frames := 60 * 60
 	while http.get_status() == HTTPClient.STATUS_BODY:
 		http.poll()
+		frame_count += 1
+		if frame_count > max_frames:
+			http.close()
+			_active_stream_http = null
+			emit_signal("stream_done", {"error": "流式响应超时", "done": true})
+			return
 		var chunk := http.read_response_body_chunk()
 		if chunk.size() > 0:
 			buf += chunk.get_string_from_utf8()
@@ -243,12 +255,20 @@ func talk_stream(npc_id: String, message: String, player_id: String = "", llm_ba
 					emit_signal("stream_chunk", "[错误] " + str(d.error))
 				if d.has("done") and d.done:
 					http.close()
+					_active_stream_http = null
 					emit_signal("stream_done", d)
 					return
 		await get_tree().process_frame
 
 	http.close()
+	_active_stream_http = null
 	emit_signal("stream_done", {"done": true})
+
+
+func _exit_tree() -> void:
+	if _active_stream_http:
+		_active_stream_http.close()
+		_active_stream_http = null
 
 
 ## Test backend connection.

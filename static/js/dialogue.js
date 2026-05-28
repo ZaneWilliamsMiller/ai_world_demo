@@ -17,6 +17,11 @@ window.App = window.App || {};
     var msg   = input.value.trim();
     if (!msg || !App.selectedNpcId || !App.playerId) return;
 
+    if (msg.length > 2000) {
+      App.addMsg("system", "消息过长，请控制在2000字以内");
+      return;
+    }
+
     input.value = "";
     App.addMsg("player", msg);
 
@@ -36,6 +41,7 @@ window.App = window.App || {};
       
       var decoder = new TextDecoder();
       var buf = "";
+      var receivedDone = false;
 
       while (true) {
         var chunk = await reader.read();
@@ -59,6 +65,7 @@ window.App = window.App || {};
               if (d.fatal) break;
             }
             if (d.done) {
+              receivedDone = true;
               if (d.player) App.fetchState().then(App.updateUI);
               break;
             }
@@ -82,6 +89,12 @@ window.App = window.App || {};
       }
 
       reader.releaseLock();
+
+      if (!receivedDone) {
+        visibleText += "\n[连接中断，回复可能不完整]";
+        textEl.textContent = visibleText;
+        App.fetchState().then(function(data) { if (data) App.updateUI(data); });
+      }
     } catch (e) {
       // 游戏内情境提示（如身陷险局）作为系统消息显示
       var errorMsg = e.message || "对话中断，请重试";

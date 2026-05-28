@@ -26,15 +26,20 @@ from backend.llm_client import chat_completion, parse_finale, parse_npc_reply_js
 from backend.views import player_public as _player_public
 
 class _RateLimiter:
-    def __init__(self, max_requests: int = 10, window_s: float = 60.0):
+    def __init__(self, max_requests: int = 10, window_s: float = 60.0, max_keys: int = 500):
         self._max = max_requests
         self._window = window_s
+        self._max_keys = max_keys
         self._requests: dict[str, list[float]] = defaultdict(list)
 
     def is_limited(self, key: str) -> bool:
         now = time.time()
         timestamps = self._requests[key]
         self._requests[key] = [t for t in timestamps if now - t < self._window]
+        if len(self._requests) > self._max_keys:
+            expired = [k for k, v in self._requests.items() if not v or now - v[-1] >= self._window]
+            for k in expired:
+                del self._requests[k]
         if len(self._requests[key]) >= self._max:
             return True
         self._requests[key].append(now)
@@ -81,6 +86,8 @@ async def use_item(body: UseItemBody) -> dict[str, Any]:
         raise HTTPException(404, f"未知 player_id: {body.player_id}")
     if getattr(p, "dead", False):
         raise HTTPException(400, "角色已故，物无所用。")
+    if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
+        raise HTTPException(409, "你正处于昏迷状态，无法使用物品。")
 
     from backend.systems.economy import use_player_item
     result = use_player_item(p, body.item)
@@ -150,6 +157,8 @@ async def npc_talk(body: TalkBody, bg: BackgroundTasks) -> dict[str, Any]:
             raise HTTPException(400, "本局已收束")
         if p.dead:
             raise HTTPException(400, "角色已身故,无法交谈")
+        if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
+            raise HTTPException(409, "你正处于昏迷状态，无法开口交谈。")
 
         npc = NPCS.get(body.npc_id)
         if not npc:
@@ -229,6 +238,8 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
         raise HTTPException(400, "本局已收束")
     if p.dead:
         raise HTTPException(400, "角色已身故,无法交谈")
+    if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
+        raise HTTPException(409, "你正处于昏迷状态，无法开口交谈。")
     npc = NPCS.get(body.npc_id)
     if not npc:
         raise HTTPException(400, "未知 npc")
@@ -264,6 +275,10 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
                 llm_model=body.llm_model,
             )
             parsed = parse_npc_reply_json(raw)
+        except asyncio.CancelledError:
+            logging.getLogger("api.routes").info("SSE stream cancelled for npc=%s player=%s", body.npc_id, body.player_id)
+            yield _sse({"done": True, "cancelled": True})
+            return
         except Exception as e:
             is_fallback = True
             fb = build_graceful_fallback(body.npc_id, str(e))
@@ -281,23 +296,32 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
                 out, needs_reflect = apply_npc_reply(p, body.npc_id, body.message, parsed, is_fallback=is_fallback)
                 p.last_talk_npc_id = body.npc_id
                 p.last_talk_message = body.message
+        except asyncio.CancelledError:
+            logging.getLogger("api.routes").info("SSE stream cancelled during state write for npc=%s player=%s", body.npc_id, body.player_id)
+            yield _sse({"done": True, "cancelled": True})
+            return
         except Exception as e:
             out = {"error": f"状态写入失败:{e}"}
 
-        vis = (parsed.visible_text or "").strip() if parsed else ""
-        if vis:
-            chunk_size = 16
-            for i in range(0, len(vis), chunk_size):
-                yield _sse({"chunk": vis[i : i + chunk_size]})
-                await asyncio.sleep(0.01)
+        try:
+            vis = (parsed.visible_text or "").strip() if parsed else ""
+            if vis:
+                chunk_size = 16
+                for i in range(0, len(vis), chunk_size):
+                    yield _sse({"chunk": vis[i : i + chunk_size]})
+                    await asyncio.sleep(0.01)
 
-        if needs_reflect and not is_light_inquiry and not is_fallback:
-            bg.add_task(bg_reflect, p.player_id, body.npc_id)  # stream
+            if needs_reflect and not is_light_inquiry and not is_fallback:
+                bg.add_task(bg_reflect, p.player_id, body.npc_id)
 
-        out["server_ms"] = int((time.perf_counter() - t0) * 1000)
-        if is_fallback:
-            out["llm_fallback"] = True
-        yield _sse({"done": True, **out})
+            out["server_ms"] = int((time.perf_counter() - t0) * 1000)
+            if is_fallback:
+                out["llm_fallback"] = True
+            yield _sse({"done": True, **out})
+        except asyncio.CancelledError:
+            logging.getLogger("api.routes").info("SSE stream cancelled during output for npc=%s player=%s", body.npc_id, body.player_id)
+            yield _sse({"done": True, "cancelled": True})
+            return
 
     return StreamingResponse(
         event_gen(),
@@ -349,6 +373,10 @@ async def agent_reflect(body: AgentActBody) -> dict[str, Any]:
     p = room.players.get(body.player_id)
     if not p:
         raise HTTPException(404, "未知 player_id")
+    if p.dead:
+        raise HTTPException(400, "角色已故，无法进行反思。")
+    if p.ended:
+        raise HTTPException(400, "本局已收束，无法操作。")
     npc = NPCS.get(body.npc_id)
     if not npc:
         raise HTTPException(404, "未知 npc_id")
@@ -373,6 +401,10 @@ async def agent_plan(body: AgentActBody) -> dict[str, Any]:
     p = room.players.get(body.player_id)
     if not p:
         raise HTTPException(404, "未知 player_id")
+    if p.dead:
+        raise HTTPException(400, "角色已故，无法制定计划。")
+    if p.ended:
+        raise HTTPException(400, "本局已收束，无法操作。")
     npc = NPCS.get(body.npc_id)
     if not npc:
         raise HTTPException(404, "未知 npc_id")
@@ -524,6 +556,10 @@ async def bounty_refresh(body: RefreshBountyBody) -> dict[str, Any]:
     p = room.players.get(body.player_id)
     if not p:
         raise HTTPException(404, "未知 player_id")
+    if p.dead:
+        raise HTTPException(400, "角色已故，无法操作悬赏。")
+    if p.ended:
+        raise HTTPException(400, "本局已收束，无法操作悬赏。")
     refresh_bounties(p)
     if not p.bounties:
         p.bounties = generate_bounties(p, count=3)
@@ -537,6 +573,10 @@ async def bounty_accept(body: AcceptBountyBody) -> dict[str, Any]:
     p = room.players.get(body.player_id)
     if not p:
         raise HTTPException(404, "未知 player_id")
+    if p.dead:
+        raise HTTPException(400, "角色已故，无法操作悬赏。")
+    if p.ended:
+        raise HTTPException(400, "本局已收束，无法操作悬赏。")
     ok, msg = accept_bounty(p, body.bounty_id)
     return {"ok": ok, "message": msg}
 
@@ -547,6 +587,10 @@ async def bounty_check(body: CompleteBountyBody) -> dict[str, Any]:
     p = room.players.get(body.player_id)
     if not p:
         raise HTTPException(404, "未知 player_id")
+    if p.dead:
+        raise HTTPException(400, "角色已故，无法操作悬赏。")
+    if p.ended:
+        raise HTTPException(400, "本局已收束，无法操作悬赏。")
     progress = check_bounty_progress(p)
     if progress is None:
         return {"has_active": False}
@@ -559,6 +603,10 @@ async def bounty_complete(body: CompleteBountyBody) -> dict[str, Any]:
     p = room.players.get(body.player_id)
     if not p:
         raise HTTPException(404, "未知 player_id")
+    if p.dead:
+        raise HTTPException(400, "角色已故，无法操作悬赏。")
+    if p.ended:
+        raise HTTPException(400, "本局已收束，无法操作悬赏。")
     ok, msg, reward = complete_bounty(p)
     return {"ok": ok, "message": msg, "reward": reward}
 
@@ -569,5 +617,9 @@ async def bounty_abandon(body: AbandonBountyBody) -> dict[str, Any]:
     p = room.players.get(body.player_id)
     if not p:
         raise HTTPException(404, "未知 player_id")
+    if p.dead:
+        raise HTTPException(400, "角色已故，无法操作悬赏。")
+    if p.ended:
+        raise HTTPException(400, "本局已收束，无法操作悬赏。")
     ok, msg = abandon_bounty(p)
     return {"ok": ok, "message": msg}

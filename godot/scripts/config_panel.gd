@@ -179,6 +179,11 @@ func _fill_config_values() -> void:
 
 ## 应用配置到 ApiClient 并更新指示器
 func _apply_config() -> void:
+	_cfg_backend_url.add_theme_color_override("font_color", Color(1, 1, 1))
+	_cfg_llm_url.add_theme_color_override("font_color", Color(1, 1, 1))
+	_cfg_llm_key.add_theme_color_override("font_color", Color(1, 1, 1))
+	_cfg_llm_model.add_theme_color_override("font_color", Color(1, 1, 1))
+
 	var new_mode := "backend" if _cfg_api_mode.selected == 0 else "direct"
 	var new_backend_url := _cfg_backend_url.text.strip_edges()
 	var new_llm_url := _cfg_llm_url.text.strip_edges()
