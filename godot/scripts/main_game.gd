@@ -324,46 +324,62 @@ func _on_sys_msg(text: String) -> void:
 # ═══════════════════════════════════════════════════════
 func _refresh() -> void:
 	if not _game_ui.visible:
-		print("[Game] _refresh() — _game_ui NOT visible, returning")
 		return
 	var gm = GameManager
-	print("[Game] _refresh() — map_id: %s, maps_data keys: %s" % [gm.player_map_id, str(gm.maps_data.keys())])
 
-	# Map - detect change or first load
 	var current_renderer_map: String = _map_renderer.get_current_map_id() if _map_renderer else ""
 	if gm.player_map_id != current_renderer_map:
-		print("[Game] _refresh() — building map (changed from '%s' to '%s')" % [current_renderer_map, gm.player_map_id])
 		_build_map()
 	_update_map_player()
 	elif gm.maps_data.is_empty():
-		print("[Game] _refresh() — maps_data is EMPTY, skipping map build")
+		pass
 	else:
 		_update_map_player()
 
-	# NPC select dropdown
+	# NPC select dropdown — 仅在列表变化时重建
 	if _npc_select:
-		var cur_idx := _npc_select.selected
-		_npc_select.clear()
-		for n in gm.npcs_here:
-			_npc_select.add_item(n.get("name", n.get("id","?")))
-		if cur_idx >= 0 and cur_idx < _npc_select.item_count:
-			_npc_select.select(cur_idx)
+		var need_rebuild := false
+		if _npc_select.item_count != gm.npcs_here.size():
+			need_rebuild = true
+		else:
+			for i in gm.npcs_here.size():
+				if _npc_select.get_item_text(i) != gm.npcs_here[i].get("name", gm.npcs_here[i].get("id","?")):
+					need_rebuild = true
+					break
+		if need_rebuild:
+			var cur_idx := _npc_select.selected
+			_npc_select.clear()
+			for n in gm.npcs_here:
+				_npc_select.add_item(n.get("name", n.get("id","?")))
+			if cur_idx >= 0 and cur_idx < _npc_select.item_count:
+				_npc_select.select(cur_idx)
 
-	# NPC list in sidebar
+	# NPC list in sidebar — 增量 diff
 	if _npc_list_container:
-		for c in _npc_list_container.get_children(): c.queue_free()
+		var existing_names: Dictionary = {}
+		for c in _npc_list_container.get_children():
+			if is_instance_valid(c):
+				existing_names[c.name] = c
+		var desired_names: Dictionary = {}
 		var npc_idx := 0
 		for n in gm.npcs_here:
-			var idx := npc_idx
 			var npc_id := n.get("id", "")
-			var entry := UIBuilder.npc_entry(n.get("name", n.get("id","?")), npc_id, func():
-				if idx < _npc_select.item_count:
-					_npc_select.select(idx)
-					gm.selected_npc_id = npc_id
-					_msg_input.grab_focus()
-			)
-			_npc_list_container.add_child(entry)
+			var node_name := "NpcEntry_%s" % npc_id
+			desired_names[node_name] = true
+			if not existing_names.has(node_name):
+				var idx := npc_idx
+				var entry := UIBuilder.npc_entry(n.get("name", n.get("id","?")), npc_id, func():
+					if idx < _npc_select.item_count:
+						_npc_select.select(idx)
+						gm.selected_npc_id = npc_id
+						_msg_input.grab_focus()
+				)
+				entry.name = node_name
+				_npc_list_container.add_child(entry)
 			npc_idx += 1
+		for node_name in existing_names:
+			if not desired_names.has(node_name):
+				existing_names[node_name].queue_free()
 
 	# HUD bars & labels
 	_vigor_bar.max_value = gm.player_vigor_max; _animate_bar(_vigor_bar, gm.player_vigor)
@@ -378,41 +394,88 @@ func _refresh() -> void:
 	_map_name_label.text = "📍 %s(%d,%d)" % [mname, gm.player_px, gm.player_py]
 	_map_title_label.text = mname
 
-	# Inventory
-	for c in _inventory_flow.get_children(): c.queue_free()
-	if gm.player_inventory.is_empty():
-		var l := UIBuilder.lbl("身无长物", 12, Color(0.4,0.4,0.4)); _inventory_flow.add_child(l)
-	else:
-		for item in gm.player_inventory:
-			_inventory_flow.add_child(UIBuilder.lbl("%s×%d" % [item, gm.player_inventory[item]], 12, GameColors.GOLD))
+	# Inventory — 增量 diff
+	if _inventory_flow:
+		var existing_inv: Dictionary = {}
+		for c in _inventory_flow.get_children():
+			if is_instance_valid(c):
+				existing_inv[c.name] = c
+		if gm.player_inventory.is_empty():
+			if not existing_inv.has("InvEmpty"):
+				for c_name in existing_inv:
+					existing_inv[c_name].queue_free()
+				var l := UIBuilder.lbl("身无长物", 12, Color(0.4,0.4,0.4))
+				l.name = "InvEmpty"
+				_inventory_flow.add_child(l)
+		else:
+			if existing_inv.has("InvEmpty"):
+				existing_inv["InvEmpty"].queue_free()
+				existing_inv.erase("InvEmpty")
+			var desired_inv: Dictionary = {}
+			for item in gm.player_inventory:
+				var node_name := "Inv_%s" % item
+				desired_inv[node_name] = true
+				if existing_inv.has(node_name):
+					var lbl: Label = existing_inv[node_name]
+					if is_instance_valid(lbl):
+						lbl.text = "%s×%d" % [item, gm.player_inventory[item]]
+				else:
+					var lbl := UIBuilder.lbl("%s×%d" % [item, gm.player_inventory[item]], 12, GameColors.GOLD)
+					lbl.name = node_name
+					_inventory_flow.add_child(lbl)
+			for c_name in existing_inv:
+				if not desired_inv.has(c_name):
+					existing_inv[c_name].queue_free()
 
-	# Favor
-	for c in _favor_vbox.get_children(): c.queue_free()
-	if not gm.player_favor.is_empty():
-		for nid in gm.player_favor:
-			var val: int = gm.player_favor[nid]
-			var nm: String = gm.npc_labels.get(nid, nid)
-			_favor_vbox.add_child(UIBuilder.lbl("%s: %+d" % [nm, val], 11,
-				GameColors.GREEN if val >= 0 else GameColors.RED))
+	# Favor — 增量 diff
+	if _favor_vbox:
+		var existing_fav: Dictionary = {}
+		for c in _favor_vbox.get_children():
+			if is_instance_valid(c):
+				existing_fav[c.name] = c
+		if gm.player_favor.is_empty():
+			for c_name in existing_fav:
+				existing_fav[c_name].queue_free()
+		else:
+			var desired_fav: Dictionary = {}
+			for nid in gm.player_favor:
+				var val: int = gm.player_favor[nid]
+				var nm: String = gm.npc_labels.get(nid, nid)
+				var node_name := "Fav_%s" % nid
+				desired_fav[node_name] = true
+				if existing_fav.has(node_name):
+					var lbl: Label = existing_fav[node_name]
+					if is_instance_valid(lbl):
+						lbl.text = "%s: %+d" % [nm, val]
+						lbl.add_theme_color_override("font_color", GameColors.GREEN if val >= 0 else GameColors.RED)
+				else:
+					var lbl := UIBuilder.lbl("%s: %+d" % [nm, val], 11, GameColors.GREEN if val >= 0 else GameColors.RED)
+					lbl.name = node_name
+					_favor_vbox.add_child(lbl)
+			for c_name in existing_fav:
+				if not desired_fav.has(c_name):
+					existing_fav[c_name].queue_free()
 
-	# Portals
-	for c in _portal_list_container.get_children(): c.queue_free()
-	var map_info: Dictionary = gm.maps_data.get(gm.player_map_id, {})
-	var portals: Array = map_info.get("portals", [])
-	if portals.is_empty():
-		var empty_label := UIBuilder.lbl("此地图无界门", 11, GameColors.DIM)
-		_portal_list_container.add_child(empty_label)
-	else:
-		for pt in portals:
-			var target_map_id: String = pt.get("target_map_id", "")
-			var target_map_info: Dictionary = gm.maps_data.get(target_map_id, {})
-			var target_name: String = target_map_info.get("name", target_map_id)
-			var to_x: int = pt.get("to_x", 0)
-			var to_y: int = pt.get("to_y", 0)
+	# Portals — 仅在地图变化时重建（界门与地图绑定）
+	if _portal_list_container and gm.player_map_id != current_renderer_map or _portal_list_container.get_child_count() == 0:
+		for c in _portal_list_container.get_children():
+			c.queue_free()
+		var map_info: Dictionary = gm.maps_data.get(gm.player_map_id, {})
+		var portals: Array = map_info.get("portals", [])
+		if portals.is_empty():
+			var empty_label := UIBuilder.lbl("此地图无界门", 11, GameColors.DIM)
+			_portal_list_container.add_child(empty_label)
+		else:
+			for pt in portals:
+				var target_map_id: String = pt.get("target_map_id", "")
+				var target_map_info: Dictionary = gm.maps_data.get(target_map_id, {})
+				var target_name: String = target_map_info.get("name", target_map_id)
+				var to_x: int = pt.get("to_x", 0)
+				var to_y: int = pt.get("to_y", 0)
 
-			var portal_btn := UIBuilder.btn("↗ 往【%s】(%d,%d)" % [target_name, to_x, to_y], GameColors.ACCENT_BLUE)
-			portal_btn.pressed.connect(func(x=to_x, y=to_y): gm.move_player(x, y))
-			_portal_list_container.add_child(portal_btn)
+				var portal_btn := UIBuilder.btn("↗ 往【%s】(%d,%d)" % [target_name, to_x, to_y], GameColors.ACCENT_BLUE)
+				portal_btn.pressed.connect(func(x=to_x, y=to_y): gm.move_player(x, y))
+				_portal_list_container.add_child(portal_btn)
 
 
 # ═══════════════════════════════════════════════════════
@@ -441,11 +504,17 @@ func _unhandled_input(event: InputEvent) -> void:
 	GameManager.move_player(GameManager.player_px + dx, GameManager.player_py + dy)
 
 
+var _bar_tweens: Dictionary = {}
+
 func _animate_bar(bar: ProgressBar, new_value: float) -> void:
 	if absf(bar.value - new_value) < 0.5:
 		bar.value = new_value
 		return
+	var bar_id := bar.name
+	if _bar_tweens.has(bar_id) and is_instance_valid(_bar_tweens[bar_id]):
+		_bar_tweens[bar_id].kill()
 	var tween := create_tween()
+	_bar_tweens[bar_id] = tween
 	tween.tween_property(bar, "value", new_value, 0.3).set_trans(Tween.TRANS_SINE)
 
 

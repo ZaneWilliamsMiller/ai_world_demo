@@ -137,56 +137,42 @@ async def shutdown_server(request: Request):
 
     secret = request.headers.get("X-Shutdown-Secret", "")
     expected = os.environ.get("SHUTDOWN_SECRET", "")
-    if expected and secret != expected:
+    if not expected:
+        raise HTTPException(403, "未配置 SHUTDOWN_SECRET，拒绝远程关闭")
+    if secret != expected:
         raise HTTPException(403, "无权关闭服务")
 
     frontend_port = os.environ.get("FRONTEND_PORT")
 
     shutdown_log = _log.getChild("shutdown")
-    shutdown_log.info("=" * 60)
-    shutdown_log.info("🛑 收到关闭请求")
-    print("\n" + "=" * 60)
-    print("🛑 [SHUTDOWN] 收到关闭请求")
-    print(f"   前端端口: {frontend_port}")
-    print("=" * 60)
+    shutdown_log.info("收到关闭请求")
+    shutdown_log.info("前端端口: %s", frontend_port)
 
     # 通知前端服务器关闭
     if frontend_port:
         try:
             frontend_url = f"http://127.0.0.1:{frontend_port}/__shutdown__"
-            shutdown_log.info(f"通知前端服务器关闭: {frontend_url}")
-            print(f"   📤 准备通知前端: {frontend_url}")
+            shutdown_log.info("通知前端服务器关闭: %s", frontend_url)
 
             def notify_frontend():
-                _time.sleep(0.5)  # 让后端先返回响应给浏览器
-                print(f"   ⏳ 等待500ms后发送通知...")
+                _time.sleep(0.5)
                 try:
                     with httpx.Client(timeout=5.0) as client:
                         resp = client.get(frontend_url)
-                        status_text = resp.text[:150] if resp.text else "(空)"
-                        shutdown_log.info(f"✅ 前端响应: {resp.status_code}")
-                        print(f"   ✅ [SUCCESS] 前端已接收关闭指令!")
-                        print(f"      HTTP状态码: {resp.status_code}")
-                        print(f"      响应内容: {status_text}")
-                        print(f"   ⏳ 前端将在1秒后自动退出 (os._exit)...")
+                        shutdown_log.info("前端响应: %d", resp.status_code)
                 except Exception as e:
-                    shutdown_log.warning(f"❌ 通知前端失败: {e}")
-                    print(f"   ❌ [ERROR] 无法连接前端!")
-                    print(f"      错误类型: {type(e).__name__}")
-                    print(f"      错误详情: {str(e)}")
+                    shutdown_log.warning("通知前端失败: %s", e)
 
             notifier = threading.Thread(target=notify_frontend, daemon=True)
             notifier.start()
         except Exception as e:
-            shutdown_log.warning(f"准备通知前端时出错: {e}")
-            print(f"   ❌ [ERROR] 准备通知时异常: {e}")
-
+            shutdown_log.warning("准备通知前端时出错: %s", e)
     else:
-        print("   ⚠️ 未设置 FRONTEND_PORT 环境变量，跳过前端通知")
+        shutdown_log.info("未设置 FRONTEND_PORT，跳过前端通知")
 
     def delayed_shutdown():
         _time.sleep(3.0)
-        print(f"\n   💀 后端进程即将退出...")
+        _log.info("后端进程即将退出...")
 
         try:
             saved = 0
@@ -196,22 +182,18 @@ async def shutdown_server(request: Request):
                 try:
                     save_game(p)
                     saved += 1
-                except Exception:
-                    pass
+                except Exception as e:
+                    _log.error("shutdown save failed %s: %s", pid, e)
             if saved:
-                print(f"   💾 已保存 {saved} 个活跃玩家")
+                _log.info("shutdown saved %d active player(s)", saved)
 
+            from backend.llm_client import _close_client_sync
             try:
-                from backend.llm_client import LLMClientManager
-                inst = LLMClientManager._instance
-                if inst and inst._client and not inst._client.is_closed:
-                    inst._client = None
-                if inst:
-                    inst._custom_clients.clear()
-            except Exception:
-                pass
-        except Exception:
-            pass
+                _close_client_sync()
+            except Exception as e:
+                _log.error("LLM client close error: %s", e)
+        except Exception as e:
+            _log.error("shutdown error: %s", e)
 
         os._exit(0)
 

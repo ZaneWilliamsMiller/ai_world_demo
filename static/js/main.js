@@ -285,11 +285,95 @@ window.App = window.App || {};
         try {
           const data = await App.doFinale();
           if (data) {
-            App.addMsg("system", data.ending_label || "江湖路尽");
+            if (data.epilogue) {
+              App.addMsg("system", "【" + (data.ending_label || "江湖路尽") + "】");
+              App.addMsg("npc", {speaker: "终局叙事", text: data.epilogue}, true);
+            } else {
+              App.addMsg("system", data.ending_label || "江湖路尽");
+            }
             if (data.player) App.updateUI(data);
           }
         } catch (e) {
           App.addMsg("system", "终局失败: " + e.message);
+        }
+      }
+    );
+  };
+
+  App.doBountyRefresh = async function() {
+    if (!App.playerId) return;
+    try {
+      const data = await App.bountyRefresh();
+      if (data) {
+        App.addMsg("system", data.board_text || "悬赏榜已刷新");
+        App.updateUI(data);
+      }
+    } catch (e) {
+      App.addMsg("system", "刷新悬赏失败: " + e.message);
+    }
+  };
+
+  App.doBountyAccept = async function(bountyId) {
+    if (!App.playerId) return;
+    try {
+      const data = await App.bountyAccept(bountyId);
+      App.addMsg("system", data.message || (data.ok ? "已接受悬赏" : "无法接受"));
+      if (data.ok) App.doBountyRefresh();
+    } catch (e) {
+      App.addMsg("system", "接受悬赏失败: " + e.message);
+    }
+  };
+
+  App.doBountyComplete = async function() {
+    if (!App.playerId) return;
+    try {
+      const data = await App.bountyComplete();
+      if (data.ok) {
+        App.addMsg("system", "悬赏完成！" + (data.reward ? " 获得奖励: " + data.reward : ""));
+        App.doBountyRefresh();
+      } else {
+        App.addMsg("system", data.message || "无法完成悬赏");
+      }
+    } catch (e) {
+      App.addMsg("system", "完成悬赏失败: " + e.message);
+    }
+  };
+
+  App.doBountyAbandon = async function() {
+    if (!App.playerId) return;
+    App.showConfirm(
+      "放弃悬赏",
+      "确定要放弃当前悬赏吗？",
+      async function() {
+        try {
+          const data = await App.bountyAbandon();
+          App.addMsg("system", data.message || (data.ok ? "已放弃悬赏" : "无法放弃"));
+          if (data.ok) App.doBountyRefresh();
+        } catch (e) {
+          App.addMsg("system", "放弃悬赏失败: " + e.message);
+        }
+      }
+    );
+  };
+
+  App.deleteSave = async function() {
+    var sel = document.querySelector(".saves-list div.selected");
+    if (!sel) { App.addMsg("system", "请先选择一个存档"); return; }
+    var pid = sel._pid;
+    App.showConfirm(
+      "删除存档",
+      "确定要删除此存档吗？<br><br>⚠️ <b>此操作不可逆</b>",
+      async function() {
+        try {
+          await fetch(App.API + "/delete-save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ player_id: pid })
+          });
+          App.addMsg("system", "存档已删除");
+          App.showLoadForm();
+        } catch (e) {
+          App.addMsg("system", "删除失败: " + e.message);
         }
       }
     );
@@ -633,7 +717,6 @@ window.App = window.App || {};
   }, 30000);
 
   document.addEventListener("DOMContentLoaded", function() {
-    // 初始化 DOM 缓存
     DOM.init();
 
     const modeIndicator = DOM.apiModeIndicator;
@@ -650,6 +733,21 @@ window.App = window.App || {};
     if (sel) {
       sel.addEventListener("change", function() {
         App.selectedNpcId = sel.value;
+      });
+    }
+
+    var bountyRefreshBtn = document.getElementById("bountyRefreshBtn");
+    if (bountyRefreshBtn) bountyRefreshBtn.addEventListener("click", function() { App.doBountyRefresh(); });
+    var bountyCompleteBtn = document.getElementById("bountyCompleteBtn");
+    if (bountyCompleteBtn) bountyCompleteBtn.addEventListener("click", function() { App.doBountyComplete(); });
+    var bountyAbandonBtn = document.getElementById("bountyAbandonBtn");
+    if (bountyAbandonBtn) bountyAbandonBtn.addEventListener("click", function() { App.doBountyAbandon(); });
+
+    var cancelStreamBtn = document.getElementById("cancelStreamBtn");
+    if (cancelStreamBtn) {
+      cancelStreamBtn.addEventListener("click", function() {
+        App.cancelTalkStream();
+        cancelStreamBtn.classList.remove("visible");
       });
     }
   });

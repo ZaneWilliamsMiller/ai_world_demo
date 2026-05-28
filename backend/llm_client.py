@@ -133,6 +133,29 @@ async def _close_client() -> None:
     await manager.close_client()
 
 
+def _close_client_sync() -> None:
+    """同步关闭共享 client（用于 shutdown 线程中调用）。"""
+    try:
+        inst = LLMClientManager._instance
+        if inst is None:
+            return
+        if inst._client and not inst._client.is_closed:
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as pool:
+                        pool.submit(lambda: asyncio.run(inst._client.aclose())).result(5)
+                    return
+            except RuntimeError:
+                pass
+            asyncio.run(inst._client.aclose())
+        inst._client = None
+        inst._custom_clients.clear()
+    except Exception:
+        pass
+
+
 async def _get_semaphore() -> asyncio.Semaphore:
     """向后兼容：获取并发限速信号量。"""
     manager = await LLMClientManager.get_instance()

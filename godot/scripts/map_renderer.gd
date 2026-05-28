@@ -262,6 +262,7 @@ func build_map() -> void:
 	_visible_range = {"x0": -1, "y0": -1, "x1": -1, "y1": -1}
 
 	# 构建 NPC 标记和地点标签
+	_build_npc_index()
 	_build_npc_markers()
 	_build_location_labels()
 

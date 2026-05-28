@@ -51,12 +51,9 @@ router = APIRouter()
 
 
 class TalkBody(BaseModel):
-    player_id: str
+    player_id: str = Field(..., min_length=1)
     npc_id: str = Field(..., min_length=1, max_length=32)
     message: str = Field(..., min_length=1, max_length=2000)
-    llm_base_url: str | None = Field(None, description="自定义LLM API地址")
-    llm_api_key: str | None = Field(None, description="自定义LLM API Key")
-    llm_model: str | None = Field(None, description="自定义LLM模型名称")
 
 class UseItemBody(BaseModel):
     player_id: str = Field(..., min_length=1)
@@ -70,7 +67,7 @@ class FinaleBody(BaseModel):
     closing_note: str | None = Field(None, max_length=600)
 
 class AgentActBody(BaseModel):
-    player_id: str
+    player_id: str = Field(..., min_length=1)
     npc_id: str = Field(..., min_length=1, max_length=32)
 
 
@@ -112,7 +109,8 @@ async def use_item(body: UseItemBody) -> dict[str, Any]:
         raise HTTPException(409, "你正处于昏迷状态，无法使用物品。")
 
     from backend.systems.economy import use_player_item
-    result = use_player_item(p, body.item)
+    async with p.lock:
+        result = use_player_item(p, body.item)
 
     if result.get("success"):
         from backend.systems.reputation import push_event
@@ -194,9 +192,6 @@ async def npc_talk(body: TalkBody, bg: BackgroundTasks) -> dict[str, Any]:
                 temperature=0.85,
                 max_tokens=450 if is_light_inquiry else 800,
                 response_format={"type": "json_object"},
-                llm_base_url=body.llm_base_url,
-                llm_api_key=body.llm_api_key,
-                llm_model=body.llm_model,
             )
             parsed = parse_npc_reply_json(raw)
         except Exception as e:
@@ -260,9 +255,6 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
                 temperature=0.85,
                 max_tokens=450 if is_light_inquiry else 800,
                 response_format={"type": "json_object"},
-                llm_base_url=body.llm_base_url,
-                llm_api_key=body.llm_api_key,
-                llm_model=body.llm_model,
             )
             parsed = parse_npc_reply_json(raw)
         except asyncio.CancelledError:

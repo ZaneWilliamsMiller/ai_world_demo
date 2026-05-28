@@ -18,9 +18,16 @@ import os
 import tempfile
 import time
 import uuid
+import re
 from dataclasses import fields as dc_fields
 from pathlib import Path
 from typing import Any
+
+_SAFE_ID_RE = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
+
+def _validate_player_id(player_id: str) -> None:
+    if not _SAFE_ID_RE.match(player_id):
+        raise ValueError(f"非法 player_id: {player_id!r}")
 
 from backend.models.player import PlayerState
 from backend.data.factions import FACTIONS
@@ -163,7 +170,7 @@ def _deserialize_player(data: dict[str, Any]) -> PlayerState:
 # ═══════════════════════════════════════════════════════
 
 def save_game(p: PlayerState) -> str:
-    """保存角色到 JSON 文件。返回保存路径字符串。"""
+    _validate_player_id(p.player_id)
     _ensure_dir()
     data = _serialize_player(p)
     fp = SAVE_DIR / f"{p.player_id}.json"
@@ -188,8 +195,7 @@ def save_game(p: PlayerState) -> str:
 
 
 def load_game(player_id: str) -> PlayerState | None:
-    """从 JSON 文件加载角色。文件不存在返回 None。
-    如果 permadeath=True 且 dead=True，抛出 ValueError。"""
+    _validate_player_id(player_id)
     fp = SAVE_DIR / f"{player_id}.json"
     if not fp.is_file():
         return None
@@ -209,7 +215,6 @@ def load_game(player_id: str) -> PlayerState | None:
 
 
 def list_saves() -> list[dict[str, Any]]:
-    """列出全部存档摘要（用于展示可选角色列表）。"""
     _ensure_dir()
     result: list[dict[str, Any]] = []
     for fp in sorted(SAVE_DIR.glob("*.json")):
@@ -235,7 +240,7 @@ def list_saves() -> list[dict[str, Any]]:
 
 
 def delete_save(player_id: str) -> bool:
-    """删除存档文件（真实江湖死亡/手动弃档）。返回是否成功删除。"""
+    _validate_player_id(player_id)
     fp = SAVE_DIR / f"{player_id}.json"
     if not fp.is_file():
         return False

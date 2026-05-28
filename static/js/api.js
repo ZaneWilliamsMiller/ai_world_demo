@@ -8,43 +8,58 @@ window.App = window.App || {};
 
   // ── 后端模式 API ──
 
-  function backendPost(url, body) {
-    const path = url.startsWith("/api") ? url.substring(4) : url;
-    const fullUrl = App.API + path;
+  var _defaultTimeout = 30000;
+
+  function backendPost(url, body, timeoutMs) {
+    var path = url.startsWith("/api") ? url.substring(4) : url;
+    var fullUrl = App.API + path;
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function() { controller.abort(); }, timeoutMs || _defaultTimeout);
     return fetch(fullUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal: controller.signal
     }).then(async function(r) {
+      clearTimeout(timeoutId);
       if (!r.ok) {
         let errorMsg = url + " " + r.status;
         try {
           const errorJson = await r.json();
           errorMsg = errorJson.detail || errorJson.message || errorMsg;
         } catch (e) {
-          // JSON 解析失败，保留默认错误信息
         }
         throw new Error(errorMsg);
       }
       return r.json();
+    }).catch(function(e) {
+      clearTimeout(timeoutId);
+      if (e.name === 'AbortError') throw new Error('请求超时');
+      throw e;
     });
   }
 
-  function backendGet(url) {
-    const path = url.startsWith("/api") ? url.substring(4) : url;
-    const fullUrl = App.API + path;
-    return fetch(fullUrl, { cache: 'no-store' }).then(async function(r) {
+  function backendGet(url, timeoutMs) {
+    var path = url.startsWith("/api") ? url.substring(4) : url;
+    var fullUrl = App.API + path;
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function() { controller.abort(); }, timeoutMs || _defaultTimeout);
+    return fetch(fullUrl, { cache: 'no-store', signal: controller.signal }).then(async function(r) {
+      clearTimeout(timeoutId);
       if (!r.ok) {
         let errorMsg = url + " " + r.status;
         try {
           const errorJson = await r.json();
           errorMsg = errorJson.detail || errorJson.message || errorMsg;
         } catch (e) {
-          // JSON 解析失败，保留默认错误信息
         }
         throw new Error(errorMsg);
       }
       return r.json();
+    }).catch(function(e) {
+      clearTimeout(timeoutId);
+      if (e.name === 'AbortError') throw new Error('请求超时');
+      throw e;
     });
   }
 
@@ -178,34 +193,49 @@ window.App = window.App || {};
   // ═══════════════════════════════════════════
 
   App.talkStream = async function(npcId, message) {
-    const requestBody = {
+    var requestBody = {
       player_id: App.playerId,
       npc_id: npcId,
       message: message
     };
 
-    if (App.apiMode !== "backend") {
-      requestBody.llm_base_url = App.LLM_API_URL;
-      requestBody.llm_api_key = App.LLM_API_KEY;
-      requestBody.llm_model = App.LLM_MODEL;
-    }
+    var controller = new AbortController();
+    App._streamAbortController = controller;
+    var connectTimeout = setTimeout(function() { controller.abort(); }, 15000);
 
-    const res = await fetch(App.API + "/npc/talk_stream", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody)
-    });
+    var res;
+    try {
+      res = await fetch(App.API + "/npc/talk_stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal
+      });
+      clearTimeout(connectTimeout);
+    } catch (e) {
+      clearTimeout(connectTimeout);
+      App._streamAbortController = null;
+      if (e.name === 'AbortError') throw new Error('连接超时');
+      throw e;
+    }
     if (!res.ok) {
+      App._streamAbortController = null;
       let errorMsg = "talk_stream " + res.status;
       try {
         const errorJson = await res.json();
         errorMsg = errorJson.detail || errorJson.message || errorMsg;
       } catch (e) {
-        // JSON 解析失败，保留默认错误信息
       }
       throw new Error(errorMsg);
     }
     return res.body.getReader();
+  };
+
+  App.cancelTalkStream = function() {
+    if (App._streamAbortController) {
+      App._streamAbortController.abort();
+      App._streamAbortController = null;
+    }
   };
 
   // ═══════════════════════════════════════════

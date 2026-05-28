@@ -16,16 +16,16 @@ router = APIRouter()
 
 
 class SaveBody(BaseModel):
-    player_id: str
+    player_id: str = Field(..., min_length=1)
 
 class LoadBody(BaseModel):
-    player_id: str
+    player_id: str = Field(..., min_length=1)
     display_name: str | None = None
     gender: str = Field(default="未言", pattern="^(男|女|未言)$")
     permadeath: bool = False
 
 class DeleteSaveBody(BaseModel):
-    player_id: str
+    player_id: str = Field(..., min_length=1)
 
 
 @router.get("/api/saves")
@@ -48,14 +48,15 @@ async def save_player(body: SaveBody) -> dict[str, Any]:
 @router.post("/api/load")
 async def load_player(body: LoadBody) -> dict[str, Any]:
     from backend.session.store import room
-    loaded = load_game(body.player_id)
+    loaded = await asyncio.to_thread(load_game, body.player_id)
     if not loaded:
         raise HTTPException(404, f"存档不存在: {body.player_id}")
     if loaded.dead and loaded.permadeath:
         raise HTTPException(400, "此角色已在真实江湖中身故，存档已废")
     if loaded.ended:
         raise HTTPException(400, "此角色的故事已收束，不可再入")
-    room.players[body.player_id] = loaded
+    async with room._lock:
+        room.players[body.player_id] = loaded
     init_npc_positions(loaded)
     init_npc_inventories(loaded)
     return build_init_response(loaded)
@@ -63,8 +64,8 @@ async def load_player(body: LoadBody) -> dict[str, Any]:
 
 @router.post("/api/delete-save")
 async def remove_save(body: DeleteSaveBody) -> dict[str, Any]:
-    """删除角色存档（手动弃档）。"""
     from backend.session.store import room
-    ok = delete_save(body.player_id)
-    room.players.pop(body.player_id, None)
+    ok = await asyncio.to_thread(delete_save, body.player_id)
+    async with room._lock:
+        room.players.pop(body.player_id, None)
     return {"ok": ok}

@@ -1,15 +1,8 @@
-// ═══════════════════════════════════════════════════════
-//  dialogue.js — NPC 对话流程
-// ═══════════════════════════════════════════════════════
 window.App = window.App || {};
 
 (function(App) {
   "use strict";
 
-  /**
-   * 发起流式对话。从 state 读取 selectedNpcId & msgInput，
-   * 通过 SSE 逐字渲染，完成后自动拉取最新状态。
-   */
   App.doTalk = async function() {
     if (App.isStreaming) return;
 
@@ -27,7 +20,13 @@ window.App = window.App || {};
 
     App.isStreaming = true;
     var btn = document.getElementById("talkBtn");
-    if (btn) btn.disabled = true;
+    var cancelBtn = document.getElementById("cancelStreamBtn");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "等待中...";
+      btn.classList.add("streaming");
+    }
+    if (cancelBtn) cancelBtn.classList.add("visible");
 
     var npcName = App.npcsHere.find(function(n) { return n.id === App.selectedNpcId; });
     npcName = npcName ? npcName.name : "NPC";
@@ -43,6 +42,7 @@ window.App = window.App || {};
       var decoder = new TextDecoder();
       var buf = "";
       var receivedDone = false;
+      var _rafPending = false;
 
       while (true) {
         var chunk = await reader.read();
@@ -57,8 +57,14 @@ window.App = window.App || {};
             var d = JSON.parse(line.slice(6).trim());
             if (d.chunk) {
               visibleText += d.chunk;
-              textEl.textContent = visibleText;
-              App.scrollToBottom();
+              if (!_rafPending) {
+                _rafPending = true;
+                requestAnimationFrame(function() {
+                  textEl.textContent = visibleText;
+                  App.scrollToBottom();
+                  _rafPending = false;
+                });
+              }
             }
             if (d.error) {
               visibleText += "\n[错误] " + d.error;
@@ -81,7 +87,6 @@ window.App = window.App || {};
         }
       }
 
-      // 处理流结束后的残留数据
       if (buf.trim()) {
         var lastLine = buf.trim();
         if (lastLine.indexOf("data: ") === 0) {
@@ -110,10 +115,18 @@ window.App = window.App || {};
       App.addMsg("system", errorMsg);
     } finally {
       if (reader) try { reader.releaseLock(); } catch (e) { /* already released */ }
+      App._streamAbortController = null;
     }
 
     App.isStreaming = false;
-    if (btn) btn.disabled = false;
+    var cancelBtn2 = document.getElementById("cancelStreamBtn");
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "发送";
+      btn.classList.remove("streaming");
+    }
+    if (cancelBtn2) cancelBtn2.classList.remove("visible");
+    textEl && (textEl.textContent = visibleText);
     App.scrollToBottom();
   };
 

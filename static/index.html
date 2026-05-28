@@ -16,15 +16,15 @@
 
       <!-- 新建角色 -->
       <div id="loginForm">
-        <label>江湖名号</label>
+        <label for="inpName">江湖名号</label>
         <input type="text" id="inpName" placeholder="输入你的名号..." maxlength="24">
-        <label>性别</label>
+        <label for="inpGender">性别</label>
         <select id="inpGender">
           <option value="男">男</option>
           <option value="女">女</option>
           <option value="未言">不透露</option>
         </select>
-        <label>
+        <label for="inpPermadeath">
           <input type="checkbox" id="inpPermadeath"> 真实江湖（永久死亡）
         </label>
         <button onclick="App.startNewGame()">踏入江湖</button>
@@ -32,9 +32,13 @@
 
       <!-- 加载存档 -->
       <div id="loadForm" style="display:none;">
-        <label>选择存档</label>
+        <label for="savesList">选择存档</label>
         <div class="saves-list" id="savesList"></div>
         <button onclick="App.loadGame()">继续江湖</button>
+        <button onclick="App.deleteSave()"
+                style="background:transparent;color:#ef4444;margin-top:4px;">
+          删除存档
+        </button>
         <button onclick="App.showLoginForm()"
                 style="background:transparent;color:var(--text-muted);margin-top:4px;">
           返回新建
@@ -91,7 +95,7 @@
     <div class="map-panel">
       <div class="panel-title" id="mapTitle">🗺️ 地图</div>
       <div class="map-container" id="mapContainer"></div>
-      <div id="loadingOverlay" class="loading-overlay" style="display:none;">
+      <div id="loadingOverlay" class="loading-overlay" style="display:none;" role="status" aria-label="加载中">
         <div class="loading-spinner"></div>
         <span class="loading-text">加载中...</span>
       </div>
@@ -129,6 +133,8 @@
         <div class="inv-row" id="statInv">
           <span style="color:#555;">身无长物</span>
         </div>
+        <div id="statAtmosphere" style="display:none;"></div>
+        <div id="statDanger" style="display:none;"></div>
       </div>
 
       <!-- NPC 列表 + 界门 -->
@@ -138,9 +144,20 @@
         <div class="portal-list" id="portalList"></div>
       </div>
 
+      <!-- 悬赏榜 -->
+      <div class="bounty-section">
+        <h3>📜 悬赏榜</h3>
+        <div id="bountyList"></div>
+        <div class="bounty-actions">
+          <button id="bountyRefreshBtn">刷新悬赏</button>
+          <button id="bountyCompleteBtn">完成悬赏</button>
+          <button id="bountyAbandonBtn">放弃悬赏</button>
+        </div>
+      </div>
+
       <!-- 对话框 -->
       <div class="dialogue-section">
-        <div class="dialogue-area" id="dialogueArea">
+        <div class="dialogue-area" id="dialogueArea" role="log" aria-live="polite">
           <div class="msg system" id="introMsg"></div>
         </div>
         <div class="input-bar">
@@ -148,6 +165,7 @@
           <input type="text" id="msgInput" placeholder="对 TA 说些什么..."
                  onkeydown="if(event.key==='Enter')App.doTalk()">
           <button onclick="App.doTalk()" id="talkBtn">发送</button>
+          <button id="cancelStreamBtn" onclick="App.cancelTalkStream()" style="display:none;">取消</button>
         </div>
       </div>
 
@@ -158,7 +176,7 @@
 
 <!-- ========== 确认对话框 ========== -->
 <div class="confirm-overlay" id="confirmOverlay">
-  <div class="confirm-dialog" id="confirmDialog">
+  <div class="confirm-dialog" id="confirmDialog" role="dialog" aria-modal="true">
     <div class="confirm-icon">⚠️</div>
     <h3 id="confirmTitle">确认操作</h3>
     <p id="confirmMessage">确定要执行此操作吗？</p>
