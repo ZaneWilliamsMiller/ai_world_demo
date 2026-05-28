@@ -14,6 +14,13 @@ from backend.models.player import PlayerState
 from backend.data.npcs_data import NPCS, NPC_FACTION, NPC_HABITS, NPC_STATE, LONG_DISTANCE_WANDERERS
 from backend.data.factions import FACTIONS
 from backend.data.maps_data import MAPS
+from backend.systems.constants import (
+    NPC_WANDER_BASE_CHANCE,
+    NPC_HOSTILE_REP_THRESHOLD,
+    NPC_HOSTILE_FAVOR_THRESHOLD,
+    NPC_ALERT_REP_THRESHOLD,
+    NPC_ALERT_FAVOR_THRESHOLD,
+)
 from backend.systems.pathfinding import can_step_between
 from backend.systems.time_weather import is_night, shichen_name
 
@@ -50,7 +57,7 @@ def maybe_wander_npcs(p: PlayerState, ticks: int = 1) -> None:
         meta = NPCS.get(nid, {})
         if meta.get("always") or meta.get("hidden"):
             continue
-        base_chance = 0.18 * ticks
+        base_chance = NPC_WANDER_BASE_CHANCE * ticks
         if weather_mult <= 0.0:
             continue
         if random.random() > base_chance * weather_mult:
@@ -160,9 +167,9 @@ def update_npc_state_dynamic(p: PlayerState, npc_id: str) -> str | None:
         and getattr(p, "move_lock_npc_id", None) == npc_id
     )
 
-    if rep_v <= -25 or fav <= -30:
+    if rep_v <= NPC_HOSTILE_REP_THRESHOLD or fav <= NPC_HOSTILE_FAVOR_THRESHOLD:
         new_state = "hostile"
-    elif rep_v <= -8 or fav <= -8 or is_trap_target:
+    elif rep_v <= NPC_ALERT_REP_THRESHOLD or fav <= NPC_ALERT_FAVOR_THRESHOLD or is_trap_target:
         new_state = "alert"
     else:
         if current in ("hostile", "alert"):
@@ -218,13 +225,13 @@ def npc_state_for_dialogue(p: PlayerState, npc_id: str) -> str:
         rep_v = int(p.reputation.get(fac, 0)) if fac else 0
         fav = int(p.favor.get(npc_id, 0))
         reasons: list[str] = []
-        if fac and rep_v <= -25:
+        if fac and rep_v <= NPC_HOSTILE_REP_THRESHOLD:
             reasons.append(f"此人在{FACTIONS.get(fac, fac)}里声名狼藉（{rep_v:+d}），早就不是一路人")
-        elif fac and rep_v <= -8:
+        elif fac and rep_v <= NPC_ALERT_REP_THRESHOLD:
             reasons.append(f"此人在{FACTIONS.get(fac, fac)}名声不佳（{rep_v:+d}），你对他没好感")
-        if fav <= -30:
+        if fav <= NPC_HOSTILE_FAVOR_THRESHOLD:
             reasons.append(f"你与此人旧怨极深（好感{fav:+d}），见他就烦")
-        elif fav <= -8:
+        elif fav <= NPC_ALERT_FAVOR_THRESHOLD:
             reasons.append(f"你与此人有些过节（好感{fav:+d}）")
         if reasons:
             attitude_context = "\n".join(f"· {r}" for r in reasons)

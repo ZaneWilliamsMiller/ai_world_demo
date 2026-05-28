@@ -14,6 +14,22 @@ from backend.models.player import PlayerState
 from backend.data.npcs_data import NPCS, NPC_FACTION
 from backend.data.factions import FACTIONS
 from backend.data.maps_data import MAPS
+from backend.systems.constants import (
+    HAZARD_PROB_INN,
+    HAZARD_PROB_BUSH,
+    HAZARD_PROB_WATER,
+    HAZARD_NIGHT_MULT,
+    HAZARD_RAIN_WATER_MULT,
+    HAZARD_RAIN_OTHER_MULT,
+    HAZARD_FOG_MULT,
+    HAZARD_LULIN_PROTECT_MULT,
+    HAZARD_CAOBANG_PROTECT_MULT,
+    HAZARD_POOR_COIN_MULT,
+    HAZARD_RICH_COIN_MULT,
+    HAZARD_MAX_DEATH_PROB,
+    HAZARD_COIN_POOR_THRESHOLD,
+    HAZARD_COIN_RICH_THRESHOLD,
+)
 from backend.systems.pathfinding import tile_at, is_dangerous
 from backend.systems.time_weather import is_night, shichen_name, shichen_phase
 from backend.systems.trap import apply_vigor_delta, apply_spirit_delta
@@ -158,30 +174,30 @@ def hazard_roll_death(p: PlayerState) -> str | None:
     import random
 
     ch = tile_at(p.map_id, p.px, p.py) or "."
-    base = {"I": 0.10, "&": 0.08, "~": 0.04}.get(ch, 0.0)
+    base = {"I": HAZARD_PROB_INN, "&": HAZARD_PROB_BUSH, "~": HAZARD_PROB_WATER}.get(ch, 0.0)
     if base <= 0:
         return None
 
-    night_mult = 1.6 if is_night(p.world_shichen) else 1.0
+    night_mult = HAZARD_NIGHT_MULT if is_night(p.world_shichen) else 1.0
     weather_mult = 1.0
     if p.weather in ("骤雨", "湿瘴"):
-        weather_mult = 1.4 if ch == "~" else 1.15
+        weather_mult = HAZARD_RAIN_WATER_MULT if ch == "~" else HAZARD_RAIN_OTHER_MULT
     elif p.weather in ("重雾", "薄雾"):
-        weather_mult = 1.25
+        weather_mult = HAZARD_FOG_MULT
     rep_mult = 1.0
     lulin = int(p.reputation.get("lulin", 0))
     caobang = int(p.reputation.get("caobang", 0))
-    if ch in ("&", "I") and lulin >= 20:
-        rep_mult *= 0.5
-    if ch == "~" and caobang >= 20:
-        rep_mult *= 0.6
+    if ch in ("&", "I") and lulin >= HAZARD_COIN_POOR_THRESHOLD:
+        rep_mult *= HAZARD_LULIN_PROTECT_MULT
+    if ch == "~" and caobang >= HAZARD_COIN_POOR_THRESHOLD:
+        rep_mult *= HAZARD_CAOBANG_PROTECT_MULT
     if ch == "I":
-        if p.coins <= 20:
-            rep_mult *= 0.4
-        elif p.coins >= 300:
-            rep_mult *= 1.4
+        if p.coins <= HAZARD_COIN_POOR_THRESHOLD:
+            rep_mult *= HAZARD_POOR_COIN_MULT
+        elif p.coins >= HAZARD_COIN_RICH_THRESHOLD:
+            rep_mult *= HAZARD_RICH_COIN_MULT
 
-    p_die = max(0.0, min(0.5, base * night_mult * weather_mult * rep_mult))
+    p_die = max(0.0, min(HAZARD_MAX_DEATH_PROB, base * night_mult * weather_mult * rep_mult))
     if random.random() >= p_die:
         return None
 

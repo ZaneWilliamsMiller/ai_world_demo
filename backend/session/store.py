@@ -5,6 +5,12 @@ from typing import Any
 
 from backend.data.factions import FACTIONS
 from backend.models.player import PlayerState
+from backend.systems.constants import (
+    INITIAL_VIGOR,
+    INITIAL_VIGOR_MAX,
+    INITIAL_SPIRIT,
+    INITIAL_SPIRIT_MAX,
+)
 
 
 class SessionStore:
@@ -49,10 +55,10 @@ class SessionStore:
                 "trap_attempts": 0,
                 "enslaved": False,
                 "enslaved_reason": None,
-                "vigor": 80,
-                "vigor_max": 100,
-                "spirit": 80,
-                "spirit_max": 100,
+                "vigor": INITIAL_VIGOR,
+                "vigor_max": INITIAL_VIGOR_MAX,
+                "spirit": INITIAL_SPIRIT,
+                "spirit_max": INITIAL_SPIRIT_MAX,
                 "sleep_debt": 0,
                 "unconscious_ticks": 0,
                 "rescue_needed": False,
@@ -76,9 +82,9 @@ class SessionStore:
                     setattr(st, attr, default() if isinstance(default, type) else default)
 
             if int(getattr(st, "vigor", 0)) <= 0:
-                st.vigor = 80
+                st.vigor = INITIAL_VIGOR
             if int(getattr(st, "spirit", 0)) <= 0:
-                st.spirit = 80
+                st.spirit = INITIAL_SPIRIT
 
             if not hasattr(st, "reputation") or not isinstance(getattr(st, "reputation", None), dict):
                 st.reputation = {k: 0 for k in FACTIONS.keys()}

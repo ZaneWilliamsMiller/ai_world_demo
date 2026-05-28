@@ -6,6 +6,15 @@ from typing import Any
 
 from backend.data.factions import FACTIONS
 from backend.memory import AgentMind
+from backend.systems.constants import (
+    INITIAL_PX,
+    INITIAL_PY,
+    INITIAL_COINS,
+    INITIAL_VIGOR,
+    INITIAL_VIGOR_MAX,
+    INITIAL_SPIRIT,
+    INITIAL_SPIRIT_MAX,
+)
 
 
 @dataclass
@@ -17,9 +26,9 @@ class PlayerState:
     dead: bool = False
     death_reason: str | None = None
     map_id: str = "world"
-    px: int = 16
-    py: int = 30
-    coins: int = 120
+    px: int = INITIAL_PX
+    py: int = INITIAL_PY
+    coins: int = INITIAL_COINS
     flags: dict[str, int] = field(
         default_factory=lambda: {"order": 0, "truth": 0, "hope": 0, "chaos": 0}
     )
@@ -32,10 +41,10 @@ class PlayerState:
     trap_attempts: int = 0
     enslaved: bool = False
     enslaved_reason: str | None = None
-    vigor: int = 80
-    vigor_max: int = 100
-    spirit: int = 80
-    spirit_max: int = 100
+    vigor: int = INITIAL_VIGOR
+    vigor_max: int = INITIAL_VIGOR_MAX
+    spirit: int = INITIAL_SPIRIT
+    spirit_max: int = INITIAL_SPIRIT_MAX
     sleep_debt: int = 0
     unconscious_ticks: int = 0
     rescue_needed: bool = False

@@ -31,6 +31,16 @@ def _validate_player_id(player_id: str) -> None:
 
 from backend.models.player import PlayerState
 from backend.data.factions import FACTIONS
+from backend.systems.constants import (
+    INITIAL_VIGOR,
+    INITIAL_VIGOR_MAX,
+    INITIAL_SPIRIT,
+    INITIAL_SPIRIT_MAX,
+    DEFAULT_RESPAWN_X,
+    DEFAULT_RESPAWN_Y,
+    RESPAWN_MIN_STAT,
+    RESPAWN_RATIO,
+)
 
 log = logging.getLogger("save_system")
 
@@ -144,14 +154,13 @@ def _deserialize_player(data: dict[str, Any]) -> PlayerState:
 
     # 兼容：没有这些字段的老存档
     if not hasattr(p, "vigor_max") or not p.vigor_max:
-        p.vigor_max = 100
+        p.vigor_max = INITIAL_VIGOR_MAX
     if not hasattr(p, "spirit_max") or not p.spirit_max:
-        p.spirit_max = 100
-    # 体力永远不应从0 开始（新角色保底80）
+        p.spirit_max = INITIAL_SPIRIT_MAX
     if int(getattr(p, "vigor", 0)) <= 0:
-        p.vigor = 80
+        p.vigor = INITIAL_VIGOR
     if int(getattr(p, "spirit", 0)) <= 0:
-        p.spirit = 80
+        p.spirit = INITIAL_SPIRIT
 
     from backend.data.maps_data import MAPS
     if p.map_id not in MAPS:
@@ -283,14 +292,14 @@ def respawn_at_supply_point(p: PlayerState) -> str:
     else:
         # 回同福栈
         p.map_id = "world"
-        nx, ny = 8, 13
+        nx, ny = DEFAULT_RESPAWN_X, DEFAULT_RESPAWN_Y
 
     old_map, old_x, old_y = p.map_id, p.px, p.py
     p.px, p.py = nx, ny
     p.dead = False
     p.death_reason = None
-    p.vigor = max(40, p.vigor_max // 2)
-    p.spirit = max(40, p.spirit_max // 2)
+    p.vigor = max(RESPAWN_MIN_STAT, p.vigor_max // RESPAWN_RATIO)
+    p.spirit = max(RESPAWN_MIN_STAT, p.spirit_max // RESPAWN_RATIO)
     p.move_locked = False
     p.move_lock_npc_id = None
     p.trap_reason = None

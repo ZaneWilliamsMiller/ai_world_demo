@@ -29,6 +29,7 @@ from backend.models.player import PlayerState
 from backend.data.npcs_data import NPCS
 from backend.data.factions import FACTIONS
 from backend.data.maps_data import MAPS, MAP_LOCATIONS
+from backend.systems.constants import BOUNTY_REFRESH_INTERVAL_DAYS, BOUNTY_COUNT_RANGE
 from backend.systems.time_weather import shichen_name
 from backend.systems.reputation import apply_rep_delta
 from backend.systems.core import push_rumor, apply_favor
@@ -391,8 +392,8 @@ def refresh_bounties(p: PlayerState) -> None:
     """刷新悬赏榜（每 3 日可刷新一次）。"""
     last_refresh_day = int(getattr(p, "last_bounty_refresh_day", 0) or 0)
     cur_day = int(p.world_day)
-    if cur_day - last_refresh_day < 3:
+    if cur_day - last_refresh_day < BOUNTY_REFRESH_INTERVAL_DAYS:
         return
-    p.bounties = generate_bounties(p, count=random.randint(2, 4))
+    p.bounties = generate_bounties(p, count=random.randint(*BOUNTY_COUNT_RANGE))
     p.last_bounty_refresh_day = cur_day
     log.info("Refreshed bounties for player %s on day %d", p.player_id, cur_day)

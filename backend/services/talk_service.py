@@ -27,6 +27,36 @@ from backend.systems.core import (
 )
 from backend.systems.economy import apply_coin_delta, add_items, remove_items, format_economy_context, format_npc_inventory, apply_npc_trade
 from backend.systems.reputation import apply_rep_delta, push_event
+from backend.systems.constants import (
+    MOOD_FAVOR_POS_MULT,
+    MOOD_FAVOR_NEG_MULT,
+    MOOD_COIN_MAX_EFFECT,
+    MOOD_COIN_DIVISOR,
+    MOOD_PERMADEATH_AROUSAL,
+    MOOD_PERMADEATH_VALENCE,
+    MOOD_ESCAPE_SUCCESS_AROUSAL,
+    MOOD_ESCAPE_SUCCESS_VALENCE,
+    MOOD_POSITIVE_WORD_VALENCE,
+    MOOD_NEGATIVE_WORD_VALENCE,
+    MOOD_NEGATIVE_WORD_AROUSAL,
+    MOOD_EVENT_AROUSAL_PER,
+    MOOD_EVENT_AROUSAL_MAX,
+    MOOD_ITEM_VALENCE_PER,
+    MOOD_ITEM_VALENCE_MAX,
+    MOOD_NIGHT_AROUSAL_PENALTY,
+    MOOD_INERTIA_POSITIVE_THRESHOLD,
+    MOOD_INERTIA_NEGATIVE_THRESHOLD,
+    MOOD_INERTIA_POS_POS_DAMPING,
+    MOOD_INERTIA_POS_NEG_DAMPING,
+    MOOD_INERTIA_NEG_NEG_AMPLIFY,
+    MOOD_INERTIA_NEG_POS_DAMPING,
+    MOOD_AROUSAL_HIGH_THRESHOLD,
+    MOOD_AROUSAL_LOW_THRESHOLD,
+    MOOD_AROUSAL_HIGH_POS_DAMPING,
+    MOOD_AROUSAL_HIGH_NEG_AMPLIFY,
+    MOOD_AROUSAL_LOW_NEG_DAMPING,
+    MOOD_AROUSAL_LOW_POS_AMPLIFY,
+)
 from backend.systems.time_weather import shichen_name, advance_clock, is_night
 from backend.views import player_public, npcs_here
 from backend.llm_client import chat_completion, parse_npc_reply_json, cached_system
@@ -555,29 +585,27 @@ def _evolve_npc_mood(
     # 好感驱动
     fav_d = parsed.favor_delta or 0
     if fav_d > 0:
-        valence_d += fav_d * 1.5
+        valence_d += fav_d * MOOD_FAVOR_POS_MULT
         causes.append("此人话到心坎")
     elif fav_d < 0:
-        valence_d += fav_d * 2.0  # 恶感比好感更刺人
+        valence_d += fav_d * MOOD_FAVOR_NEG_MULT
         causes.append("此人言语触逆")
 
-    # 金钱驱动
     if parsed.coin_delta:
         if parsed.coin_delta > 0:
-            valence_d += min(3.0, parsed.coin_delta / 50.0)
+            valence_d += min(MOOD_COIN_MAX_EFFECT, parsed.coin_delta / MOOD_COIN_DIVISOR)
             causes.append("进账顺遂")
         else:
-            valence_d -= min(3.0, abs(parsed.coin_delta) / 50.0)
+            valence_d -= min(MOOD_COIN_MAX_EFFECT, abs(parsed.coin_delta) / MOOD_COIN_DIVISOR)
             causes.append("银钱受损")
 
-    # 险局紧张感
     if parsed.permadeath or parsed.escape_outcome == "fail":
-        arousal_d += 3.0
-        valence_d -= 3.0
+        arousal_d += MOOD_PERMADEATH_AROUSAL
+        valence_d += MOOD_PERMADEATH_VALENCE
         causes.append("险象骤生")
     elif parsed.escape_outcome == "success":
-        arousal_d += 2.0
-        valence_d += 4.0
+        arousal_d += MOOD_ESCAPE_SUCCESS_AROUSAL
+        valence_d += MOOD_ESCAPE_SUCCESS_VALENCE
         causes.append("强敌当前，侥幸周旋得脱")
 
     # 文本信号：玩家话语中的善意/敌意
@@ -585,26 +613,25 @@ def _evolve_npc_mood(
     positive_words = {"谢", "请", "有劳", "劳驾", "费心", "恩", "感激", "拜", "敬", "善"}
     negative_words = {"滚", "找死", "狗", "猪", "贱", "蠢", "杀你", "灭你", "刁难", "不识抬举"}
     if any(kw in umsg for kw in positive_words):
-        valence_d += 0.8
+        valence_d += MOOD_POSITIVE_WORD_VALENCE
     if any(kw in umsg for kw in negative_words):
-        valence_d -= 2.5
-        arousal_d += 1.5
+        valence_d += MOOD_NEGATIVE_WORD_VALENCE
+        arousal_d += MOOD_NEGATIVE_WORD_AROUSAL
         causes.append("此人出言不逊")
 
     # 事件驱动
     if parsed.events:
-        arousal_d += min(2.0, len(parsed.events) * 0.8)
+        arousal_d += min(MOOD_EVENT_AROUSAL_MAX, len(parsed.events) * MOOD_EVENT_AROUSAL_PER)
         causes.append("风云有变")
 
     # 物品得失
     if parsed.items_gain:
-        valence_d += min(2.0, len(parsed.items_gain) * 0.7)
+        valence_d += min(MOOD_ITEM_VALENCE_MAX, len(parsed.items_gain) * MOOD_ITEM_VALENCE_PER)
     if parsed.items_lose:
-        valence_d -= min(2.0, len(parsed.items_lose) * 0.7)
+        valence_d -= min(MOOD_ITEM_VALENCE_MAX, len(parsed.items_lose) * MOOD_ITEM_VALENCE_PER)
 
-    # 深夜情绪调制
     if is_night(p.world_shichen):
-        arousal_d -= 0.8  # 夜越深越倦
+        arousal_d += MOOD_NIGHT_AROUSAL_PENALTY
 
     if valence_d == 0.0 and arousal_d == 0.0:
         return  # 无显著变化，保留原状
@@ -614,29 +641,26 @@ def _evolve_npc_mood(
     #   负性放大：心情差时对负面刺激更敏感（雪上加霜）、对正面刺激较难接受
     current_valence = float(getattr(mind, "affect_valence", 0) or 0)
     current_arousal = float(getattr(mind, "affect_arousal", 5) or 5)
-    if current_valence > 2.0:
-        # 心情好：正面变化打折（习以为常），负面变化轻微缓冲
+    if current_valence > MOOD_INERTIA_POSITIVE_THRESHOLD:
         if valence_d > 0:
-            valence_d *= 0.7
+            valence_d *= MOOD_INERTIA_POS_POS_DAMPING
         else:
-            valence_d *= 0.85
-    elif current_valence < -2.0:
-        # 心情差：负面变化放大（雪上加霜），正面变化更难接受
+            valence_d *= MOOD_INERTIA_POS_NEG_DAMPING
+    elif current_valence < MOOD_INERTIA_NEGATIVE_THRESHOLD:
         if valence_d < 0:
-            valence_d *= 1.3
+            valence_d *= MOOD_INERTIA_NEG_NEG_AMPLIFY
         else:
-            valence_d *= 0.6
-    # 唤醒度惯量：高唤醒时可以更快回落（归于平静），低唤醒时可更难被唤醒
-    if current_arousal > 7.0:
+            valence_d *= MOOD_INERTIA_NEG_POS_DAMPING
+    if current_arousal > MOOD_AROUSAL_HIGH_THRESHOLD:
         if arousal_d > 0:
-            arousal_d *= 0.6  # 已在高点，再升更难
+            arousal_d *= MOOD_AROUSAL_HIGH_POS_DAMPING
         else:
-            arousal_d *= 1.2  # 从高点回落更容易
-    elif current_arousal < 3.0:
+            arousal_d *= MOOD_AROUSAL_HIGH_NEG_AMPLIFY
+    elif current_arousal < MOOD_AROUSAL_LOW_THRESHOLD:
         if arousal_d < 0:
-            arousal_d *= 0.5  # 已低迷，再降更难（地板效应）
+            arousal_d *= MOOD_AROUSAL_LOW_NEG_DAMPING
         else:
-            arousal_d *= 1.15  # 从低点上升相对容易
+            arousal_d *= MOOD_AROUSAL_LOW_POS_AMPLIFY
 
     cause_str = "；".join(causes[:3]) if causes else ""
     is_anchor = mind.update_mood(valence_delta=valence_d, arousal_delta=arousal_d, cause=cause_str)

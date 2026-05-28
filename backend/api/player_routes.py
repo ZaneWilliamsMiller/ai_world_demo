@@ -29,6 +29,7 @@ from backend.systems.save_system import save_game, respawn_at_supply_point, dele
 from backend.systems.npc_gossip import maybe_npc_gossip
 from backend.systems.pathfinding import find_path, tile_at, tile_elevation, tile_cost, check_danger_and_injure, is_dangerous, path_cost, cost_to_ticks
 from backend.systems.perception import hazard_roll_death
+from backend.systems.constants import STEEP_VIGOR_DAMAGE, STEEP_SPIRIT_DAMAGE, DANGER_VIGOR_DAMAGE, DANGER_SPIRIT_DAMAGE
 from backend.systems.encounter import should_trigger_encounter, generate_dynamic_encounter, apply_encounter
 from backend.systems.time_weather import shichen_name, is_night, advance_clock
 from backend.data.atmosphere import scene_context
@@ -119,8 +120,8 @@ def _walk_path(p, path, allow_steep):
         p.px, p.py = nx, ny
         actual_path.append((nx, ny))
         if allow_steep and dh > 2:
-            vigor_cost += apply_vigor_delta(p, -12)
-            spirit_cost += apply_spirit_delta(p, -6)
+            vigor_cost += apply_vigor_delta(p, -STEEP_VIGOR_DAMAGE)
+            spirit_cost += apply_spirit_delta(p, -STEEP_SPIRIT_DAMAGE)
         step_cost = max(1, tile_cost(ch_to))
         vigor_cost += apply_vigor_delta(p, -max(1, step_cost // 2))
         if is_night(p.world_shichen):
@@ -129,8 +130,8 @@ def _walk_path(p, path, allow_steep):
         if not p.dead and is_dangerous(ch_to):
             hurt, reason = check_danger_and_injure(ch_to)
             if hurt and reason:
-                vigor_cost += apply_vigor_delta(p, -10)
-                spirit_cost += apply_spirit_delta(p, -4)
+                vigor_cost += apply_vigor_delta(p, -DANGER_VIGOR_DAMAGE)
+                spirit_cost += apply_spirit_delta(p, -DANGER_SPIRIT_DAMAGE)
                 injuries.append(reason)
                 if ch_to == "!" or ch_to == "~":
                     forced = {
