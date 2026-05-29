@@ -23,7 +23,7 @@ window.App = window.App || {};
         try {
           var errorJson = await r.json();
           errorMsg = errorJson.detail || errorJson.message || errorMsg;
-        } catch (e) { /* ignore parse error */ }
+        } catch (_e) { /* ignore parse error */ }
         throw new Error(errorMsg);
       }
       return await r.json();
@@ -47,7 +47,7 @@ window.App = window.App || {};
         try {
           var errorJson = await r.json();
           errorMsg = errorJson.detail || errorJson.message || errorMsg;
-        } catch (e) { /* ignore parse error */ }
+        } catch (_e) { /* ignore parse error */ }
         throw new Error(errorMsg);
       }
       return await r.json();
@@ -201,7 +201,7 @@ window.App = window.App || {};
       try {
         var errorJson = await res.json();
         errorMsg = errorJson.detail || errorJson.message || errorMsg;
-      } catch (e) { /* ignore parse error */ }
+      } catch (_e) { /* ignore parse error */ }
       throw new Error(errorMsg);
     }
     return res.body.getReader();

@@ -131,7 +131,7 @@ window.App = window.App || {};
         };
         list.appendChild(div);
       });
-    } catch (e) {
+    } catch (_e) {
       const savesList = DOM.savesList || document.getElementById("savesList");
       // 错误消息使用安全方式显示
       HtmlUtils.setSafeHtml(savesList, '<div style="color:#ef5350;">加载存档列表失败</div>');
@@ -460,7 +460,7 @@ window.App = window.App || {};
           let step3 = document.getElementById("shutdownStep3");
 
           let backendSuccess = false;
-          let data = null;
+          let _data = null;
           let lastError = null;
 
           // ════════════════════════════════════
@@ -487,7 +487,7 @@ window.App = window.App || {};
               });
 
               clearTimeout(timeoutId);
-              data = await resp.json();
+              _data = await resp.json();
               backendSuccess = true;
               lastError = null;
 
@@ -560,7 +560,7 @@ window.App = window.App || {};
                 await fetch(App.BACKEND_URL + "/api/health", {
                   cache: 'no-store'
                 });
-              } catch (err) {
+              } catch (_err) {
                 backendStopped = true;
                 break;
               }
@@ -588,7 +588,7 @@ window.App = window.App || {};
           }
 
           try {
-            const directResp = await fetch(window.location.origin + "/__shutdown__", {
+            const _directResp = await fetch(window.location.origin + "/__shutdown__", {
               method: "GET"
             });
 
@@ -597,7 +597,7 @@ window.App = window.App || {};
               step3.classList.remove("pending");
               step3.classList.add("done");
             }
-          } catch (err) {
+          } catch (_err) {
             if (step3) {
               step3.textContent = "⚠️ 前端关闭指令发送异常";
               step3.classList.remove("pending");
@@ -614,7 +614,7 @@ window.App = window.App || {};
               await fetch(window.location.origin + "/__ping__", {
                 cache: 'no-store'
               });
-            } catch (err) {
+            } catch (_err) {
               frontendStopped = true;
               break;
             }

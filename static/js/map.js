@@ -14,7 +14,7 @@ window.App = window.App || {};
   // ═══════════════════════════════════════════
   var TILE = 28;                          // 主视口瓦片像素 - 更大更舒适
   var MINI_TILE = 2;                     // 小地图瓦片像素 - 缩小
-  var MINI_PAD = 8;                      // 小地图内边距
+  var _MINI_PAD = 8;                      // 小地图内边距
   var MINI_BORDER = 2;                   // 小地图边框宽
 
   // 游戏风格配色 - 肉鸽风格
@@ -237,7 +237,7 @@ window.App = window.App || {};
     }
   }
 
-  function stopRender() {
+  function _stopRender() {
     if (_rafId) { cancelAnimationFrame(_rafId); _rafId = null; }
   }
 
@@ -578,7 +578,7 @@ window.App = window.App || {};
   // ═══════════════════════════════════════════
   function buildLocationLabels() {
     _locationLabels = [];
-    var locs = (App.mapsData && App.mapsData[App.currentMapId])
+    var _locs = (App.mapsData && App.mapsData[App.currentMapId])
       ? (App.mapsData[App.currentMapId]._locations || {})
       : {};
     if (App._mapLocations) {

@@ -11,7 +11,7 @@ window.App = window.App || {};
   // 用户可通过配置面板覆盖此值
   (function() {
     var saved = null;
-    try { saved = JSON.parse(localStorage.getItem("lp_config") || "{}"); } catch(e) {}
+    try { saved = JSON.parse(localStorage.getItem("lp_config") || "{}"); } catch(_e) {}
     if (saved && saved.backendUrl) {
       App.BACKEND_URL = saved.backendUrl;
     } else {

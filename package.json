@@ -1,6 +1,7 @@
 {
   "name": "living-paper-frontend",
   "private": true,
+  "type": "module",
   "description": "Frontend lint tooling for living-paper",
   "scripts": {
     "lint": "eslint static/js/ static/tests.html static/index.html",

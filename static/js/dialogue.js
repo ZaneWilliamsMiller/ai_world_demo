@@ -31,32 +31,34 @@ window.App = window.App || {};
     var npcName = App.npcsHere.find(function(n) { return n.id === App.selectedNpcId; });
     npcName = npcName ? npcName.name : "NPC";
 
+    var reader = null;
+    var textEl = null;
+    var visibleText = "";
+    var _streamTimeout = null;
+
+    function _resetStreamState() {
+      App.isStreaming = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "发送";
+        btn.classList.remove("streaming");
+      }
+      if (cancelBtn) cancelBtn.classList.remove("visible");
+      if (_streamTimeout) clearTimeout(_streamTimeout);
+      if (textEl) textEl.textContent = visibleText;
+      App.scrollToBottom();
+    }
+
     try {
-      var reader = null;
       reader = await App.talkStream(App.selectedNpcId, msg);
-      
+
       var msgDiv = App.addMsg("npc", {speaker: npcName, text: "..."}, false);
-      var textEl = msgDiv.querySelector(".msg-text");
-      var visibleText = "";
+      textEl = msgDiv.querySelector(".msg-text");
 
       var decoder = new TextDecoder();
       var buf = "";
       var receivedDone = false;
       var _rafPending = false;
-      var _streamTimeout = null;
-
-      function _resetStreamState() {
-        App.isStreaming = false;
-        if (btn) {
-          btn.disabled = false;
-          btn.textContent = "发送";
-          btn.classList.remove("streaming");
-        }
-        if (cancelBtn) cancelBtn.classList.remove("visible");
-        if (_streamTimeout) clearTimeout(_streamTimeout);
-        if (textEl) textEl.textContent = visibleText;
-        App.scrollToBottom();
-      }
 
       _streamTimeout = setTimeout(function() {
         visibleText += "\n[对话超时，回复可能不完整]";
@@ -103,7 +105,7 @@ window.App = window.App || {};
               }
               break;
             }
-          } catch (e) { /* 忽略解析错误 */ }
+          } catch (_e) { /* 忽略解析错误 */ }
         }
       }
 
@@ -117,7 +119,7 @@ window.App = window.App || {};
               textEl.textContent = visibleText;
               App.scrollToBottom();
             }
-          } catch (e) { /* 忽略 */ }
+          } catch (_e) { /* 忽略 */ }
         }
       }
 
@@ -135,7 +137,7 @@ window.App = window.App || {};
       }
       App.addMsg("system", errorMsg);
     } finally {
-      if (reader) try { reader.releaseLock(); } catch (e) { /* already released */ }
+      if (reader) try { reader.releaseLock(); } catch (_e) { /* already released */ }
       App._streamAbortController = null;
     }
 

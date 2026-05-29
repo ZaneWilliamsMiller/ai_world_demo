@@ -40,7 +40,7 @@ window.App = window.App || {};
     topbarInfo.appendChild(weatherSpan);
   }
 
-  function renderRightPanel(p, data) {
+  function renderRightPanel(p, _data) {
     var statTime = document.getElementById("statTime");
     if (statTime) statTime.textContent = p.world_shichen || "--";
     var statWeather = document.getElementById("statWeather");
@@ -275,7 +275,7 @@ window.App = window.App || {};
 
   App.scrollToBottom = scrollToBottom;
 
-  function renderPortals(p) {
+  function renderPortals(_p) {
     var mapInfo = App.mapsData[App.currentMapId];
     var div = document.getElementById("portalList");
     if (!div) return;
