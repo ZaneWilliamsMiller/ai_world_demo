@@ -43,6 +43,9 @@ class TestResult(BaseModel):
     output: str
     exit_code: int | None = None
     elapsed: float = 0.0
+    cases_passed: int = 0
+    cases_failed: int = 0
+    cases_skipped: int = 0
 
 
 class ModuleInfo(BaseModel):
@@ -57,6 +60,7 @@ class ModuleResult(BaseModel):
     total: int
     passed: int
     failed: int
+    skipped: int = 0
     results: list[TestResult]
 
 
@@ -140,6 +144,26 @@ async def list_modules():
     return {"count": len(all_tests), "modules": modules}
 
 
+def _parse_pytest_counts(output: str) -> tuple[int, int, int]:
+    passed = failed = skipped = 0
+    for line in output.strip().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if " passed" in line or " failed" in line or " skipped" in line:
+            m = re.search(r"(\d+)\s+passed", line)
+            if m:
+                passed = int(m.group(1))
+            m = re.search(r"(\d+)\s+failed", line)
+            if m:
+                failed = int(m.group(1))
+            m = re.search(r"(\d+)\s+skipped", line)
+            if m:
+                skipped = int(m.group(1))
+            return passed, failed, skipped
+    return passed, failed, skipped
+
+
 async def _run_single(test_path: str) -> TestResult:
     test_name = test_path.replace("/", os.sep).replace("\\", os.sep)
     test_file = TESTS_DIR / test_name
@@ -168,12 +192,17 @@ async def _run_single(test_path: str) -> TestResult:
     elapsed = round(asyncio.get_event_loop().time() - t0, 1)
     output = stdout.decode("utf-8", errors="replace")
 
+    cp, cf, cs = _parse_pytest_counts(output)
+
     return TestResult(
         test_name=test_path,
         success=(proc.returncode == 0),
         output=output,
         exit_code=proc.returncode,
         elapsed=elapsed,
+        cases_passed=cp,
+        cases_failed=cf,
+        cases_skipped=cs,
     )
 
 
@@ -237,11 +266,13 @@ async def run_module(module_id: str):
                 ))
 
     passed = sum(1 for r in results if r.success)
+    skipped = sum(r.cases_skipped for r in results)
     return ModuleResult(
         module_id=module_id,
         total=len(results),
         passed=passed,
         failed=len(results) - passed,
+        skipped=skipped,
         results=results,
     )
 
@@ -271,10 +302,12 @@ async def run_all():
                 ))
 
     passed = sum(1 for r in results if r.success)
+    skipped = sum(r.cases_skipped for r in results)
     return ModuleResult(
         module_id="",
         total=len(results),
         passed=passed,
         failed=len(results) - passed,
+        skipped=skipped,
         results=results,
     )

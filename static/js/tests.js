@@ -255,9 +255,11 @@ window.App = window.App || {};
     updateModuleBadge(testName);
   }
 
-  async function runModule(moduleId, btn) {
-    btn.disabled = true;
-    btn.textContent = '\u23f3 \u8fd0\u884c\u4e2d...';
+  async function runModule(moduleId, btn, fromRunAll) {
+    if (!fromRunAll) {
+      btn.disabled = true;
+      btn.textContent = '\u23f3 \u8fd0\u884c\u4e2d...';
+    }
 
     var sid = safeId(moduleId);
     var badge = document.getElementById('badge-' + sid);
@@ -288,8 +290,17 @@ window.App = window.App || {};
     try {
       var startTime = Date.now();
       var resp = await fetch(apiBase() + '/tests/run-module/' + moduleId, { method: 'POST' });
+
+      if (!resp.ok) {
+        var errText = '';
+        try { var errData = await resp.json(); errText = errData.detail || resp.statusText; } catch(e) { errText = resp.statusText; }
+        throw new Error(errText);
+      }
+
       var data = await resp.json();
       var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+      var modPassed = 0, modFailed = 0, modSkipped = 0;
 
       data.results.forEach(function(r) {
         testResults[r.test_name] = r;
@@ -299,6 +310,16 @@ window.App = window.App || {};
         var resultEl = document.getElementById('rowresult-' + rsid);
         var outputEl = document.getElementById('rowout-' + rsid);
         var rElapsed = r.elapsed ? r.elapsed.toFixed(1) : '?';
+
+        if (r.success) {
+          modPassed += r.cases_passed || 0;
+          modFailed += r.cases_failed || 0;
+          modSkipped += r.cases_skipped || 0;
+        } else {
+          modFailed += r.cases_failed || 0;
+          modPassed += r.cases_passed || 0;
+          modSkipped += r.cases_skipped || 0;
+        }
 
         if (statusEl) {
           if (r.success) {
@@ -320,27 +341,35 @@ window.App = window.App || {};
         }
       });
 
-      var passed = data.passed;
-      var total = data.total;
-      if (passed === total) {
+      var modTotal = modPassed + modFailed + modSkipped;
+      var badgeText = modTotal + '\u603b ' + modPassed + '\u901a\u8fc7';
+      if (modFailed > 0) badgeText += ' ' + modFailed + '\u5931\u8d25';
+      if (modSkipped > 0) badgeText += ' ' + modSkipped + '\u8df3\u8fc7';
+      badgeText += ' (' + elapsed + 's)';
+
+      if (modFailed === 0) {
         badge.className = 'module-badge badge-success';
-        badge.textContent = '\u2705 \u5168\u90e8\u901a\u8fc7 (' + elapsed + 's)';
+        badge.textContent = '\u2705 ' + badgeText;
       } else {
         badge.className = 'module-badge badge-error';
-        badge.textContent = '\u274c ' + passed + '/' + total + ' \u901a\u8fc7 (' + elapsed + 's)';
+        badge.textContent = '\u274c ' + badgeText;
       }
 
     } catch (err) {
       badge.className = 'module-badge badge-error';
-      badge.textContent = '\u274c \u8fd0\u884c\u5931\u8d25';
-      stats.error++;
+      badge.textContent = '\u274c \u8fd0\u884c\u5931\u8d25: ' + err.message;
+      if (!fromRunAll) {
+        stats.error++;
+      }
     }
 
     stats.running--;
     updateStats();
 
-    btn.disabled = false;
-    btn.textContent = '\u25b6 \u4e00\u952e\u6d4b\u8bd5';
+    if (!fromRunAll) {
+      btn.disabled = false;
+      btn.textContent = '\u25b6 \u4e00\u952e\u6d4b\u8bd5';
+    }
   }
 
   async function runAll() {
@@ -350,68 +379,13 @@ window.App = window.App || {};
 
     stats.success = 0;
     stats.error = 0;
-    stats.running++;
     updateStats();
 
-    modules.forEach(function(mod) {
-      var sid = safeId(mod.id);
-      var badge = document.getElementById('badge-' + sid);
-      if (badge) {
-        badge.className = 'module-badge badge-running';
-        badge.textContent = '\u23f3 \u8fd0\u884c\u4e2d...';
-      }
-      mod.tests.forEach(function(t) {
-        var statusEl = document.getElementById('rowstatus-' + safeId(t.name));
-        if (statusEl) {
-          statusEl.className = 'test-row-status status-running';
-          statusEl.textContent = '\u23f3';
-        }
-      });
-    });
-
-    try {
-      var resp = await fetch(apiBase() + '/tests/run-all', { method: 'POST' });
-      var data = await resp.json();
-
-      data.results.forEach(function(r) {
-        testResults[r.test_name] = r;
-
-        var rsid = safeId(r.test_name);
-        var statusEl = document.getElementById('rowstatus-' + rsid);
-        var resultEl = document.getElementById('rowresult-' + rsid);
-        var outputEl = document.getElementById('rowout-' + rsid);
-        var rElapsed = r.elapsed ? r.elapsed.toFixed(1) : '?';
-
-        if (statusEl) {
-          if (r.success) {
-            statusEl.className = 'test-row-status status-success';
-            statusEl.textContent = '\u2705 ' + rElapsed + 's';
-            stats.success++;
-          } else {
-            statusEl.className = 'test-row-status status-error';
-            statusEl.textContent = '\u274c ' + rElapsed + 's';
-            stats.error++;
-          }
-        }
-
-        if (resultEl) {
-          resultEl.textContent = formatOutput(r.test_name, r, rElapsed);
-          if (outputEl && (verbose || !r.success || formatOutput(r.test_name, r, rElapsed).indexOf('\n') > 0)) {
-            outputEl.classList.add('show');
-          }
-        }
-      });
-
-      modules.forEach(function(mod) {
-        recalcModuleBadge(mod);
-      });
-
-    } catch (err) {
-      console.error('Run all failed:', err);
+    for (var i = 0; i < modules.length; i++) {
+      var mod = modules[i];
+      var modBtn = document.getElementById('modbtn-' + safeId(mod.id));
+      await runModule(mod.id, modBtn, true);
     }
-
-    stats.running--;
-    updateStats();
 
     btn.disabled = false;
     btn.textContent = '\u25b6 \u5168\u90e8\u6d4b\u8bd5';
@@ -492,11 +466,16 @@ window.App = window.App || {};
     var badge = document.getElementById('badge-' + sid);
     if (!badge) return;
 
-    var tested = 0, passed = 0;
+    var tested = 0, passed = 0, failed = 0, skipped = 0;
     mod.tests.forEach(function(t) {
       if (testResults[t.name]) {
         tested++;
-        if (testResults[t.name].success) passed++;
+        if (testResults[t.name].success) {
+          passed++;
+        } else {
+          failed++;
+        }
+        skipped += testResults[t.name].cases_skipped || 0;
       }
     });
 
@@ -506,12 +485,16 @@ window.App = window.App || {};
     } else if (tested < mod.count) {
       badge.className = 'module-badge badge-running';
       badge.textContent = '\u23f3 ' + passed + '/' + tested + ' \u5df2\u6d4b';
-    } else if (passed === mod.count) {
+    } else if (failed === 0) {
       badge.className = 'module-badge badge-success';
-      badge.textContent = '\u2705 \u5168\u90e8\u901a\u8fc7';
+      var text = tested + '\u603b ' + passed + '\u901a\u8fc7';
+      if (skipped > 0) text += ' ' + skipped + '\u8df3\u8fc7';
+      badge.textContent = '\u2705 ' + text;
     } else {
       badge.className = 'module-badge badge-error';
-      badge.textContent = '\u274c ' + passed + '/' + mod.count + ' \u901a\u8fc7';
+      var text = tested + '\u603b ' + passed + '\u901a\u8fc7 ' + failed + '\u5931\u8d25';
+      if (skipped > 0) text += ' ' + skipped + '\u8df3\u8fc7';
+      badge.textContent = '\u274c ' + text;
     }
   }
 
