@@ -85,6 +85,8 @@ def _discover_tests() -> list[tuple[Path, str]]:
     results = []
     for f in sorted(TESTS_DIR.rglob("test_*.py")):
         rel = str(f.relative_to(TESTS_DIR)).replace("\\", "/")
+        if rel.startswith("interactive/"):
+            continue
         results.append((f, rel))
     return results
 
@@ -424,65 +426,77 @@ async def _run_interactive_single(test_path: str) -> InteractiveTestResult:
             output=f"测试文件不存在: {test_path}",
         )
 
-    module_rel = test_path.replace("\\", "/").replace("/", ".").replace(".py", "")
-    parts = module_rel.split(".")
-    if parts[-1].startswith("test_"):
-        module_name = "tests." + module_rel
+    module_name = "tests." + test_path.replace("/", ".").replace("\\", ".").replace(".py", "")
 
-    t0 = time.time()
-    try:
-        if module_name in sys.modules:
-            mod = sys.modules[module_name]
-        else:
+    def _run_sync() -> InteractiveTestResult:
+        t0 = time.time()
+        try:
+            if module_name in sys.modules:
+                del sys.modules[module_name]
+
             spec = importlib.util.spec_from_file_location(module_name, str(test_file))
             mod = importlib.util.module_from_spec(spec)
             sys.modules[module_name] = mod
             spec.loader.exec_module(mod)
 
-        test_class = None
-        for attr_name in dir(mod):
-            attr = getattr(mod, attr_name)
-            if isinstance(attr, type) and attr_name.startswith("Test") and issubclass(attr, unittest.TestCase):
-                test_class = attr
-                break
+            test_class = None
+            for attr_name in dir(mod):
+                attr = getattr(mod, attr_name)
+                if isinstance(attr, type) and attr_name.startswith("Test") and issubclass(attr, unittest.TestCase):
+                    test_class = attr
+                    break
 
-        if not test_class:
+            if not test_class:
+                return InteractiveTestResult(
+                    test_name=test_path, success=False,
+                    output="未找到测试类",
+                    elapsed=round(time.time() - t0, 1),
+                )
+
+            suite = unittest.TestLoader().loadTestsFromTestCase(test_class)
+            result = unittest.TestResult()
+            suite.run(result)
+
+            elapsed = round(time.time() - t0, 1)
+            output_lines = []
+            if result.errors:
+                for test, tb in result.errors:
+                    output_lines.append(f"ERROR: {test}\n{tb}")
+            if result.failures:
+                for test, tb in result.failures:
+                    output_lines.append(f"FAIL: {test}\n{tb}")
+            if result.skipped:
+                for test, reason in result.skipped:
+                    output_lines.append(f"SKIP: {test} ({reason})")
+
+            output = "\n".join(output_lines) if output_lines else f"Ran {result.testsRun} tests OK"
+
+            return InteractiveTestResult(
+                test_name=test_path,
+                success=result.wasSuccessful(),
+                output=output,
+                elapsed=elapsed,
+            )
+        except Exception as e:
             return InteractiveTestResult(
                 test_name=test_path, success=False,
-                output="未找到测试类",
+                output=traceback.format_exc(),
                 elapsed=round(time.time() - t0, 1),
             )
 
-        suite = unittest.TestLoader().loadTestsFromTestCase(test_class)
-        result = unittest.TestResult()
-        suite.run(result)
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _run_sync)
 
-        elapsed = round(time.time() - t0, 1)
-        output_lines = []
-        if result.errors:
-            for test, tb in result.errors:
-                output_lines.append(f"ERROR: {test}\n{tb}")
-        if result.failures:
-            for test, tb in result.failures:
-                output_lines.append(f"FAIL: {test}\n{tb}")
-        if result.skipped:
-            for test, reason in result.skipped:
-                output_lines.append(f"SKIP: {test} ({reason})")
 
-        output = "\n".join(output_lines) if output_lines else f"Ran {result.testsRun} tests OK"
-
-        return InteractiveTestResult(
-            test_name=test_path,
-            success=result.wasSuccessful(),
-            output=output,
-            elapsed=elapsed,
-        )
-    except Exception as e:
-        return InteractiveTestResult(
-            test_name=test_path, success=False,
-            output=traceback.format_exc(),
-            elapsed=round(time.time() - t0, 1),
-        )
+@router.post("/interactive/reset-circuit-breaker")
+async def reset_circuit_breaker():
+    from backend.llm.circuit_breaker import get_circuit_breaker
+    cb = get_circuit_breaker()
+    if hasattr(cb, '_state'):
+        cb._state = __import__('backend.llm.circuit_breaker', fromlist=['CircuitState']).CircuitState.CLOSED
+        cb._failure_times.clear()
+        cb._opened_at = 0.0
+    return {"status": "ok", "state": cb.stats["state"]}
 
 
 @router.post("/interactive/run/{test_path:path}")
