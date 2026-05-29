@@ -80,12 +80,12 @@ window.App = window.App || {};
     const dayEl = document.getElementById("statDay");
     if (dayEl) dayEl.textContent = p.world_day || 1;
 
-    const v = p.vigor || 0, vm = p.vigor_max || 100;
+    const v = p.vigor || 0, vm = Math.max(p.vigor_max || 100, 1);
     document.getElementById("statVigor").textContent = v + "/" + vm;
     document.getElementById("barVigor").style.width =
       (v / vm * 100).toFixed(0) + "%";
 
-    const s = p.spirit || 0, sm = p.spirit_max || 100;
+    const s = p.spirit || 0, sm = Math.max(p.spirit_max || 100, 1);
     document.getElementById("statSpirit").textContent = s + "/" + sm;
     document.getElementById("barSpirit").style.width =
       (s / sm * 100).toFixed(0) + "%";
@@ -99,6 +99,7 @@ window.App = window.App || {};
       html += "<span class='inv-item' data-item=\"" + HtmlUtils.escape(k) + "\">" + HtmlUtils.escape(k) + "\u00d7" + HtmlUtils.escape(inv[k]) + "</span>";
     });
     const statInv = document.getElementById("statInv");
+    if (!statInv) return;
     if (html) {
       statInv.innerHTML = html;
     } else {
@@ -272,6 +273,7 @@ window.App = window.App || {};
       const targetName = target ? target.name : pt.target_map_id;
       const sx = parseInt(pt.to_x, 10);
       const sy = parseInt(pt.to_y, 10);
+      if (isNaN(sx) || isNaN(sy)) return '';
       return '<div class="portal-entry" onclick="App.moveTo('
         + sx + ',' + sy + ')">\u2197 \u5f80\u3010'
         + HtmlUtils.escape(targetName)

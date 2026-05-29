@@ -257,7 +257,7 @@ def apply_encounter(p: PlayerState, encounter: dict[str, Any]) -> None:
         cell = meta.get("cell")
         if not cell or cell[0] != p.map_id:
             # 也检查游走中的NPC
-            npc_pos = p.npc_positions.get(nid)
+            npc_pos = getattr(p, "npc_positions", {}).get(nid)
             if not npc_pos or npc_pos[0] != p.map_id:
                 continue
 

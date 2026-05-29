@@ -276,7 +276,7 @@ func talk_stream(npc_id: String, message: String, player_id: String = "") -> voi
 				var json := JSON.new()
 				if json.parse(payload) != OK:
 					continue
-				var d: Dictionary = json.data
+				var d = json.data if json.data is Dictionary else {}
 				if d.has("chunk"):
 					emit_signal("stream_chunk", d.chunk)
 				if d.has("error"):

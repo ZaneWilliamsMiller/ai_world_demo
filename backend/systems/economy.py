@@ -309,6 +309,8 @@ def apply_npc_trade(
         current = inv.get(name, 0)
         if current > 0:
             inv[name] = current - 1
+            if inv[name] <= 0:
+                del inv[name]
         else:
             continue
 
@@ -567,7 +569,7 @@ def use_player_item(p: "PlayerState", item_name: str) -> dict[str, object]:
     actual_spirit = apply_spirit_delta(p, spirit_delta)
 
     # 睡眠债变化
-    if sleep_debt_delta < 0:
+    if sleep_debt_delta != 0:
         p.sleep_debt = max(0, int(getattr(p, "sleep_debt", 0)) + sleep_debt_delta)
 
     # 从背包扣除

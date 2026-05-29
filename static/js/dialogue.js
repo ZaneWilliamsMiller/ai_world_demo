@@ -94,8 +94,8 @@ window.App = window.App || {};
             if (d.done) {
               receivedDone = true;
               if (d.player) {
-                var stateData = d.player;
-                if (d.npcs_here) stateData = { player: d.player, npcs_here: d.npcs_here };
+                var stateData = { player: d.player };
+                if (d.npcs_here) stateData.npcs_here = d.npcs_here;
                 App.updateUI(stateData);
               }
               if (!d.player) {

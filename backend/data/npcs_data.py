@@ -381,7 +381,7 @@ NPC_SEEDS: dict[str, list[str]] = {
 # 猎户 · 铁彀：野径与竹林出没，可卖兽皮、教追踪术
 # 赌徒 · 金满堂：渡口与黑店之间游走，开设赌局
 NPC_HABITS["xuanzhen"] = {"active": (5, 22), "home": ("world", "书院廊"), "frequent": [("world", "书院廊"), ("world", "寺廊"), ("world", "竹径")]}
-NPC_HABITS["tiegu"] = {"active": (4, 20), "home": ("world", "野径中"), "frequent": [("world", "野径中"), ("world", "竹林"), ("world", "桥口")], "wander_anchor_radius": 10}
+NPC_HABITS["tiegu"] = {"active": (4, 20), "home": ("world", "野径中"), "frequent": [("world", "野径中"), ("world", "竹径"), ("world", "桥口")], "wander_anchor_radius": 10}
 NPC_HABITS["jintang"] = {"active": (16, 28), "home": ("world", "黑店"), "frequent": [("world", "黑店"), ("world", "渡头")], "nocturnal": True}
 
 NPCS["xuanzhen"] = {
@@ -422,7 +422,10 @@ NPCS["jintang"] = {
     "cell": ("world", 70, 6),
     "wander_anchor_radius": 5,
     "wander_maps_whitelist": ("world", "world"),
-    "hidden": True,  # 默认不显示，需触发「赌局」事件才出现
+    "hidden": True,
+    "triggers_on_tile": "I",
+    "encounter_blurb": "赌局",
+    "encounter_user": "[际遇·系统指令] 过路客推门入黑店，却见角落里骰子声声——赌徒金满堂正等着下一只肥羊。请以第三方旁观口吻描写此刻场景，暗示玩家可赌钱、赌情报。中文 4~8 句</user_input>",
     "system": f"""你是江湖赌徒金满堂：骰子、牌九、马吊、猜拳——你样样通，也样样能出千。你在黑店与渡口之间讨生活，哪家的桌上都有你的影子。
 玩家可赌钱、赌情报、赌信物——赌注越大，你越不肯松手。
 你输了嘴上说「这一局不算」，心里却在盘算下一把怎么赢回来。

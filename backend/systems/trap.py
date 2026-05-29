@@ -224,7 +224,7 @@ def survival_action_delta(p: PlayerState, user_message: str) -> dict[str, Any]:
     tracker = p.item_use_tracker
     day_key = str(p.world_day)
 
-    if any(k in msg for k in ("吃干粮", "啃干粮", "干粮")) and int(p.inventory.get("干粮", 0)) > 0:
+    if any(k in msg for k in ("吃干粮", "啃干粮")) and int(p.inventory.get("干粮", 0)) > 0:
         p.inventory["干粮"] = max(0, int(p.inventory.get("干粮", 0)) - 1)
         if p.inventory["干粮"] <= 0:
             p.inventory.pop("干粮", None)
@@ -253,22 +253,25 @@ def survival_action_delta(p: PlayerState, user_message: str) -> dict[str, Any]:
             spirit += apply_spirit_delta(p, WILD_FRUIT_SPIRIT)
             note = "你在林地寻得野果,勉强充饥。"
     elif any(k in msg for k in ("睡", "歇息", "打盹", "合眼")):
-        rest_key = f"rest_{day_key}"
-        if tracker.get(rest_key, 0) >= REST_MAX_PER_DAY:
-            note = "今日已多次歇息,难以再入睡。"
+        if getattr(p, "move_locked", False):
+            note = "身处险局，无法安歇。"
         else:
-            tracker[rest_key] = tracker.get(rest_key, 0) + 1
-            safe = (ch in ("T", "Y")) or (p.map_id == "world" and SAFE_ZONE_X_RANGE[0] <= p.px <= SAFE_ZONE_X_RANGE[1] and SAFE_ZONE_Y_RANGE[0] <= p.py <= SAFE_ZONE_Y_RANGE[1])
-            if safe:
-                vigor += apply_vigor_delta(p, SAFE_REST_VIGOR)
-                spirit += apply_spirit_delta(p, SAFE_REST_SPIRIT)
-                p.sleep_debt = max(0, int(getattr(p, "sleep_debt", 0)) - SAFE_REST_SLEEP_DEBT)
-                note = "你在较安全处合眼调息,心气大幅回升。"
+            rest_key = f"rest_{day_key}"
+            if tracker.get(rest_key, 0) >= REST_MAX_PER_DAY:
+                note = "今日已多次歇息,难以再入睡。"
             else:
-                vigor += apply_vigor_delta(p, WILD_REST_VIGOR)
-                spirit += apply_spirit_delta(p, WILD_REST_SPIRIT)
-                p.sleep_debt = max(0, int(getattr(p, "sleep_debt", 0)) - WILD_REST_SLEEP_DEBT)
-                note = "荒野露宿,寒湿与警惕反噬了体力,只回了一点心气。"
+                tracker[rest_key] = tracker.get(rest_key, 0) + 1
+                safe = (ch in ("T", "Y")) or (p.map_id == "world" and SAFE_ZONE_X_RANGE[0] <= p.px <= SAFE_ZONE_X_RANGE[1] and SAFE_ZONE_Y_RANGE[0] <= p.py <= SAFE_ZONE_Y_RANGE[1])
+                if safe:
+                    vigor += apply_vigor_delta(p, SAFE_REST_VIGOR)
+                    spirit += apply_spirit_delta(p, SAFE_REST_SPIRIT)
+                    p.sleep_debt = max(0, int(getattr(p, "sleep_debt", 0)) - SAFE_REST_SLEEP_DEBT)
+                    note = "你在较安全处合眼调息,心气大幅回升。"
+                else:
+                    vigor += apply_vigor_delta(p, WILD_REST_VIGOR)
+                    spirit += apply_spirit_delta(p, WILD_REST_SPIRIT)
+                    p.sleep_debt = max(0, int(getattr(p, "sleep_debt", 0)) - WILD_REST_SLEEP_DEBT)
+                    note = "荒野露宿,寒湿与警惕反噬了体力,只回了一点心气。"
     elif any(k in msg for k in ("攀爬", "爬坡", "翻越", "跳崖", "下崖")):
         p.allow_steep_next_move = True
         spirit += apply_spirit_delta(p, -3)

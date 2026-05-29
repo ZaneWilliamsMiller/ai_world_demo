@@ -131,7 +131,7 @@ def update_npc_states_from_habits(p: PlayerState) -> dict[str, str]:
         a0, a1 = int(active_val[0]), int(active_val[1])
         a0_mod, a1_mod = a0 % 12, a1 % 12
 
-        if a0 <= a1:
+        if a0_mod <= a1_mod:
             in_active = (a0_mod <= sh <= a1_mod)
         else:
             in_active = (sh >= a0_mod or sh <= a1_mod)

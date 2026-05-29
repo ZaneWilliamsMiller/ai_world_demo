@@ -52,6 +52,7 @@ def advance_clock(p: "PlayerState", ticks: int = 1) -> None:
     """推进世界时钟。每次 tick = 一时辰；溢出转入下一日；附带可能的天气演替。"""
     if ticks <= 0:
         return
+    ticks = min(ticks, 24)
     import random
     old_day = int(p.world_day)
     for _ in range(ticks):

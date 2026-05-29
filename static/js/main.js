@@ -259,7 +259,7 @@ window.App = window.App || {};
     try {
       const data = await App.useItem(itemName);
       if (data) {
-        App.addMsg("system", data.message || "使用了 " + itemName);
+        App.addMsg("system", data.note || data.message || "使用了 " + itemName);
         if (data.player) App.updateUI(data);
       }
     } catch (e) {
@@ -273,7 +273,7 @@ window.App = window.App || {};
       App.addMsg("system", "正在休息...");
       const data = await App.rest();
       if (data) {
-        App.addMsg("system", data.message || "休息完毕");
+        App.addMsg("system", data.note || data.message || "休息完毕");
         if (data.player) App.updateUI(data);
       }
     } catch (e) {

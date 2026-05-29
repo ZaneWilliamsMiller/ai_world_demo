@@ -189,6 +189,8 @@ async def reflect(
         )
         data = json.loads(raw)
         insights = data.get("insights", [])
+        if not isinstance(insights, list):
+            insights = []
     except Exception as e:  # noqa: BLE001
         log.warning("reflect LLM failed for %s: %s", npc_id, e)
         mind.importance_since_reflect *= 0.5
@@ -336,7 +338,9 @@ async def cross_reflect(
     for m in obs:
         text_lower = m.text.lower()
         for rel in own_rels:
-            tid = rel["target"]
+            tid = rel.get("target")
+            if not tid:
+                continue
             tname = (NPCS.get(tid, {}).get("name") or "").lower()
             tshort = (NPCS.get(tid, {}).get("short") or "").lower()
             if not tname:
@@ -409,6 +413,8 @@ async def cross_reflect(
             )
             data = json.loads(raw)
             social_insights = data.get("insights", [])
+            if not isinstance(social_insights, list):
+                social_insights = []
         except Exception as e:
             log.warning("cross_reflect LLM failed for %s->%s: %s",
                         npc_id, target_id, e)
@@ -469,8 +475,10 @@ async def plan_day(
             response_format={"type": "json_object"}
         )
         data = json.loads(raw)
-        summary = data.get("summary", "")[:60]
+        summary = str(data.get("summary", ""))[:60]
         by_shichen = data.get("schedule", {})
+        if not isinstance(by_shichen, dict):
+            by_shichen = {}
     except Exception as e:  # noqa: BLE001
         log.warning("plan_day LLM failed for %s: %s", npc_id, e)
         mind.plan_day = int(world_day)

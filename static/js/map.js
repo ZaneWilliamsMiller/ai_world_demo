@@ -640,9 +640,7 @@ window.App = window.App || {};
   // ─── 步行动画
   App.moveTo = async function(tx, ty) {
     if (App._isMoving) return;
-    App._isMoving = true;
     
-    // 移动期间清除悬停高亮，防止高亮残留造成视觉干扰
     _hoverX = -1;
     _hoverY = -1;
     
