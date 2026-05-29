@@ -577,6 +577,7 @@ class TestCachingBehavior:
         things = _get_thing_keywords()
         all_kw = _get_all_entity_keywords()
         cache = _mod._DYNAMIC_ENTITIES_CACHED
+        assert cache is not None
         assert persons is cache[0]
         assert places is cache[1]
         assert things is cache[2]

@@ -141,17 +141,18 @@ def _close_client_sync() -> None:
         inst = LLMClientManager._instance
         if inst is None:
             return
-        if inst._client and not inst._client.is_closed:
+        cli = inst._client
+        if cli and not cli.is_closed:
             try:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
                     import concurrent.futures
                     with concurrent.futures.ThreadPoolExecutor() as pool:
-                        pool.submit(lambda: asyncio.run(inst._client.aclose())).result(5)
+                        pool.submit(lambda: asyncio.run(cli.aclose())).result(5)
                     return
             except RuntimeError:
                 pass
-            asyncio.run(inst._client.aclose())
+            asyncio.run(cli.aclose())
         inst._client = None
         inst._custom_clients.clear()
     except Exception:
@@ -395,7 +396,7 @@ async def chat_completion(
             llm_api_key or settings.llm_api_key,
         )
         max_retries = 2
-        last_exc: Exception | None = None
+        last_exc: Exception = RuntimeError("unreachable")
         for attempt in range(max_retries + 1):
             r = None
             try:
