@@ -30,5 +30,9 @@ router.include_router(test_router)
 
 @router.get("/api/health")
 async def health() -> dict[str, str]:
-    from backend.config import settings
-    return {"status": "ok", "llm_configured": str(bool(settings.llm_api_key and settings.llm_base_url)).lower(), "world": WORLD_NAME}
+    try:
+        from backend.config import settings
+        llm_ok = bool(settings.llm_api_key and settings.llm_base_url)
+    except Exception:
+        llm_ok = False
+    return {"status": "ok", "llm_configured": str(llm_ok).lower(), "world": WORLD_NAME}

@@ -287,14 +287,12 @@ def format_npc_inventory(p: PlayerState, npc_id: str) -> str:
 
 def apply_npc_trade(
     p: PlayerState, npc_id: str,
-    items_given_by_player: list[str],   # 玩家交出的物（= NPC 得到）
-    items_given_by_npc: list[str],      # NPC 交出的物（= 玩家得到）
-) -> None:
+    items_given_by_player: list[str],
+    items_given_by_npc: list[str],
+) -> list[str]:
     """在 apply_npc_reply 之后调用,同步 NPC 货柜的增减。
 
-    注意：
-    - items_given_by_player = parsed.items_lose（玩家失去 = NPC 获得）
-    - items_given_by_npc    = parsed.items_gain（玩家获得 = NPC 失去）
+    返回: NPC 实际成功给出的物品列表（库存不足的会被跳过）。
     """
     inv = p.npc_inventories.get(npc_id)
     if inv is None:
@@ -318,12 +316,13 @@ def apply_npc_trade(
     if actually_given:
         add_items(p, actually_given)
 
-    # NPC 得到的物（从玩家收的）
     for raw in items_given_by_player:
         name = (raw or "").strip().strip("「」『」\"'")[:MAX_ITEM_NAME_LEN]
         if not name:
             continue
         inv[name] = inv.get(name, 0) + 1
+
+    return actually_given
 
 
 def format_economy_context(p: PlayerState, vendor_npc_id: str | None = None) -> str:

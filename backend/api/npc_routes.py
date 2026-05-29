@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import random
 import time
 import traceback
 from typing import Any
@@ -577,6 +578,7 @@ from backend.systems.bounty_board import (
     format_bounty_board,
     refresh_bounties,
 )
+from backend.systems.constants import BOUNTY_COUNT_RANGE
 
 class RefreshBountyBody(BaseModel):
     player_id: str = Field(..., min_length=1, max_length=64)
@@ -598,7 +600,7 @@ async def bounty_refresh(body: RefreshBountyBody) -> dict[str, Any]:
     async with p.lock:
         refresh_bounties(p)
         if not p.bounties:
-            p.bounties = generate_bounties(p, count=3)
+            p.bounties = generate_bounties(p, count=random.randint(*BOUNTY_COUNT_RANGE))
         board_text = format_bounty_board(p)
         return {"bounties": p.bounties, "board_text": board_text, "player": _player_public(p)}
 

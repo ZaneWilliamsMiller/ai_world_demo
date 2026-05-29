@@ -49,6 +49,16 @@ class SessionStore:
             defaults: dict[str, Any] = {
                 "favor": dict,
                 "rumors": list,
+                "bounties": list,
+                "active_bounty": dict,
+                "completed_bounties": list,
+                "last_bounty_refresh_day": int,
+                "last_talk_npc_id": None,
+                "last_talk_message": None,
+                "last_move_map_id": None,
+                "last_move_px": None,
+                "last_move_py": None,
+                "item_use_tracker": dict,
                 "move_locked": False,
                 "move_lock_npc_id": None,
                 "trap_reason": None,
@@ -80,6 +90,15 @@ class SessionStore:
             for attr, default in defaults.items():
                 if not hasattr(st, attr):
                     setattr(st, attr, default() if isinstance(default, type) else default)
+
+            for attr in ("bounties", "completed_bounties", "rumors", "events"):
+                val = getattr(st, attr, None)
+                if val is None:
+                    setattr(st, attr, [])
+            for attr in ("favor", "inventory", "minds", "npc_positions", "npc_inventories", "npc_inventory_restock_day", "npc_states", "item_use_tracker"):
+                val = getattr(st, attr, None)
+                if val is None:
+                    setattr(st, attr, {})
 
             if int(getattr(st, "vigor", 0)) < 0:
                 st.vigor = 0

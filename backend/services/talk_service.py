@@ -315,7 +315,8 @@ def _apply_parsed_effects(
     items_added = []
     items_lost = remove_items(p, parsed.items_lose)
 
-    apply_npc_trade(p, npc_id, parsed.items_lose, parsed.items_gain)
+    actually_received = apply_npc_trade(p, npc_id, parsed.items_lose, parsed.items_gain)
+    items_added.extend(actually_received)
 
     if parsed.rep_delta:
         apply_rep_delta(p, parsed.rep_delta.model_dump())

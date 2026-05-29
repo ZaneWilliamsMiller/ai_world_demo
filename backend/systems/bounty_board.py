@@ -95,15 +95,12 @@ def _random_target_npc(p: PlayerState) -> str | None:
 def _random_location(p: PlayerState) -> tuple[str, str, int, int]:
     """随机选一个地图格作为地点，返回 (map_id, loc_name, px, py)。"""
     map_id = p.map_id
-    maps_data = MAPS.get(map_id, {})
-    locations = maps_data.get("locations", [])
-    if locations:
-        loc = random.choice(locations)
-        loc_name = loc["name"]
-        # 查 MAP_LOCATIONS 获取坐标
-        coords = MAP_LOCATIONS.get(map_id, {}).get(loc_name, (10, 14))
+    locs = MAP_LOCATIONS.get(map_id, {})
+    if locs:
+        loc_name = random.choice(list(locs.keys()))
+        coords = locs[loc_name]
         return (map_id, loc_name, coords[0], coords[1])
-    return (map_id, "市口", 13, 13)
+    return (map_id, "市口", 25, 28)
 
 
 def generate_bounties(p: PlayerState, count: int = 3) -> list[dict[str, Any]]:
@@ -137,12 +134,15 @@ def generate_bounties(p: PlayerState, count: int = 3) -> list[dict[str, Any]]:
         dest_coords = MAP_LOCATIONS.get(map_id, {}).get(dest_name, (10, 16))
 
         # 对于 location_npc：选一个在当前地点活跃的 NPC
-        location_npc_id = target_id  # 兜底用目标 NPC
+        location_npc_id = target_id
+        npc_pos_data = getattr(p, "npc_positions", {})
         for nid, m in NPCS.items():
             if m.get("hidden") or nid == "jiang":
                 continue
-            location_npc_id = nid
-            break
+            pos = npc_pos_data.get(nid)
+            if pos and len(pos) >= 3 and pos[0] == map_id:
+                location_npc_id = nid
+                break
         location_npc_meta = NPCS.get(location_npc_id, {})
         location_npc_name = location_npc_meta.get("name", location_npc_id)
 

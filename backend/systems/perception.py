@@ -74,7 +74,7 @@ def perception_scan(p: PlayerState) -> dict[str, Any] | None:
             if dx == 0 and dy == 0:
                 continue
             nx, ny = p.px + dx, p.py + dy
-            if not (0 <= ny < len(rows) and 0 <= nx < len(rows[0])):
+            if not (0 <= ny < len(rows) and 0 <= nx < len(rows[ny])):
                 continue
             ch = rows[ny][nx]
             dist = abs(dx) + abs(dy)
@@ -154,7 +154,9 @@ def tile_forced_encounter(p: PlayerState) -> dict[str, Any] | None:
         if not meta.get("hidden"):
             continue
         cell = meta.get("cell")
-        if not cell or cell[0] != p.map_id or cell[1] != p.px or cell[2] != p.py:
+        if not cell or not isinstance(cell, (list, tuple)) or len(cell) < 3:
+            continue
+        if cell[0] != p.map_id or cell[1] != p.px or cell[2] != p.py:
             continue
         need = meta.get("triggers_on_tile")
         if need and ch != need:

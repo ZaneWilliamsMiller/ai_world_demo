@@ -121,8 +121,9 @@ def _build_dynamic_entities() -> tuple[tuple[str, ...], tuple[str, ...], tuple[s
                 target = portal.get("target_name", "") or portal.get("name", "")
                 if target and len(target) >= 2:
                     places.add(target)
-    except Exception:
-        pass
+    except Exception as e:
+        import logging as _ent_log
+        _ent_log.getLogger("entities").error("_build_dynamic_entities failed: %s", e, exc_info=True)
 
     _HARDCODED_PERSONS = (
         "掌柜", "牙人", "皂隶", "镖头", "黑店", "匪首", "船家", "阿泠",
