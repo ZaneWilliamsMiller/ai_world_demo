@@ -399,42 +399,38 @@ window.App = window.App || {};
     }
 
     var mod = modules.find(function(m) { return m.id === moduleId; });
-    if (mod) {
-      mod.tests.forEach(function(t) {
-        var statusEl = document.getElementById('rowstatus-' + safeId(t.name));
-        if (statusEl) {
-          statusEl.className = 'test-row-status status-running';
-          statusEl.textContent = '\u23f3';
-        }
-      });
+    if (!mod) {
+      badge.className = 'module-badge badge-error';
+      badge.textContent = '\u274c \u6a21\u5757\u672a\u627e\u5230';
+      if (!fromRunAll) { btn.disabled = false; btn.textContent = '\u25b6 \u4e00\u952e\u6d4b\u8bd5'; }
+      return;
     }
 
-    stats.running++;
-    updateStats();
+    var startTime = Date.now();
+    var modPassed = 0, modFailed = 0, modSkipped = 0;
 
-    try {
-      var startTime = Date.now();
-      var resp = await fetch(apiBase() + '/tests/run-module/' + moduleId, { method: 'POST' });
+    for (var i = 0; i < mod.tests.length; i++) {
+      var t = mod.tests[i];
+      var tsid = safeId(t.name);
+      var statusEl = document.getElementById('rowstatus-' + tsid);
+      var resultEl = document.getElementById('rowresult-' + tsid);
+      var outputEl = document.getElementById('rowout-' + tsid);
 
-      if (!resp.ok) {
-        var errText = '';
-        try { var errData = await resp.json(); errText = errData.detail || resp.statusText; } catch(e) { errText = resp.statusText; }
-        throw new Error(errText);
+      if (statusEl) {
+        statusEl.className = 'test-row-status status-running';
+        statusEl.textContent = '\u23f3 \u8fd0\u884c\u4e2d';
       }
+      if (resultEl) resultEl.textContent = '\u23f3 \u6b63\u5728\u6267\u884c...';
+      if (outputEl) outputEl.classList.add('show');
 
-      var data = await resp.json();
-      var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      badge.textContent = '\u23f3 ' + (i + 1) + '/' + mod.tests.length + ' \u8fd0\u884c\u4e2d';
 
-      var modPassed = 0, modFailed = 0, modSkipped = 0;
-
-      data.results.forEach(function(r) {
-        testResults[r.test_name] = r;
-
-        var rsid = safeId(r.test_name);
-        var statusEl = document.getElementById('rowstatus-' + rsid);
-        var resultEl = document.getElementById('rowresult-' + rsid);
-        var outputEl = document.getElementById('rowout-' + rsid);
+      try {
+        var resp = await fetch(apiBase() + '/tests/run/' + t.name, { method: 'POST' });
+        var r = await resp.json();
         var rElapsed = r.elapsed ? r.elapsed.toFixed(1) : '?';
+
+        testResults[t.name] = r;
 
         if (r.success) {
           modPassed += r.cases_passed || 0;
@@ -459,37 +455,38 @@ window.App = window.App || {};
         }
 
         if (resultEl) {
-          resultEl.textContent = formatOutput(r.test_name, r, rElapsed);
-          if (outputEl && (verbose || !r.success || formatOutput(r.test_name, r, rElapsed).indexOf('\n') > 0)) {
-            outputEl.classList.add('show');
-          }
+          resultEl.textContent = formatOutput(t.name, r, rElapsed);
         }
-      });
+        if (outputEl && (verbose || !r.success || (resultEl && resultEl.textContent.indexOf('\n') > 0))) {
+          outputEl.classList.add('show');
+        }
 
-      var modTotal = modPassed + modFailed + modSkipped;
-      var badgeText = modTotal + '\u603b ' + modPassed + '\u901a\u8fc7';
-      if (modFailed > 0) badgeText += ' ' + modFailed + '\u5931\u8d25';
-      if (modSkipped > 0) badgeText += ' ' + modSkipped + '\u8df3\u8fc7';
-      badgeText += ' (' + elapsed + 's)';
-
-      if (modFailed === 0) {
-        badge.className = 'module-badge badge-success';
-        badge.textContent = '\u2705 ' + badgeText;
-      } else {
-        badge.className = 'module-badge badge-error';
-        badge.textContent = '\u274c ' + badgeText;
-      }
-
-    } catch (err) {
-      badge.className = 'module-badge badge-error';
-      badge.textContent = '\u274c \u8fd0\u884c\u5931\u8d25: ' + err.message;
-      if (!fromRunAll) {
+      } catch (err) {
+        if (statusEl) {
+          statusEl.className = 'test-row-status status-error';
+          statusEl.textContent = '\u274c \u9519\u8bef';
+        }
+        if (resultEl) resultEl.textContent = '\u8bf7\u6c42\u5931\u8d25: ' + err.message;
         stats.error++;
       }
+
+      updateStats();
     }
 
-    stats.running--;
-    updateStats();
+    var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    var modTotal = modPassed + modFailed + modSkipped;
+    var badgeText = modTotal + '\u603b ' + modPassed + '\u901a\u8fc7';
+    if (modFailed > 0) badgeText += ' ' + modFailed + '\u5931\u8d25';
+    if (modSkipped > 0) badgeText += ' ' + modSkipped + '\u8df3\u8fc7';
+    badgeText += ' (' + elapsed + 's)';
+
+    if (modFailed === 0) {
+      badge.className = 'module-badge badge-success';
+      badge.textContent = '\u2705 ' + badgeText;
+    } else {
+      badge.className = 'module-badge badge-error';
+      badge.textContent = '\u274c ' + badgeText;
+    }
 
     if (!fromRunAll) {
       btn.disabled = false;
@@ -509,6 +506,7 @@ window.App = window.App || {};
     for (var i = 0; i < modules.length; i++) {
       var mod = modules[i];
       var modBtn = document.getElementById('modbtn-' + safeId(mod.id));
+      btn.textContent = '\u23f3 ' + (i + 1) + '/' + modules.length + ' \u6a21\u5757';
       await runModule(mod.id, modBtn, true);
     }
 
@@ -528,35 +526,103 @@ window.App = window.App || {};
     statusEl.className = 'test-row-status status-running';
     statusEl.textContent = '\u23f3 \u8c03\u7528LLM...';
     outputEl.classList.add('show');
-    resultEl.textContent = '\u6b63\u5728\u4e0eNPC\u5bf9\u8bdd\uff0c\u8bf7\u7b49\u5f85...';
+    resultEl.textContent = '\u23f3 \u6b63\u5728\u4e0eNPC\u5bf9\u8bdd...\n';
+
+    var dialogueLines = [];
 
     try {
-      var resp = await fetch(apiBase() + '/tests/interactive/run/' + testName, { method: 'POST' });
-      var data = await resp.json();
-      var elapsed = data.elapsed ? data.elapsed.toFixed(1) : '?';
+      var resp = await fetch(apiBase() + '/tests/interactive/stream/' + testName);
+      var reader = resp.body.getReader();
+      var decoder = new TextDecoder();
+      var buffer = '';
 
-      interactiveResults[testName] = data;
+      while (true) {
+        var chunk = await reader.read();
+        if (chunk.done) break;
+        buffer += decoder.decode(chunk.value, { stream: true });
 
-      if (data.success) {
-        statusEl.className = 'test-row-status status-success';
-        statusEl.textContent = '\u2705 ' + elapsed + 's';
-        interactiveStats.success++;
-      } else {
-        statusEl.className = 'test-row-status status-error';
-        statusEl.textContent = '\u274c ' + elapsed + 's';
-        interactiveStats.failed++;
+        var lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i].trim();
+          if (line.indexOf('data: ') !== 0) continue;
+          var jsonStr = line.substring(6);
+          try {
+            var data = JSON.parse(jsonStr);
+          } catch (e) { continue; }
+
+          if (data.__error__) {
+            resultEl.textContent += '\n\u274c ' + data.__error__;
+            continue;
+          }
+
+          if (data.test_name !== undefined && data.success !== undefined) {
+            var elapsed = data.elapsed ? data.elapsed.toFixed(1) : '?';
+            interactiveResults[testName] = data;
+
+            if (data.success) {
+              statusEl.className = 'test-row-status status-success';
+              statusEl.textContent = '\u2705 ' + elapsed + 's';
+              interactiveStats.success++;
+            } else {
+              statusEl.className = 'test-row-status status-error';
+              statusEl.textContent = '\u274c ' + elapsed + 's';
+              interactiveStats.failed++;
+            }
+
+            var fullText = '';
+            if (dialogueLines.length > 0) {
+              fullText += '\u2501\u2501\u2501 \u5bf9\u8bdd\u8bb0\u5f55 \u2501\u2501\u2501\n' + dialogueLines.join('\n') + '\n\n';
+            }
+            fullText += '\u2501\u2501\u2501 \u6d4b\u8bd5\u7ed3\u679c \u2501\u2501\u2501\n';
+            fullText += data.output || (data.success ? '\u2705 \u901a\u8fc7' : '\u274c \u5931\u8d25');
+            resultEl.textContent = fullText;
+            updateInteractiveStats();
+            continue;
+          }
+
+          if (data.npc || data.player) {
+            var npcName = data.npc_name || data.npc || '?';
+            var playerMsg = data.player || '';
+            var reply = data.reply || '';
+            var fav = data.favor_delta || 0;
+            var coin = data.coin_delta || 0;
+
+            var lineText = '\n\u3010' + npcName + '\u3011\u4f60\uff1a' + playerMsg;
+            resultEl.textContent += lineText + '\n';
+            dialogueLines.push(lineText);
+
+            statusEl.textContent = '\u23f3 ' + npcName + '\u56de\u590d\u4e2d...';
+
+            await new Promise(function(resolve) { setTimeout(resolve, 50); });
+
+            var replyText = '\u3010' + npcName + '\u3011' + reply;
+            resultEl.textContent += replyText + '\n';
+            dialogueLines.push(replyText);
+
+            if (fav !== 0 || coin !== 0) {
+              var changes = [];
+              if (fav !== 0) changes.push('\u597d\u611f' + (fav > 0 ? '+' : '') + fav);
+              if (coin !== 0) changes.push('\u91d1\u94b1' + (coin > 0 ? '+' : '') + coin);
+              var changeText = '  \u2192 ' + changes.join(', ');
+              resultEl.textContent += changeText + '\n';
+              dialogueLines.push(changeText);
+            }
+
+            resultEl.scrollTop = resultEl.scrollHeight;
+          }
+        }
       }
-
-      resultEl.textContent = formatInteractiveOutput(data, elapsed);
 
     } catch (err) {
       statusEl.className = 'test-row-status status-error';
       statusEl.textContent = '\u274c \u9519\u8bef';
-      resultEl.textContent = '\u8bf7\u6c42\u5931\u8d25: ' + err.message;
+      resultEl.textContent += '\n\u8bf7\u6c42\u5931\u8d25: ' + err.message;
       interactiveStats.failed++;
+      updateInteractiveStats();
     }
 
-    updateInteractiveStats();
     btn.disabled = false;
     btn.textContent = '\u25b6';
   }
@@ -579,70 +645,48 @@ window.App = window.App || {};
       if (expandBtn) expandBtn.textContent = '\u25bc';
     }
 
-    try {
-      var startTime = Date.now();
-      var resp = await fetch(apiBase() + '/tests/interactive/run-module/' + moduleId, { method: 'POST' });
-
-      if (!resp.ok) {
-        var errText = '';
-        try { var errData = await resp.json(); errText = errData.detail || resp.statusText; } catch(e) { errText = resp.statusText; }
-        throw new Error(errText);
-      }
-
-      var data = await resp.json();
-      var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-
-      var modPassed = 0, modFailed = 0;
-
-      data.results.forEach(function(r) {
-        interactiveResults[r.test_name] = r;
-
-        var rsid = safeId(r.test_name);
-        var statusEl = document.getElementById('irowstatus-' + rsid);
-        var resultEl = document.getElementById('irowresult-' + rsid);
-        var outputEl = document.getElementById('irowout-' + rsid);
-        var rElapsed = r.elapsed ? r.elapsed.toFixed(1) : '?';
-
-        if (r.success) {
-          modPassed++;
-          interactiveStats.success++;
-          if (statusEl) {
-            statusEl.className = 'test-row-status status-success';
-            statusEl.textContent = '\u2705 ' + rElapsed + 's';
-          }
-        } else {
-          modFailed++;
-          interactiveStats.failed++;
-          if (statusEl) {
-            statusEl.className = 'test-row-status status-error';
-            statusEl.textContent = '\u274c ' + rElapsed + 's';
-          }
-        }
-
-        if (resultEl) {
-          resultEl.textContent = formatInteractiveOutput(r, rElapsed);
-          if (outputEl) outputEl.classList.add('show');
-        }
-      });
-
-      var badgeText = data.total + '\u603b ' + modPassed + '\u901a\u8fc7';
-      if (modFailed > 0) badgeText += ' ' + modFailed + '\u5931\u8d25';
-      badgeText += ' (' + elapsed + 's)';
-
-      if (modFailed === 0) {
-        badge.className = 'module-badge badge-success';
-        badge.textContent = '\u2705 ' + badgeText;
-      } else {
-        badge.className = 'module-badge badge-error';
-        badge.textContent = '\u274c ' + badgeText;
-      }
-
-    } catch (err) {
+    var mod = interactiveModules.find(function(m) { return m.id === moduleId; });
+    if (!mod) {
       badge.className = 'module-badge badge-error';
-      badge.textContent = '\u274c \u8fd0\u884c\u5931\u8d25: ' + err.message;
+      badge.textContent = '\u274c \u6a21\u5757\u672a\u627e\u5230';
+      if (!fromRunAll) { btn.disabled = false; btn.textContent = '\u25b6 \u4e00\u952e\u6d4b\u8bd5'; }
+      return;
     }
 
-    updateInteractiveStats();
+    var startTime = Date.now();
+    var modPassed = 0, modFailed = 0;
+
+    for (var i = 0; i < mod.tests.length; i++) {
+      var t = mod.tests[i];
+      badge.textContent = '\u23f3 ' + (i + 1) + '/' + mod.tests.length + ' \u8fd0\u884c\u4e2d';
+
+      var tBtn = document.getElementById('irowbtn-' + safeId(t.name));
+      if (tBtn) {
+        await runInteractiveSingleTest(t.name, tBtn);
+      }
+
+      if (interactiveResults[t.name]) {
+        if (interactiveResults[t.name].success) {
+          modPassed++;
+        } else {
+          modFailed++;
+        }
+      }
+    }
+
+    var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    var total = mod.tests.length;
+    var badgeText = total + '\u603b ' + modPassed + '\u901a\u8fc7';
+    if (modFailed > 0) badgeText += ' ' + modFailed + '\u5931\u8d25';
+    badgeText += ' (' + elapsed + 's)';
+
+    if (modFailed === 0) {
+      badge.className = 'module-badge badge-success';
+      badge.textContent = '\u2705 ' + badgeText;
+    } else {
+      badge.className = 'module-badge badge-error';
+      badge.textContent = '\u274c ' + badgeText;
+    }
 
     if (!fromRunAll) {
       btn.disabled = false;
@@ -662,6 +706,7 @@ window.App = window.App || {};
     for (var i = 0; i < interactiveModules.length; i++) {
       var mod = interactiveModules[i];
       var modBtn = document.getElementById('imodbtn-' + safeId(mod.id));
+      btn.textContent = '\u23f3 ' + (i + 1) + '/' + interactiveModules.length + ' \u6a21\u5757';
       await runInteractiveModule(mod.id, modBtn, true);
     }
 
@@ -696,15 +741,45 @@ window.App = window.App || {};
   }
 
   function formatInteractiveOutput(data, elapsed) {
-    if (interactiveVerbose) {
-      return (data.success ? '\u2705' : '\u274c') + ' ' + (data.test_name || '') + ' (' + elapsed + 's)\n\n' + data.output;
+    var dialogueLog = data.dialogue_log || [];
+    var dialogueHtml = '';
+
+    if (dialogueLog.length > 0) {
+      dialogueHtml += '\n\u2501\u2501\u2501 \u5bf9\u8bdd\u8bb0\u5f55 \u2501\u2501\u2501\n';
+      for (var i = 0; i < dialogueLog.length; i++) {
+        var entry = dialogueLog[i];
+        var npcName = entry.npc_name || entry.npc || '?';
+        var playerMsg = entry.player || '';
+        var reply = entry.reply || '';
+        var fav = entry.favor_delta || 0;
+        var coin = entry.coin_delta || 0;
+
+        dialogueHtml += '\n\u3010' + npcName + '\u3011\u4f60\uff1a' + playerMsg + '\n';
+        dialogueHtml += '\u3010' + npcName + '\u3011' + reply + '\n';
+        if (fav !== 0 || coin !== 0) {
+          var changes = [];
+          if (fav !== 0) changes.push('\u597d\u611f' + (fav > 0 ? '+' : '') + fav);
+          if (coin !== 0) changes.push('\u91d1\u94b1' + (coin > 0 ? '+' : '') + coin);
+          dialogueHtml += '  \u2192 ' + changes.join(', ') + '\n';
+        }
+      }
+      dialogueHtml += '\n';
     }
+
+    if (interactiveVerbose) {
+      return (data.success ? '\u2705' : '\u274c') + ' ' + (data.test_name || '') + ' (' + elapsed + 's)\n' + dialogueHtml + data.output;
+    }
+
     if (data.success) {
+      if (dialogueHtml) {
+        return '\u2705 \u901a\u8fc7 (' + elapsed + 's)\n' + dialogueHtml;
+      }
       return '\u2705 \u901a\u8fc7 (' + elapsed + 's)';
     }
+
     var output = data.output || '';
-    var lines = output.trim().split('\n');
     var firstFail = '';
+    var lines = output.trim().split('\n');
     for (var i = 0; i < lines.length; i++) {
       if (lines[i].indexOf('FAIL:') >= 0 || lines[i].indexOf('ERROR:') >= 0) {
         firstFail = lines[i].trim();
@@ -712,9 +787,9 @@ window.App = window.App || {};
       }
     }
     if (firstFail) {
-      return '\u274c ' + firstFail;
+      return '\u274c ' + firstFail + '\n' + dialogueHtml;
     }
-    return '\u274c \u5931\u8d25 (' + elapsed + 's)\n' + output.substring(0, 200);
+    return '\u274c \u5931\u8d25 (' + elapsed + 's)\n' + dialogueHtml + output.substring(0, 200);
   }
 
   function extractSummary(output) {

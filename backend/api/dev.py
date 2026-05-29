@@ -15,6 +15,7 @@ import unittest
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from backend.config import settings
@@ -360,6 +361,7 @@ class InteractiveTestResult(BaseModel):
     npc_reply: str = ""
     favor_delta: int = 0
     coin_delta: int = 0
+    dialogue_log: list[dict] = []
 
 
 class InteractiveModuleResult(BaseModel):
@@ -471,11 +473,36 @@ async def _run_interactive_single(test_path: str) -> InteractiveTestResult:
 
             output = "\n".join(output_lines) if output_lines else f"Ran {result.testsRun} tests OK"
 
+            from tests.interactive.conftest import InteractiveClient as _IC
+            dialogue_log = _IC.get_dialogue_log()
+
+            dialogue_summary = ""
+            for entry in dialogue_log:
+                npc_name = entry.get("npc_name", entry.get("npc", "?"))
+                player_msg = entry.get("player", "")
+                reply = entry.get("reply", "")
+                fav = entry.get("favor_delta", 0)
+                coin = entry.get("coin_delta", 0)
+                dialogue_summary += f"\n【{npc_name}】你：{player_msg}\n"
+                dialogue_summary += f"【{npc_name}】{reply}\n"
+                if fav != 0 or coin != 0:
+                    changes = []
+                    if fav != 0:
+                        changes.append(f"好感{'+'if fav>0 else ''}{fav}")
+                    if coin != 0:
+                        changes.append(f"金钱{'+'if coin>0 else ''}{coin}")
+                    dialogue_summary += f"  → {', '.join(changes)}\n"
+
+            full_output = output
+            if dialogue_summary:
+                full_output = "━━━ 对话记录 ━━━" + dialogue_summary + "\n━━━ 测试结果 ━━━\n" + output
+
             return InteractiveTestResult(
                 test_name=test_path,
                 success=result.wasSuccessful(),
-                output=output,
+                output=full_output,
                 elapsed=elapsed,
+                dialogue_log=dialogue_log,
             )
         except Exception as e:
             return InteractiveTestResult(
@@ -514,6 +541,67 @@ async def run_interactive_test(test_path: str):
 
     async with _run_lock:
         return await _run_interactive_single(test_path)
+
+
+@router.get("/interactive/stream/{test_path:path}")
+async def stream_interactive_test(test_path: str):
+    if ".." in test_path or not test_path.startswith("interactive/"):
+        raise HTTPException(400, "无效的交互测试路径")
+    test_file = TESTS_DIR / test_path
+    if not test_file.resolve().is_relative_to(TESTS_DIR.resolve()):
+        raise HTTPException(403, "路径越界")
+    if not test_file.exists():
+        raise HTTPException(404, f"测试 {test_path} 不存在")
+
+    if _run_lock.locked():
+        raise HTTPException(429, "已有测试正在运行，请稍后再试")
+
+    queue: asyncio.Queue = asyncio.Queue()
+    loop = asyncio.get_event_loop()
+
+    def _on_entry(entry: dict):
+        try:
+            loop.call_soon_threadsafe(queue.put_nowait, entry)
+        except Exception:
+            pass
+
+    async def _run_and_queue():
+        from tests.interactive.conftest import InteractiveClient as _IC
+        _IC._on_dialogue = _on_entry
+        try:
+            async with _run_lock:
+                result = await _run_interactive_single(test_path)
+            await queue.put({"__done__": True, "result": result.dict()})
+        except Exception as e:
+            await queue.put({"__done__": True, "result": {
+                "test_name": test_path, "success": False,
+                "output": traceback.format_exc(), "elapsed": 0.0,
+                "dialogue_log": [],
+            }})
+        finally:
+            _IC._on_dialogue = None
+
+    async def _event_stream():
+        task = asyncio.create_task(_run_and_queue())
+        try:
+            while True:
+                try:
+                    item = await asyncio.wait_for(queue.get(), timeout=120.0)
+                except asyncio.TimeoutError:
+                    yield f"data: {__import__('json').dumps({'__error__': '超时'})}\n\n"
+                    break
+
+                if isinstance(item, dict) and item.get("__done__"):
+                    result = item["result"]
+                    yield f"data: {__import__('json').dumps(result)}\n\n"
+                    break
+                else:
+                    yield f"data: {__import__('json').dumps(item)}\n\n"
+        finally:
+            if not task.done():
+                task.cancel()
+
+    return StreamingResponse(_event_stream(), media_type="text/event-stream")
 
 
 @router.post("/interactive/run-module/{module_id:path}")

@@ -24,7 +24,7 @@
 - **00:45 Prompt Cache架构+简历生成** (task-artifact-20260523-0045): 实现Prompt Cache架构——将NPC对话system message拆分为静态可缓存层（占60-70%）和动态上下文层，同一NPC连续对话静态层命中缓存
 - **00:57 NPC情绪自然衰减** (task-artifact-20260523-0057): 将mood_decay_tick接入游戏循环（update_npc_states_from_habits），NPC情绪随时间自然向中性回归，深夜唤醒度下降
 - **01:56 前端布局优化** (task-artifact-20260523-0156): 左侧栏7个分组默认折叠，右侧栏新增折叠按钮和容器，toggle切换collapsed类
-- **02:25 API Key配置+行走Bug修复** (task-artifact-20260523-0225): 切换LLM API至Paratera平台（DeepSeek-V4-Pro），修复core.py any()误用导致Move 500错误
+- **02:25 API Key配置+行走Bug修复** (task-artifact-20260523-0225): 切换LLM API至新平台，修复core.py any()误用导致Move 500错误
 - **02:49 迭代记录体系+Cron优化** (task-artifact-20260523-0249): 创建docs/iterations/目录和PROJECT_STRUCTURE.md，定时任务频率从2h改为6h，新增迭代记录写入和announce交付
 - **02:50 前端交互优化** (2026-05-23_0250): WASD手动移动+自动寻路双模式，格子点击上下文菜单（寻路/打探），向风闻子打探功能，动画加速47%，奇遇后台异步化（11s→瞬时）
 - **04:02 A-Mem顿悟崩溃修复** (task-artifact-20260523-0402 / 2026-05-23_0402): 修复memory.py中log变量未定义导致A-Mem顿悟触发NameError崩溃

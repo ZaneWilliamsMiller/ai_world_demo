@@ -11,7 +11,7 @@
 - 新增：Godot 前端、重构后的 Web 前端、9+ 测试文件、auto_test.py
 
 #### 2. LLM 配置 & 全链路测试
-- `DeepSeek-V4-Pro @ llmapi.paratera.com` — 配置已完成（.env 预设）
+- LLM API — 配置已完成（.env 预设）
 - `tools/auto_test.py`: 修复端口 8765→8766（已完成）
 - **8/8 全部通过**：
   | 测试 | 耗时 |
@@ -41,7 +41,7 @@
 - `db9b6c7`: 端口修正 + 悬赏榜状态暴露 + 测试报告
 
 ### Current State
-- 服务运行中: http://127.0.0.1:8766
-- 模型: DeepSeek-V4-Pro (91 models available)
+- 服务运行中: 参见 .env.example
+- 模型: 参见 .env.example
 - 所有 8 项自动化测试通过
 - 定时巡检已激活（每30分钟）

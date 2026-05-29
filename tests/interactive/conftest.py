@@ -25,13 +25,18 @@ for _nid, _meta in NPCS.items():
 
 
 class InteractiveClient:
+    _global_dialogue_log: list[dict[str, Any]] = []
+    _on_dialogue: Any = None
+
     def __init__(self):
         self.client = httpx.Client(base_url=_BASE_URL, timeout=60.0)
         self.player_id: str = ""
         self._patches: list[Any] = []
+        self._dialogue_log: list[dict[str, Any]] = []
 
     def setup(self, npc_id: str | None = None) -> None:
         self.player_id = f"itest_{uuid.uuid4().hex[:12]}"
+        self._dialogue_log = []
 
         try:
             self.client.post("/api/tests/interactive/reset-circuit-breaker")
@@ -69,6 +74,7 @@ class InteractiveClient:
         for p in self._patches:
             p.stop()
         self._patches.clear()
+        InteractiveClient._global_dialogue_log = list(self._dialogue_log)
         try:
             self.client.post("/api/delete-save", json={"player_id": self.player_id})
         except Exception:
@@ -84,21 +90,49 @@ class InteractiveClient:
             }, timeout=timeout)
         except Exception as e:
             elapsed = round(time.time() - t0, 1)
-            return {
-                "success": False,
-                "error": str(e),
-                "elapsed": elapsed,
-            }
+            entry = {"npc": npc_id, "player": message, "reply": "", "error": str(e), "elapsed": elapsed, "favor_delta": 0, "coin_delta": 0}
+            self._dialogue_log.append(entry)
+            return {"success": False, "error": str(e), "elapsed": elapsed}
         elapsed = round(time.time() - t0, 1)
         if resp.status_code != 200:
-            return {
-                "success": False,
-                "error": f"HTTP {resp.status_code}: {resp.text[:200]}",
-                "elapsed": elapsed,
-            }
+            entry = {"npc": npc_id, "player": message, "reply": "", "error": f"HTTP {resp.status_code}", "elapsed": elapsed, "favor_delta": 0, "coin_delta": 0}
+            self._dialogue_log.append(entry)
+            return {"success": False, "error": f"HTTP {resp.status_code}: {resp.text[:200]}", "elapsed": elapsed}
         data = resp.json()
         data["elapsed"] = elapsed
         data["success"] = True
+
+        raw_reply = data.get("visible_text", "") or data.get("reply", "")
+        if isinstance(raw_reply, dict):
+            raw_reply = raw_reply.get("visible_text", "") or raw_reply.get("reply", "") or str(raw_reply)
+        if not raw_reply:
+            raw_reply = ""
+
+        favor_delta = 0
+        coin_delta = 0
+        if isinstance(data.get("delta"), dict):
+            favor_delta = data["delta"].get("favor", 0) or 0
+            coin_delta = data["delta"].get("coins", 0) or 0
+        if favor_delta == 0 and data.get("favor_delta"):
+            favor_delta = data["favor_delta"]
+        if coin_delta == 0 and data.get("coin_delta"):
+            coin_delta = data["coin_delta"]
+
+        entry = {
+            "npc": npc_id,
+            "npc_name": NPCS.get(npc_id, {}).get("name", npc_id),
+            "player": message,
+            "reply": raw_reply,
+            "elapsed": elapsed,
+            "favor_delta": favor_delta,
+            "coin_delta": coin_delta,
+        }
+        self._dialogue_log.append(entry)
+        if InteractiveClient._on_dialogue is not None:
+            try:
+                InteractiveClient._on_dialogue(entry)
+            except Exception:
+                pass
         return data
 
     def dialogue(self, npc_id: str, messages: list[str], timeout: float = 60.0) -> list[dict[str, Any]]:
@@ -118,6 +152,10 @@ class InteractiveClient:
             return resp.json()
         except Exception:
             return {}
+
+    @classmethod
+    def get_dialogue_log(cls) -> list[dict[str, Any]]:
+        return list(cls._global_dialogue_log)
 
 
 class ResponseEvaluator:
@@ -151,6 +189,7 @@ class ResponseEvaluator:
         "没能回话",
         "神游天外",
         "倦极",
+        "旁人打断",
     ]
 
     WORLD_LOCATIONS: list[str] = [
