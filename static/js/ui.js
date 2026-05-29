@@ -64,71 +64,98 @@ window.App = window.App || {};
   };
 
   function updateTopbar(p) {
-    const badge = p.world_is_night
-        ? '<span class="badge night">' + HtmlUtils.escape(p.world_shichen) + '\u00b7\u591c</span>'
-        : '<span class="badge day">'   + HtmlUtils.escape(p.world_shichen) + '</span>';
     const topbarInfo = document.getElementById("topbarInfo");
-    HtmlUtils.setSafeHtml(topbarInfo,
-      HtmlUtils.escape(p.map_id || "") + " " + badge + " " + HtmlUtils.escape(p.weather || ""));
+    if (!topbarInfo) return;
+    topbarInfo.textContent = "";
+
+    var mapSpan = document.createElement("span");
+    mapSpan.textContent = (p.map_id || "") + " ";
+    topbarInfo.appendChild(mapSpan);
+
+    var badge = document.createElement("span");
+    badge.className = p.world_is_night ? "badge night" : "badge day";
+    badge.textContent = p.world_shichen || "";
+    if (p.world_is_night) badge.textContent += "\u00b7\u591c";
+    topbarInfo.appendChild(badge);
+
+    var weatherSpan = document.createElement("span");
+    weatherSpan.textContent = " " + (p.weather || "");
+    topbarInfo.appendChild(weatherSpan);
   }
 
   function renderRightPanel(p, data) {
-    document.getElementById("statTime").textContent =
-      p.world_shichen || "--";
-    document.getElementById("statWeather").textContent =
-      p.weather || "--";
+    var statTime = document.getElementById("statTime");
+    if (statTime) statTime.textContent = p.world_shichen || "--";
+    var statWeather = document.getElementById("statWeather");
+    if (statWeather) statWeather.textContent = p.weather || "--";
     const dayEl = document.getElementById("statDay");
     if (dayEl) dayEl.textContent = p.world_day || 1;
 
     const v = p.vigor || 0, vm = Math.max(p.vigor_max || 100, 1);
-    document.getElementById("statVigor").textContent = v + "/" + vm;
-    document.getElementById("barVigor").style.width =
-      (v / vm * 100).toFixed(0) + "%";
+    var statVigor = document.getElementById("statVigor");
+    if (statVigor) statVigor.textContent = v + "/" + vm;
+    var barVigor = document.getElementById("barVigor");
+    if (barVigor) barVigor.style.width = (v / vm * 100).toFixed(0) + "%";
 
     const s = p.spirit || 0, sm = Math.max(p.spirit_max || 100, 1);
-    document.getElementById("statSpirit").textContent = s + "/" + sm;
-    document.getElementById("barSpirit").style.width =
-      (s / sm * 100).toFixed(0) + "%";
+    var statSpirit = document.getElementById("statSpirit");
+    if (statSpirit) statSpirit.textContent = s + "/" + sm;
+    var barSpirit = document.getElementById("barSpirit");
+    if (barSpirit) barSpirit.style.width = (s / sm * 100).toFixed(0) + "%";
 
-    document.getElementById("statCoins").textContent =
-      p.coins || 0;
+    var statCoins = document.getElementById("statCoins");
+    if (statCoins) statCoins.textContent = p.coins || 0;
 
     const inv = p.inventory || {};
-    let html = "";
-    Object.keys(inv).forEach(function(k) {
-      html += "<span class='inv-item' data-item=\"" + HtmlUtils.escape(k) + "\">" + HtmlUtils.escape(k) + "\u00d7" + HtmlUtils.escape(inv[k]) + "</span>";
-    });
     const statInv = document.getElementById("statInv");
     if (!statInv) return;
-    if (html) {
-      statInv.innerHTML = html;
+    statInv.innerHTML = "";
+
+    var keys = Object.keys(inv);
+    if (keys.length === 0) {
+      var emptySpan = document.createElement("span");
+      emptySpan.style.color = "#555";
+      emptySpan.textContent = "\u8eab\u65e0\u957f\u7269";
+      statInv.appendChild(emptySpan);
     } else {
-      statInv.innerHTML = "<span style='color:#555;'>\u8eab\u65e0\u957f\u7269</span>";
-    }
-    statInv.querySelectorAll(".inv-item").forEach(function(el) {
-      el.addEventListener("click", function() {
-        var name = el.getAttribute("data-item");
-        if (name) App.doUseItem(name);
+      keys.forEach(function(k) {
+        var span = document.createElement("span");
+        span.className = "inv-item";
+        span.setAttribute("data-item", k);
+        span.textContent = k + "\u00d7" + inv[k];
+        span.addEventListener("click", function() {
+          App.doUseItem(k);
+        });
+        statInv.appendChild(span);
       });
-    });
+    }
   }
 
   function renderNpcBar(data) {
     App.npcsHere = data.npcs_here || [];
 
     var ul = document.getElementById("npcList");
+    if (!ul) return;
+    ul.innerHTML = "";
+
     if (!App.npcsHere || App.npcsHere.length === 0) {
-      ul.innerHTML = '<div style="color:var(--text-muted);padding:8px;font-size:12px;">附近无人，试试移动到其他地点</div>';
+      var emptyDiv = document.createElement("div");
+      emptyDiv.style.cssText = "color:var(--text-muted);padding:8px;font-size:12px;";
+      emptyDiv.textContent = "附近无人，试试移动到其他地点";
+      ul.appendChild(emptyDiv);
     } else {
-      ul.innerHTML = "";
       App.npcsHere.forEach(function(n) {
         const li = document.createElement("li");
-        li.innerHTML = '<span class="npc-dot"></span>' + HtmlUtils.escape(n.name);
+        var dot = document.createElement("span");
+        dot.className = "npc-dot";
+        li.appendChild(dot);
+        li.appendChild(document.createTextNode(n.name));
         li.onclick = function() {
           App.selectedNpcId = n.id;
           renderNpcBar(data);
           setNpcSelect(n.id);
-          document.getElementById("msgInput").focus();
+          var msgInput = document.getElementById("msgInput");
+          if (msgInput) msgInput.focus();
         };
         if (n.id === App.selectedNpcId) li.classList.add("selected");
         ul.appendChild(li);
@@ -136,7 +163,7 @@ window.App = window.App || {};
     }
 
     const sel = document.getElementById("npcSelect");
-    const oldVal = sel.value;
+    if (!sel) return;
     sel.innerHTML = "";
     App.npcsHere.forEach(function(n) {
       const opt = document.createElement("option");
@@ -155,7 +182,7 @@ window.App = window.App || {};
 
   function setNpcSelect(id) {
     const sel = document.getElementById("npcSelect");
-    sel.value = id;
+    if (sel) sel.value = id;
   }
 
   function renderAtmosphere(p, data) {
@@ -188,41 +215,60 @@ window.App = window.App || {};
     var bounties = p.bounties || data.bounties;
     var listEl = document.getElementById("bountyList");
     if (!listEl) return;
+    listEl.innerHTML = "";
 
     if (!bounties || bounties.length === 0) {
-      listEl.innerHTML = '<div style="color:var(--text-muted);padding:8px;font-size:11px;">暂无悬赏，点击刷新查看</div>';
+      var emptyDiv = document.createElement("div");
+      emptyDiv.style.cssText = "color:var(--text-muted);padding:8px;font-size:11px;";
+      emptyDiv.textContent = "暂无悬赏，点击刷新查看";
+      listEl.appendChild(emptyDiv);
       return;
     }
 
-    var html = "";
     bounties.forEach(function(b) {
       var isActive = b.status === "active" || b.accepted;
-      var cls = isActive ? "bounty-item active" : "bounty-item";
-      html += '<div class="' + cls + '" data-bounty-id="' + HtmlUtils.escape(b.id || "") + '">';
-      html += '<div class="bounty-title">' + HtmlUtils.escape(b.title || b.name || "悬赏") + '</div>';
+      var item = document.createElement("div");
+      item.className = isActive ? "bounty-item active" : "bounty-item";
+      item.setAttribute("data-bounty-id", b.id || "");
+
+      var title = document.createElement("div");
+      title.className = "bounty-title";
+      title.textContent = b.title || b.name || "悬赏";
+      item.appendChild(title);
+
       if (b.desc) {
-        html += '<div class="bounty-desc">' + HtmlUtils.escape(b.desc).substring(0, 80) + '</div>';
+        var desc = document.createElement("div");
+        desc.className = "bounty-desc";
+        desc.textContent = (b.desc || "").substring(0, 80);
+        item.appendChild(desc);
       }
       if (b.reward) {
-        html += '<div class="bounty-reward">\u5956\u52b1: ' + HtmlUtils.escape(String(b.reward)) + '</div>';
+        var reward = document.createElement("div");
+        reward.className = "bounty-reward";
+        reward.textContent = "\u5956\u52b1: " + b.reward;
+        item.appendChild(reward);
       }
       if (isActive) {
-        html += '<div style="color:var(--accent-green);font-size:10px;margin-top:2px;">\u2713 \u5df2\u63a5\u53d7</div>';
+        var activeLabel = document.createElement("div");
+        activeLabel.style.cssText = "color:var(--accent-green);font-size:10px;margin-top:2px;";
+        activeLabel.textContent = "\u2713 \u5df2\u63a5\u53d7";
+        item.appendChild(activeLabel);
       }
-      html += '</div>';
-    });
-    listEl.innerHTML = html;
 
-    listEl.querySelectorAll(".bounty-item:not(.active)").forEach(function(el) {
-      el.addEventListener("click", function() {
-        var bid = el.getAttribute("data-bounty-id");
-        if (bid) App.doBountyAccept(bid);
-      });
+      if (!isActive) {
+        item.addEventListener("click", function() {
+          var bid = b.id;
+          if (bid) App.doBountyAccept(bid);
+        });
+      }
+
+      listEl.appendChild(item);
     });
   }
 
   App.addMsg = function(type, text, isImportant) {
     const area = document.getElementById("dialogueArea");
+    if (!area) return null;
     const div  = document.createElement("div");
     div.className = "msg " + type;
 
@@ -231,10 +277,21 @@ window.App = window.App || {};
     }
 
     if (type === "npc" && text) {
-      div.innerHTML = '<div class="speaker">' + HtmlUtils.escape(text.speaker || "")
-        + '</div><div class="msg-text">' + HtmlUtils.sanitize(text.text || text) + '</div>';
+      var speakerDiv = document.createElement("div");
+      speakerDiv.className = "speaker";
+      speakerDiv.textContent = text.speaker || "";
+      div.appendChild(speakerDiv);
+
+      var textDiv = document.createElement("div");
+      textDiv.className = "msg-text";
+      HtmlUtils.setTrustedHtml(textDiv, HtmlUtils.sanitize(text.text || text));
+      div.appendChild(textDiv);
     } else if (type === "system-error") {
-      div.innerHTML = HtmlUtils.escape(text).replace(/\n/g, "<br>");
+      var lines = (text || "").split("\n");
+      lines.forEach(function(line, i) {
+        if (i > 0) div.appendChild(document.createElement("br"));
+        div.appendChild(document.createTextNode(line));
+      });
     } else {
       div.textContent = text;
     }
@@ -256,7 +313,7 @@ window.App = window.App || {};
 
   function scrollToBottom() {
     const area = document.getElementById("dialogueArea");
-    area.scrollTop = area.scrollHeight;
+    if (area) area.scrollTop = area.scrollHeight;
   }
 
   App.scrollToBottom = scrollToBottom;
@@ -264,21 +321,32 @@ window.App = window.App || {};
   function renderPortals(p) {
     const mapInfo = App.mapsData[App.currentMapId];
     const div = document.getElementById("portalList");
+    if (!div) return;
+    div.innerHTML = "";
+
     if (!mapInfo || !mapInfo.portals || mapInfo.portals.length === 0) {
-      div.innerHTML = '<span style="color:#555;">\u6b64\u5730\u56fe\u65e0\u754c\u95e8</span>';
+      var emptySpan = document.createElement("span");
+      emptySpan.style.color = "#555";
+      emptySpan.textContent = "\u6b64\u5730\u56fe\u65e0\u754c\u95e8";
+      div.appendChild(emptySpan);
       return;
     }
-    div.innerHTML = mapInfo.portals.map(function(pt) {
+
+    mapInfo.portals.forEach(function(pt) {
       const target = App.mapsData[pt.target_map_id];
       const targetName = target ? target.name : pt.target_map_id;
       const sx = parseInt(pt.to_x, 10);
       const sy = parseInt(pt.to_y, 10);
-      if (isNaN(sx) || isNaN(sy)) return '';
-      return '<div class="portal-entry" onclick="App.moveTo('
-        + sx + ',' + sy + ')">\u2197 \u5f80\u3010'
-        + HtmlUtils.escape(targetName)
-        + '\u3011(' + sx + ',' + sy + ')</div>';
-    }).join("");
+      if (isNaN(sx) || isNaN(sy)) return;
+
+      var entry = document.createElement("div");
+      entry.className = "portal-entry";
+      entry.textContent = "\u2197 \u5f80\u3010" + targetName + "\u3011(" + sx + "," + sy + ")";
+      entry.addEventListener("click", function() {
+        App.moveTo(sx, sy);
+      });
+      div.appendChild(entry);
+    });
   }
 
 })(window.App);

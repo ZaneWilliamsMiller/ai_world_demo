@@ -54,26 +54,8 @@ window.App = window.App || {};
   // 暴露 DOM 缓存供其他模块使用
   App.DOM = DOM;
 
-  // ═══════════════════════════════════════════
-  //  HTML 安全工具 - 复用 ui.js 的实现或提供本地版本
-  // ═══════════════════════════════════════════
-  const HtmlUtils = App.HtmlUtils || {
-    escape(text) {
-      if (!text) return '';
-      const str = String(text);
-      const div = document.createElement('div');
-      div.textContent = str;
-      return div.innerHTML;
-    },
+  const HtmlUtils = App.HtmlUtils;
 
-    setSafeHtml(element, html) {
-      if (element) {
-        element.innerHTML = this.escape(html);
-      }
-    }
-  };
-
-  // 配置面板开关
   App.toggleConfigPanel = function() {
     const overlay = DOM.configOverlay || document.getElementById("configOverlay");
     const panel = DOM.configPanel || document.getElementById("configPanel");
@@ -220,8 +202,16 @@ window.App = window.App || {};
 
     const introMsg = DOM.introMsg || document.getElementById("introMsg");
     if (introMsg) {
-      introMsg.innerHTML =
-        "<b>欢迎，" + HtmlUtils.escape(App.displayName) + "！</b><br>" + HtmlUtils.escape(data.intro || "江湖路远，珍重。").replace(/\n/g, "<br>");
+      introMsg.textContent = "";
+      var b = document.createElement("b");
+      b.textContent = "欢迎，" + App.displayName + "！";
+      introMsg.appendChild(b);
+      introMsg.appendChild(document.createElement("br"));
+      var introLines = (data.intro || "江湖路远，珍重。").split("\n");
+      introLines.forEach(function(line, i) {
+        if (i > 0) introMsg.appendChild(document.createElement("br"));
+        introMsg.appendChild(document.createTextNode(line));
+      });
     }
 
     App.updateUI(data);
@@ -398,8 +388,7 @@ window.App = window.App || {};
     const cancelBtn = DOM.confirmCancel || document.getElementById("confirmCancel");
 
     titleEl.textContent = title;
-    // 确认框的消息通常是硬编码的可信 HTML，使用 setTrustedHtml
-    msgEl.innerHTML = message;
+    HtmlUtils.setTrustedHtml(msgEl, message);
 
     overlay.classList.add("show");
 
@@ -455,17 +444,16 @@ window.App = window.App || {};
         try {
           const overlay = DOM.loginOverlay || document.getElementById("loginOverlay");
           if (overlay) {
-            // 关闭界面是硬编码的可信 HTML，直接设置
-            overlay.innerHTML =
-              '<div class="shutdown-screen">' +
-              '<div class="shutdown-icon">⏳</div>' +
-              '<h2>正在关闭所有服务...</h2>' +
-              '<p class="shutdown-step pending" id="shutdownStep1">⏳ 正在连接后端 (第1/3次)...</p>' +
-              '<p class="shutdown-step pending" id="shutdownStep2" style="display:none;">⏳ 验证后端已停止...</p>' +
-              '<p class="shutdown-step pending" id="shutdownStep3" style="display:none;">⏳ 关闭前端服务器...</p>' +
-              '</div>';
-            overlay.style.display = 'flex';
-          }
+              HtmlUtils.setTrustedHtml(overlay,
+                '<div class="shutdown-screen">' +
+                '<div class="shutdown-icon">⏳</div>' +
+                '<h2>正在关闭所有服务...</h2>' +
+                '<p class="shutdown-step pending" id="shutdownStep1">⏳ 正在连接后端 (第1/3次)...</p>' +
+                '<p class="shutdown-step pending" id="shutdownStep2" style="display:none;">⏳ 验证后端已停止...</p>' +
+                '<p class="shutdown-step pending" id="shutdownStep3" style="display:none;">⏳ 关闭前端服务器...</p>' +
+                '</div>');
+              overlay.style.display = 'flex';
+            }
 
           let step1 = document.getElementById("shutdownStep1");
           let step2 = document.getElementById("shutdownStep2");
@@ -517,9 +505,8 @@ window.App = window.App || {};
               // 如果是且这是 shutdown 请求，说明后端已收到请求并开始关闭（网络断开）
               const isNetworkError = e.message === 'Failed to fetch' ||
                                      e.name === 'TypeError';
-              const isShutdownRequest = true; // 当前上下文就是 shutdown
 
-              if (isNetworkError && isShutdownRequest) {
+              if (isNetworkError) {
                 // 这种情况下，后端实际上已经收到了关闭指令
                 // 只是网络连接在响应传输过程中断开了
                 backendSuccess = true;  // 视为成功！
@@ -658,8 +645,7 @@ window.App = window.App || {};
               ? "✅ Web前端服务已强制停止<br>"
               : "⚠️ Web前端可能仍在运行<br>";
 
-            // 最终结果是动态生成的，但数据来源可信（系统状态），使用 setTrustedHtml
-            overlay.innerHTML =
+            HtmlUtils.setTrustedHtml(overlay,
               '<div class="shutdown-screen">' +
               '<div class="shutdown-icon">' + resultIcon + '</div>' +
               '<h2>' + resultTitle + '</h2>' +
@@ -669,7 +655,7 @@ window.App = window.App || {};
               '<br><span style="color:#a0a0b0;">' +
               (frontendStopped ? '此页面即将失效<br>' : '') +
               '可重新运行 <code>python start.py</code> 启动服务</span></p>' +
-              '</div>';
+              '</div>');
           }
 
         } catch (e) {

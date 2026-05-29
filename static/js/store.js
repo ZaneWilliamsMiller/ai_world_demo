@@ -14,8 +14,6 @@ window.App = window.App || {};
     try { saved = JSON.parse(localStorage.getItem("lp_config") || "{}"); } catch(e) {}
     if (saved && saved.backendUrl) {
       App.BACKEND_URL = saved.backendUrl;
-    } else if (window.location.port === "8765") {
-      App.BACKEND_URL = window.location.origin;
     } else {
       App.BACKEND_URL = window.location.origin;
     }

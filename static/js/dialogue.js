@@ -129,7 +129,8 @@ window.App = window.App || {};
     } catch (e) {
       var errorMsg = e.message || "对话中断，请重试";
       var lastMsg = document.querySelector(".msg:last-child");
-      if (lastMsg && lastMsg.classList.contains("npc") && lastMsg.textContent === "...") {
+      var msgTextEl = lastMsg ? lastMsg.querySelector(".msg-text") : null;
+      if (lastMsg && lastMsg.classList.contains("npc") && msgTextEl && msgTextEl.textContent === "...") {
         lastMsg.remove();
       }
       App.addMsg("system", errorMsg);

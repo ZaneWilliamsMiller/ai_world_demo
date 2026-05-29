@@ -1,73 +1,66 @@
-// ═══════════════════════════════════════════════════════
-//  api.js — 后端 API 调用封装（支持后端/独立双模式）
-// ═══════════════════════════════════════════════════════
 window.App = window.App || {};
 
 (function(App) {
   "use strict";
 
-  // ── 后端模式 API ──
-
   var _defaultTimeout = 30000;
 
-  function backendPost(url, body, timeoutMs) {
+  async function backendPost(url, body, timeoutMs) {
     var path = url.startsWith("/api") ? url.substring(4) : url;
     var fullUrl = App.API + path;
     var controller = new AbortController();
     var timeoutId = setTimeout(function() { controller.abort(); }, timeoutMs || _defaultTimeout);
-    return fetch(fullUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: controller.signal
-    }).then(async function(r) {
+    try {
+      var r = await fetch(fullUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: controller.signal
+      });
       clearTimeout(timeoutId);
       if (!r.ok) {
-        let errorMsg = url + " " + r.status;
+        var errorMsg = url + " " + r.status;
         try {
-          const errorJson = await r.json();
+          var errorJson = await r.json();
           errorMsg = errorJson.detail || errorJson.message || errorMsg;
-        } catch (e) {
-        }
+        } catch (e) { /* ignore parse error */ }
         throw new Error(errorMsg);
       }
-      return r.json();
-    }).catch(function(e) {
+      return await r.json();
+    } catch (e) {
       clearTimeout(timeoutId);
       if (e.name === 'AbortError') throw new Error('请求超时');
       throw e;
-    });
+    }
   }
 
-  function backendGet(url, timeoutMs) {
+  async function backendGet(url, timeoutMs) {
     var path = url.startsWith("/api") ? url.substring(4) : url;
     var fullUrl = App.API + path;
     var controller = new AbortController();
     var timeoutId = setTimeout(function() { controller.abort(); }, timeoutMs || _defaultTimeout);
-    return fetch(fullUrl, { cache: 'no-store', signal: controller.signal }).then(async function(r) {
+    try {
+      var r = await fetch(fullUrl, { cache: 'no-store', signal: controller.signal });
       clearTimeout(timeoutId);
       if (!r.ok) {
-        let errorMsg = url + " " + r.status;
+        var errorMsg = url + " " + r.status;
         try {
-          const errorJson = await r.json();
+          var errorJson = await r.json();
           errorMsg = errorJson.detail || errorJson.message || errorMsg;
-        } catch (e) {
-        }
+        } catch (e) { /* ignore parse error */ }
         throw new Error(errorMsg);
       }
-      return r.json();
-    }).catch(function(e) {
+      return await r.json();
+    } catch (e) {
       clearTimeout(timeoutId);
       if (e.name === 'AbortError') throw new Error('请求超时');
       throw e;
-    });
+    }
   }
 
-  // ── LLM 直连 API（独立模式）──
-
-  function llmChat(messages, options) {
+  async function llmChat(messages, options) {
     options = options || {};
-    return fetch(App.LLM_API_URL + "/chat/completions", {
+    var r = await fetch(App.LLM_API_URL + "/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -80,15 +73,10 @@ window.App = window.App || {};
         max_tokens: options.maxTokens || 1024,
         stream: options.stream || false
       })
-    }).then(function(r) {
-      if (!r.ok) throw new Error("LLM API " + r.status + ": " + r.statusText);
-      return r.json();
     });
+    if (!r.ok) throw new Error("LLM API " + r.status + ": " + r.statusText);
+    return await r.json();
   }
-
-  // ═══════════════════════════════════════════
-  //  角色初始化 / 恢复
-  // ═══════════════════════════════════════════
 
   App.createPlayer = async function(name, gender, permadeath) {
     if (App.apiMode === "backend") {
@@ -117,10 +105,6 @@ window.App = window.App || {};
     if (App.apiMode !== "backend") return [];
     return (await backendGet("/api/saves")).saves || [];
   };
-
-  // ═══════════════════════════════════════════
-  //  游戏操作
-  // ═══════════════════════════════════════════
 
   App.doMove = async function(tx, ty) {
     App.setLoading(true, "行走中...");
@@ -185,10 +169,6 @@ window.App = window.App || {};
     return await backendPost("/api/bounty/abandon", { player_id: App.playerId });
   };
 
-  // ═══════════════════════════════════════════
-  //  NPC 对话
-  // ═══════════════════════════════════════════
-
   App.talkStream = async function(npcId, message) {
     var requestBody = {
       player_id: App.playerId,
@@ -217,12 +197,11 @@ window.App = window.App || {};
     }
     if (!res.ok) {
       App._streamAbortController = null;
-      let errorMsg = "talk_stream " + res.status;
+      var errorMsg = "talk_stream " + res.status;
       try {
-        const errorJson = await res.json();
+        var errorJson = await res.json();
         errorMsg = errorJson.detail || errorJson.message || errorMsg;
-      } catch (e) {
-      }
+      } catch (e) { /* ignore parse error */ }
       throw new Error(errorMsg);
     }
     return res.body.getReader();
@@ -234,10 +213,6 @@ window.App = window.App || {};
       App._streamAbortController = null;
     }
   };
-
-  // ═══════════════════════════════════════════
-  //  连接测试
-  // ═══════════════════════════════════════════
 
   App.testBackend = async function() {
     try {

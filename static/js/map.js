@@ -441,8 +441,9 @@ window.App = window.App || {};
     }
 
     // ─── 动画路径高亮 ───
-    if (_animPath.length > 0 && _animIdx < _animPath.length) {
-      var step = _animPath[_animIdx];
+    for (var pi = 0; pi < _animPath.length && _animIdx < _animPath.length; pi++) {
+      if (pi !== _animIdx) continue;
+      var step = _animPath[pi];
       var asx = (step[0] - cam.x) * TILE + TILE / 2;
       var asy = (step[1] - cam.y) * TILE + TILE / 2;
       ctx.strokeStyle = "rgba(255,220,80,0.8)";
@@ -620,8 +621,8 @@ window.App = window.App || {};
     App._playerX = p.px;
     App._playerY = p.py;
 
-    document.getElementById("mapTitle").textContent =
-      "🗺️ " + (mapInfo.name || App.currentMapId);
+    var mapTitle = document.getElementById("mapTitle");
+    if (mapTitle) mapTitle.textContent = "🗺️ " + (mapInfo.name || App.currentMapId);
 
     initCanvas();
     buildNpcIndex();
