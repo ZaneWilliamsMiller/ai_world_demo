@@ -20,7 +20,7 @@ class SaveBody(BaseModel):
 
 class LoadBody(BaseModel):
     player_id: str = Field(..., min_length=1, max_length=64)
-    display_name: str | None = None
+    display_name: str | None = Field(None, min_length=1, max_length=24)
     gender: str = Field(default="未言", pattern="^(男|女|未言)$")
     permadeath: bool = False
 

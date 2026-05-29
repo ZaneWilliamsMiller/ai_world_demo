@@ -20,6 +20,7 @@ from backend.systems.constants import (
     DRY_RATION_VIGOR, DRY_RATION_SPIRIT,
     FISH_VIGOR, FISH_SPIRIT,
     WILD_FRUIT_VIGOR, WILD_FRUIT_SPIRIT,
+    FISH_MAX_PER_DAY, FRUIT_MAX_PER_DAY, REST_MAX_PER_DAY,
 )
 
 
@@ -218,6 +219,9 @@ def survival_action_delta(p: PlayerState, user_message: str) -> dict[str, Any]:
     spirit = 0
     note = ""
 
+    tracker = p.item_use_tracker if p.item_use_tracker else {}
+    day_key = str(p.world_day)
+
     if any(k in msg for k in ("吃干粮", "啃干粮", "干粮")) and int(p.inventory.get("干粮", 0)) > 0:
         p.inventory["干粮"] = max(0, int(p.inventory.get("干粮", 0)) - 1)
         if p.inventory["干粮"] <= 0:
@@ -227,27 +231,42 @@ def survival_action_delta(p: PlayerState, user_message: str) -> dict[str, Any]:
         items_lose.append("干粮")
         note = "你嚼了几口干粮,气力略回。"
     elif any(k in msg for k in ("打鱼", "捕鱼", "下网", "摸鱼")) and ch in ("~", "B"):
-        vigor += apply_vigor_delta(p, FISH_VIGOR)
-        spirit += apply_spirit_delta(p, FISH_SPIRIT)
-        p.inventory["鲜鱼"] = int(p.inventory.get("鲜鱼", 0)) + 1
-        items_gain.append("鲜鱼")
-        note = "你就着水势摸得一尾鲜鱼。"
-    elif any(k in msg for k in ("野果", "采果", "摘果", "吃果")) and ch in ("F", "&", ","):
-        vigor += apply_vigor_delta(p, WILD_FRUIT_VIGOR)
-        spirit += apply_spirit_delta(p, WILD_FRUIT_SPIRIT)
-        note = "你在林地寻得野果,勉强充饥。"
-    elif any(k in msg for k in ("睡", "歇息", "打盹", "合眼")):
-        safe = (ch in ("T", "Y")) or (p.map_id == "world" and SAFE_ZONE_X_RANGE[0] <= p.px <= SAFE_ZONE_X_RANGE[1] and SAFE_ZONE_Y_RANGE[0] <= p.py <= SAFE_ZONE_Y_RANGE[1])
-        if safe:
-            vigor += apply_vigor_delta(p, SAFE_REST_VIGOR)
-            spirit += apply_spirit_delta(p, SAFE_REST_SPIRIT)
-            p.sleep_debt = max(0, int(getattr(p, "sleep_debt", 0)) - SAFE_REST_SLEEP_DEBT)
-            note = "你在较安全处合眼调息,心气大幅回升。"
+        fish_key = f"fish_{day_key}"
+        if tracker.get(fish_key, 0) >= FISH_MAX_PER_DAY:
+            note = "今日已多次打鱼,水边再无收获。"
         else:
-            vigor += apply_vigor_delta(p, WILD_REST_VIGOR)
-            spirit += apply_spirit_delta(p, WILD_REST_SPIRIT)
-            p.sleep_debt = max(0, int(getattr(p, "sleep_debt", 0)) - WILD_REST_SLEEP_DEBT)
-            note = "荒野露宿,寒湿与警惕反噬了体力,只回了一点心气。"
+            tracker[fish_key] = tracker.get(fish_key, 0) + 1
+            vigor += apply_vigor_delta(p, FISH_VIGOR)
+            spirit += apply_spirit_delta(p, FISH_SPIRIT)
+            p.inventory["鲜鱼"] = int(p.inventory.get("鲜鱼", 0)) + 1
+            items_gain.append("鲜鱼")
+            note = "你就着水势摸得一尾鲜鱼。"
+    elif any(k in msg for k in ("野果", "采果", "摘果", "吃果")) and ch in ("F", "&", ","):
+        fruit_key = f"fruit_{day_key}"
+        if tracker.get(fruit_key, 0) >= FRUIT_MAX_PER_DAY:
+            note = "附近野果已被采尽,明日再来。"
+        else:
+            tracker[fruit_key] = tracker.get(fruit_key, 0) + 1
+            vigor += apply_vigor_delta(p, WILD_FRUIT_VIGOR)
+            spirit += apply_spirit_delta(p, WILD_FRUIT_SPIRIT)
+            note = "你在林地寻得野果,勉强充饥。"
+    elif any(k in msg for k in ("睡", "歇息", "打盹", "合眼")):
+        rest_key = f"rest_{day_key}"
+        if tracker.get(rest_key, 0) >= REST_MAX_PER_DAY:
+            note = "今日已多次歇息,难以再入睡。"
+        else:
+            tracker[rest_key] = tracker.get(rest_key, 0) + 1
+            safe = (ch in ("T", "Y")) or (p.map_id == "world" and SAFE_ZONE_X_RANGE[0] <= p.px <= SAFE_ZONE_X_RANGE[1] and SAFE_ZONE_Y_RANGE[0] <= p.py <= SAFE_ZONE_Y_RANGE[1])
+            if safe:
+                vigor += apply_vigor_delta(p, SAFE_REST_VIGOR)
+                spirit += apply_spirit_delta(p, SAFE_REST_SPIRIT)
+                p.sleep_debt = max(0, int(getattr(p, "sleep_debt", 0)) - SAFE_REST_SLEEP_DEBT)
+                note = "你在较安全处合眼调息,心气大幅回升。"
+            else:
+                vigor += apply_vigor_delta(p, WILD_REST_VIGOR)
+                spirit += apply_spirit_delta(p, WILD_REST_SPIRIT)
+                p.sleep_debt = max(0, int(getattr(p, "sleep_debt", 0)) - WILD_REST_SLEEP_DEBT)
+                note = "荒野露宿,寒湿与警惕反噬了体力,只回了一点心气。"
     elif any(k in msg for k in ("攀爬", "爬坡", "翻越", "跳崖", "下崖")):
         p.allow_steep_next_move = True
         spirit += apply_spirit_delta(p, -3)

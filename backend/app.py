@@ -46,20 +46,23 @@ async def _auto_save_loop():
     """每 5 分钟自动存档所有活跃玩家。"""
     _save_log = logging.getLogger("auto_save")
     while True:
-        await asyncio.sleep(settings.auto_save_interval_s)
-        saved = 0
-        async with room._lock:
-            snapshot = list(room.players.items())
-        for pid, p in snapshot:
-            if p.dead or p.ended:
-                continue
-            try:
-                await asyncio.to_thread(save_game, p)
-                saved += 1
-            except Exception as e:
-                _save_log.error("auto-save failed %s: %s", pid, e)
-        if saved:
-            _save_log.info("auto-saved %d player(s)", saved)
+        try:
+            await asyncio.sleep(settings.auto_save_interval_s)
+            saved = 0
+            async with room._lock:
+                snapshot = list(room.players.items())
+            for pid, p in snapshot:
+                if p.dead or p.ended:
+                    continue
+                try:
+                    await asyncio.to_thread(save_game, p)
+                    saved += 1
+                except Exception as e:
+                    _save_log.error("auto-save failed %s: %s", pid, e)
+            if saved:
+                _save_log.info("auto-saved %d player(s)", saved)
+        except Exception as e:
+            _save_log.error("auto-save loop error: %s", e, exc_info=True)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

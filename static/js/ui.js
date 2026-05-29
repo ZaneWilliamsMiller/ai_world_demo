@@ -199,8 +199,8 @@ window.App = window.App || {};
       var cls = isActive ? "bounty-item active" : "bounty-item";
       html += '<div class="' + cls + '" data-bounty-id="' + HtmlUtils.escape(b.id || "") + '">';
       html += '<div class="bounty-title">' + HtmlUtils.escape(b.title || b.name || "悬赏") + '</div>';
-      if (b.description) {
-        html += '<div class="bounty-desc">' + HtmlUtils.escape(b.description).substring(0, 80) + '</div>';
+      if (b.desc) {
+        html += '<div class="bounty-desc">' + HtmlUtils.escape(b.desc).substring(0, 80) + '</div>';
       }
       if (b.reward) {
         html += '<div class="bounty-reward">\u5956\u52b1: ' + HtmlUtils.escape(String(b.reward)) + '</div>';

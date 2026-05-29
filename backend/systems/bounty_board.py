@@ -308,6 +308,10 @@ def complete_bounty(p: PlayerState) -> tuple[bool, str, dict[str, Any]]:
     if not bounty:
         return False, "当前没有进行中的悬赏。", {}
 
+    if p.completed_bounties and bounty["id"] in p.completed_bounties:
+        p.active_bounty = None
+        return False, "此悬赏已完成。", {}
+
     progress = check_bounty_progress(p)
     if not progress or not progress.get("done"):
         return False, "悬赏尚未完成。", {}

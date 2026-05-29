@@ -271,17 +271,27 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
 
         try:
             is_light_inquiry = body.message.startswith("[系统指令·问路")
-            raw = await chat_completion(
-                messages,
-                temperature=TALK_TEMPERATURE,
-                max_tokens=TALK_LIGHT_MAX_TOKENS if is_light_inquiry else TALK_FULL_MAX_TOKENS,
-                response_format={"type": "json_object"},
+            raw = await asyncio.wait_for(
+                chat_completion(
+                    messages,
+                    temperature=TALK_TEMPERATURE,
+                    max_tokens=TALK_LIGHT_MAX_TOKENS if is_light_inquiry else TALK_FULL_MAX_TOKENS,
+                    response_format={"type": "json_object"},
+                ),
+                timeout=60.0,
             )
             parsed = parse_npc_reply_json(raw)
         except asyncio.CancelledError:
             logging.getLogger("api.routes").info("SSE stream cancelled for npc=%s player=%s", body.npc_id, body.player_id)
             yield _sse({"done": True, "cancelled": True})
             return
+        except asyncio.TimeoutError:
+            is_fallback = True
+            fb = build_graceful_fallback(body.npc_id, "LLM 响应超时")
+            parsed = fb["parsed"]
+            logging.getLogger("api.routes").warning(
+                "LLM timeout (stream) for npc=%s player=%s", body.npc_id, body.player_id
+            )
         except Exception as e:
             is_fallback = True
             fb = build_graceful_fallback(body.npc_id, str(e))
