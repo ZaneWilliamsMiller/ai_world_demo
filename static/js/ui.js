@@ -3,51 +3,10 @@ window.App = window.App || {};
 (function(App) {
   "use strict";
 
-  const HtmlUtils = {
-    escape(text) {
-      if (!text) return '';
-      const str = String(text);
-      const div = document.createElement('div');
-      div.textContent = str;
-      return div.innerHTML.replace(/'/g, '&#39;');
-    },
-
-    setSafeHtml(element, html) {
-      if (element) {
-        element.innerHTML = this.escape(html);
-      }
-    },
-
-    setTrustedHtml(element, html) {
-      if (element) {
-        element.innerHTML = html;
-      }
-    },
-
-    _ALLOWED_TAGS: new Set(['b', 'i', 'u', 'strong', 'em', 'br']),
-
-    sanitize(text) {
-      if (!text) return '';
-      var escaped = String(text)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-      escaped = escaped.replace(/&lt;(\/?)(b|i|u|strong|em|br)\s*\/?&gt;/gi, function(match, slash, tag) {
-        tag = tag.toLowerCase();
-        if (HtmlUtils._ALLOWED_TAGS.has(tag)) {
-          if (tag === 'br') return '<br>';
-          return '<' + slash + tag + '>';
-        }
-        return match;
-      });
-      return escaped;
-    },
-  };
-
-  App.HtmlUtils = HtmlUtils;
+  var HtmlUtils = App.HtmlUtils;
 
   App.updateUI = function(data) {
-    const p = data.player || {};
+    var p = data.player || {};
     App.currentMapId = p.map_id;
     App.npcCatalog  = data.npc_catalog || App.npcCatalog || [];
     App._playerX = p.px;
@@ -64,7 +23,7 @@ window.App = window.App || {};
   };
 
   function updateTopbar(p) {
-    const topbarInfo = document.getElementById("topbarInfo");
+    var topbarInfo = document.getElementById("topbarInfo");
     if (!topbarInfo) return;
     topbarInfo.textContent = "";
 
@@ -88,16 +47,16 @@ window.App = window.App || {};
     if (statTime) statTime.textContent = p.world_shichen || "--";
     var statWeather = document.getElementById("statWeather");
     if (statWeather) statWeather.textContent = p.weather || "--";
-    const dayEl = document.getElementById("statDay");
+    var dayEl = document.getElementById("statDay");
     if (dayEl) dayEl.textContent = p.world_day || 1;
 
-    const v = p.vigor || 0, vm = Math.max(p.vigor_max || 100, 1);
+    var v = p.vigor || 0, vm = Math.max(p.vigor_max || 100, 1);
     var statVigor = document.getElementById("statVigor");
     if (statVigor) statVigor.textContent = v + "/" + vm;
     var barVigor = document.getElementById("barVigor");
     if (barVigor) barVigor.style.width = (v / vm * 100).toFixed(0) + "%";
 
-    const s = p.spirit || 0, sm = Math.max(p.spirit_max || 100, 1);
+    var s = p.spirit || 0, sm = Math.max(p.spirit_max || 100, 1);
     var statSpirit = document.getElementById("statSpirit");
     if (statSpirit) statSpirit.textContent = s + "/" + sm;
     var barSpirit = document.getElementById("barSpirit");
@@ -106,8 +65,8 @@ window.App = window.App || {};
     var statCoins = document.getElementById("statCoins");
     if (statCoins) statCoins.textContent = p.coins || 0;
 
-    const inv = p.inventory || {};
-    const statInv = document.getElementById("statInv");
+    var inv = p.inventory || {};
+    var statInv = document.getElementById("statInv");
     if (!statInv) return;
     statInv.innerHTML = "";
 
@@ -145,7 +104,7 @@ window.App = window.App || {};
       ul.appendChild(emptyDiv);
     } else {
       App.npcsHere.forEach(function(n) {
-        const li = document.createElement("li");
+        var li = document.createElement("li");
         var dot = document.createElement("span");
         dot.className = "npc-dot";
         li.appendChild(dot);
@@ -162,11 +121,11 @@ window.App = window.App || {};
       });
     }
 
-    const sel = document.getElementById("npcSelect");
+    var sel = document.getElementById("npcSelect");
     if (!sel) return;
     sel.innerHTML = "";
     App.npcsHere.forEach(function(n) {
-      const opt = document.createElement("option");
+      var opt = document.createElement("option");
       opt.value = n.id;
       opt.textContent = n.name;
       sel.appendChild(opt);
@@ -181,7 +140,7 @@ window.App = window.App || {};
   }
 
   function setNpcSelect(id) {
-    const sel = document.getElementById("npcSelect");
+    var sel = document.getElementById("npcSelect");
     if (sel) sel.value = id;
   }
 
@@ -267,9 +226,9 @@ window.App = window.App || {};
   }
 
   App.addMsg = function(type, text, isImportant) {
-    const area = document.getElementById("dialogueArea");
+    var area = document.getElementById("dialogueArea");
     if (!area) return null;
-    const div  = document.createElement("div");
+    var div = document.createElement("div");
     div.className = "msg " + type;
 
     if (isImportant) {
@@ -312,15 +271,15 @@ window.App = window.App || {};
   };
 
   function scrollToBottom() {
-    const area = document.getElementById("dialogueArea");
+    var area = document.getElementById("dialogueArea");
     if (area) area.scrollTop = area.scrollHeight;
   }
 
   App.scrollToBottom = scrollToBottom;
 
   function renderPortals(p) {
-    const mapInfo = App.mapsData[App.currentMapId];
-    const div = document.getElementById("portalList");
+    var mapInfo = App.mapsData[App.currentMapId];
+    var div = document.getElementById("portalList");
     if (!div) return;
     div.innerHTML = "";
 
@@ -333,10 +292,10 @@ window.App = window.App || {};
     }
 
     mapInfo.portals.forEach(function(pt) {
-      const target = App.mapsData[pt.target_map_id];
-      const targetName = target ? target.name : pt.target_map_id;
-      const sx = parseInt(pt.to_x, 10);
-      const sy = parseInt(pt.to_y, 10);
+      var target = App.mapsData[pt.target_map_id];
+      var targetName = target ? target.name : pt.target_map_id;
+      var sx = parseInt(pt.to_x, 10);
+      var sy = parseInt(pt.to_y, 10);
       if (isNaN(sx) || isNaN(sy)) return;
 
       var entry = document.createElement("div");

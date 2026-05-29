@@ -235,4 +235,60 @@ window.App = window.App || {};
     }
   };
 
+  App.testBackendConnection = async function() {
+    var resultEl = document.getElementById("backendTestResult");
+    if (resultEl) {
+      resultEl.textContent = "\u6d4b\u8bd5\u4e2d...";
+      resultEl.className = "test-result testing";
+    }
+    var startTime = Date.now();
+    try {
+      var result = await App.testBackend();
+      var latency = Date.now() - startTime;
+      if (result.ok) {
+        var msg = "\u540e\u7aef\u8fde\u63a5\u6210\u529f! \u5ef6\u8fdf: " + latency + "ms";
+        if (resultEl) { resultEl.textContent = msg; resultEl.className = "test-result success"; }
+        return { ok: true, latency: latency, message: msg };
+      } else {
+        var msg2 = "\u540e\u7aef\u8fde\u63a5\u5931\u8d25" + (result.detail || "");
+        if (resultEl) { resultEl.textContent = msg2; resultEl.className = "test-result fail"; }
+        return { ok: false, latency: latency, message: msg2 };
+      }
+    } catch (e) {
+      var latency2 = Date.now() - startTime;
+      var msg3 = "\u8fde\u63a5\u5931\u8d25: " + e.message;
+      if (resultEl) { resultEl.textContent = msg3; resultEl.className = "test-result fail"; }
+      return { ok: false, latency: latency2, message: msg3 };
+    }
+  };
+
+  App.testLlmConnection = async function() {
+    var startTime = Date.now();
+    var resultEl = document.getElementById("llmTestResult");
+    if (resultEl) {
+      resultEl.textContent = "\u6d4b\u8bd5\u4e2d...";
+      resultEl.className = "test-result testing";
+    }
+    try {
+      var data = await llmChat(
+        [
+          { role: "system", content: "\u4f60\u662f\u4e00\u4e2a\u6d4b\u8bd5\u52a9\u624b\u3002\u8bf7\u7528\u4e00\u53e5\u8bdd\u56de\u590d\u3002" },
+          { role: "user", content: "\u8bf4\u4e00\u53e5\u6c5f\u6e56\u8bdd" }
+        ],
+        { maxTokens: 50, temperature: 0.7 }
+      );
+      var latency = Date.now() - startTime;
+      var reply = data.choices && data.choices[0] && data.choices[0].message
+        ? data.choices[0].message.content : "(\u65e0\u56de\u590d)";
+      var msg = "\u8fde\u63a5\u6210\u529f! \u5ef6\u8fdf: " + latency + "ms | \u56de\u590d: " + reply;
+      if (resultEl) { resultEl.textContent = msg; resultEl.className = "test-result success"; }
+      return { ok: true, latency: latency, message: msg, response: reply };
+    } catch (e) {
+      var latency2 = Date.now() - startTime;
+      var msg2 = "\u8fde\u63a5\u5931\u8d25: " + e.message;
+      if (resultEl) { resultEl.textContent = msg2; resultEl.className = "test-result fail"; }
+      return { ok: false, latency: latency2, message: msg2 };
+    }
+  };
+
 })(window.App);
