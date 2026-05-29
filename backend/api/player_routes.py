@@ -220,7 +220,7 @@ async def _post_move_world_update(p, prev_map, actual_path, prev_day, bg):
             if meta.get("hidden"):
                 continue
             cell = meta.get("cell")
-            if cell and cell[0] == p.map_id:
+            if cell and isinstance(cell, (list, tuple)) and len(cell) >= 1 and cell[0] == p.map_id:
                 npc_ids_for_plan.append(nid)
     if npc_ids_for_plan:
         bg.add_task(bg_plan_for_npcs, p.player_id, npc_ids_for_plan, new_day)
@@ -263,7 +263,8 @@ async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
     from backend.session.store import room
 
     p = room.players.get(body.player_id)
-    _validate_move_preconditions(p, body)
+    if not p:
+        raise HTTPException(404, "未知 player_id")
 
     allow_steep = bool(getattr(p, "allow_steep_next_move", False))
     path = find_path(p.map_id, p.px, p.py, body.to_x, body.to_y, allow_steep=allow_steep)
@@ -271,6 +272,7 @@ async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
         raise HTTPException(400, "此处无路可达")
 
     async with p.lock:
+        _validate_move_preconditions(p, body)
         if (p.px, p.py) != (path[0][0], path[0][1]):
             path = find_path(p.map_id, p.px, p.py, body.to_x, body.to_y, allow_steep=allow_steep)
             if not path:

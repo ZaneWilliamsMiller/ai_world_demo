@@ -50,10 +50,10 @@ def player_public(p: PlayerState) -> dict[str, Any]:
         "trap_attempts": int(getattr(p, "trap_attempts", 0) or 0),
         "enslaved": bool(getattr(p, "enslaved", False)),
         "enslaved_reason": getattr(p, "enslaved_reason", None),
-        "vigor": int(getattr(p, "vigor", 80) or 0),
-        "vigor_max": int(getattr(p, "vigor_max", 100) or 100),
-        "spirit": int(getattr(p, "spirit", 80) or 0),
-        "spirit_max": int(getattr(p, "spirit_max", 100) or 100),
+        "vigor": max(0, int(getattr(p, "vigor", 0) or 0)),
+        "vigor_max": max(1, int(getattr(p, "vigor_max", 100) or 100)),
+        "spirit": max(0, int(getattr(p, "spirit", 0) or 0)),
+        "spirit_max": max(1, int(getattr(p, "spirit_max", 100) or 100)),
         "sleep_debt": int(getattr(p, "sleep_debt", 0) or 0),
         "unconscious_ticks": int(getattr(p, "unconscious_ticks", 0) or 0),
         "rescue_needed": bool(getattr(p, "rescue_needed", False)),
@@ -97,7 +97,7 @@ def maps_public() -> dict[str, Any]:
         return _maps_cache
     out: dict[str, Any] = {}
     for mid, m in MAPS.items():
-        out[mid] = {"name": m["name"], "rows": m["rows"], "portals": m.get("portals", [])}
+        out[mid] = {"name": m.get("name", mid), "rows": m.get("rows", []), "portals": m.get("portals", [])}
     _maps_cache = out
     return _maps_cache
 
@@ -125,7 +125,7 @@ def npc_labels_public() -> dict[str, str]:
     global _npc_labels_cache
     if _npc_labels_cache is not None:
         return _npc_labels_cache
-    _npc_labels_cache = {nid: v["name"] for nid, v in NPCS.items()}
+    _npc_labels_cache = {nid: v.get("name", nid) for nid, v in NPCS.items()}
     return _npc_labels_cache
 
 

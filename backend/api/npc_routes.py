@@ -62,13 +62,13 @@ def _get_active_player(player_id: str) -> PlayerState:
     if not p:
         raise HTTPException(404, "未知 player_id")
     if p.dead:
-        raise HTTPException(400, "角色已故，无法操作悬赏榜")
+        raise HTTPException(400, "角色已故，无法操作")
     if p.ended:
-        raise HTTPException(400, "本局已收束，无法操作悬赏榜")
+        raise HTTPException(400, "本局已收束，无法操作")
     if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
-        raise HTTPException(409, "你正处于昏迷状态，无法操作悬赏榜")
+        raise HTTPException(409, "你正处于昏迷状态，无法操作")
     if getattr(p, "enslaved", False):
-        raise HTTPException(403, "你正被奴役，无法操作悬赏榜")
+        raise HTTPException(403, "你正被奴役，无法操作")
     return p
 
 
@@ -366,7 +366,7 @@ async def agent_mind(player_id: str = Path(..., min_length=1, max_length=64), np
     if mind is None:
         return {
             "npc_id": npc_id,
-            "npc_name": NPCS[npc_id]["name"],
+            "npc_name": NPCS.get(npc_id, {}).get("name", npc_id),
             "items": [],
             "plan_day": None,
             "plan_summary": "",
@@ -378,7 +378,7 @@ async def agent_mind(player_id: str = Path(..., min_length=1, max_length=64), np
         }
     return {
         "npc_id": npc_id,
-        "npc_name": NPCS[npc_id]["name"],
+        "npc_name": NPCS.get(npc_id, {}).get("name", npc_id),
         "items": [m.to_dict() for m in mind.items],
         "importance_since_reflect": float(mind.importance_since_reflect),
         "plan_day": mind.plan_day,
@@ -412,7 +412,7 @@ async def agent_reflect(body: AgentActBody) -> dict[str, Any]:
         mind = get_or_init_mind(p, body.npc_id)
         new_refls = await agent_brain.reflect(
             npc_id=body.npc_id,
-            npc_name=npc["name"],
+            npc_name=npc.get("name", body.npc_id),
             npc_blurb=str(npc.get("short", "")),
             mind=mind,
             world_day=int(p.world_day),
@@ -446,7 +446,7 @@ async def agent_plan(body: AgentActBody) -> dict[str, Any]:
         mind = get_or_init_mind(p, body.npc_id)
         ok = await agent_brain.plan_day(
             npc_id=body.npc_id,
-            npc_name=npc["name"],
+            npc_name=npc.get("name", body.npc_id),
             npc_blurb=str(npc.get("short", "")),
             mind=mind,
             world_day=int(p.world_day),
@@ -486,7 +486,7 @@ async def finale(body: FinaleBody) -> dict[str, Any]:
     inv_line = "身无长物" if not p.inventory else "随身:" + "、".join(
         (f"{n}×{c}" if c > 1 else n) for n, c in sorted(p.inventory.items())
     )
-    rep_line = " ".join(f"{FACTIONS[k]}{v:+d}" for k, v in p.reputation.items() if v != 0) or "声望未起"
+    rep_line = " ".join(f"{FACTIONS.get(k, k)}{v:+d}" for k, v in p.reputation.items() if v != 0) or "声望未起"
     from backend.data.maps_data import MAPS
     lines = [
         FIXED_INTRO, "",
@@ -504,7 +504,7 @@ async def finale(body: FinaleBody) -> dict[str, Any]:
         if not hist:
             continue
         any_talk = True
-        name = NPCS[nid]["name"]
+        name = NPCS.get(nid, {}).get("name", nid)
         for turn in hist:
             u = turn.get("user", "")[:1400]
             a = turn.get("assistant", "")[:1400]

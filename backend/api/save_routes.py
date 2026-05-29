@@ -56,6 +56,14 @@ async def load_player(body: LoadBody) -> dict[str, Any]:
         raise HTTPException(400, "此角色的故事已收束，不可再入")
     await room.set_player(body.player_id, loaded)
     async with loaded.lock:
+        for attr in ("bounties", "completed_bounties", "rumors", "events"):
+            val = getattr(loaded, attr, None)
+            if val is None:
+                setattr(loaded, attr, [])
+        for attr in ("favor", "inventory", "minds", "npc_positions", "npc_inventories", "npc_inventory_restock_day", "npc_states", "item_use_tracker"):
+            val = getattr(loaded, attr, None)
+            if val is None:
+                setattr(loaded, attr, {})
         init_npc_positions(loaded)
         init_npc_inventories(loaded)
     return build_init_response(loaded)
