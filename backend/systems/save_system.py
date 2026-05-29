@@ -15,10 +15,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import tempfile
 import time
 import uuid
-import re
 from dataclasses import fields as dc_fields
 from pathlib import Path
 from typing import Any
@@ -29,15 +29,15 @@ def _validate_player_id(player_id: str) -> None:
     if not _SAFE_ID_RE.match(player_id):
         raise ValueError(f"非法 player_id: {player_id!r}")
 
-from backend.models.player import PlayerState
+import contextlib
+
 from backend.data.factions import FACTIONS
+from backend.models.player import PlayerState
 from backend.systems.constants import (
-    INITIAL_VIGOR,
-    INITIAL_VIGOR_MAX,
-    INITIAL_SPIRIT,
-    INITIAL_SPIRIT_MAX,
     DEFAULT_RESPAWN_X,
     DEFAULT_RESPAWN_Y,
+    INITIAL_SPIRIT_MAX,
+    INITIAL_VIGOR_MAX,
     RESPAWN_MIN_STAT,
     RESPAWN_RATIO,
 )
@@ -101,7 +101,7 @@ def _deserialize_player(data: dict[str, Any]) -> PlayerState:
     rep = data.get("reputation", {})
     if not isinstance(rep, dict):
         rep = {}
-    for k in FACTIONS.keys():
+    for k in FACTIONS:
         rep.setdefault(k, 0)
     data["reputation"] = rep
 
@@ -111,7 +111,7 @@ def _deserialize_player(data: dict[str, Any]) -> PlayerState:
     p = PlayerState(**data)
 
     # 还原 minds
-    from backend.memory import Memory, AgentMind
+    from backend.memory import AgentMind, Memory
     for nid, md in minds_raw.items():
         mind = AgentMind()
         mind.importance_since_reflect = float(md.get("importance_since_reflect", 0))
@@ -193,10 +193,8 @@ def save_game(p: PlayerState) -> str:
                 json.dump(data, f, ensure_ascii=False, indent=2)
             os.replace(tmp_path, fp)
         except Exception:
-            try:
+            with contextlib.suppress(Exception):
                 os.unlink(tmp_path)
-            except Exception:
-                pass
             raise
         log.info("存档成功: %s (%s, 第%d日 制钱%d)", p.display_name, p.player_id,
                   p.world_day, p.coins)
@@ -212,7 +210,7 @@ def load_game(player_id: str) -> PlayerState | None:
     if not fp.is_file():
         return None
     try:
-        with open(fp, "r", encoding="utf-8") as f:
+        with open(fp, encoding="utf-8") as f:
             data = json.load(f)
         p = _deserialize_player(data)
         if p.permadeath and p.dead:
@@ -231,7 +229,7 @@ def list_saves() -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     for fp in sorted(SAVE_DIR.glob("*.json")):
         try:
-            with open(fp, "r", encoding="utf-8") as f:
+            with open(fp, encoding="utf-8") as f:
                 data = json.load(f)
             result.append({
                 "player_id": data.get("player_id", fp.stem),
@@ -275,10 +273,9 @@ def respawn_at_supply_point(p: PlayerState) -> str:
     恢复 50% 体力/心气，清除debuff。
     返回一句文本描述。"""
     from backend.data.maps_data import MAPS
-    from backend.systems.pathfinding import walkable
 
     supply_tiles = {"T", "Y", "I", "M", "B"}
-    candidates: list[tuple[int, int, str]] = []  # (manhattan_dist, x, y)
+    candidates: list[tuple[int, int, int]] = []  # (manhattan_dist, x, y)
 
     # 先在当前地图找
     m = MAPS.get(p.map_id)
@@ -298,8 +295,8 @@ def respawn_at_supply_point(p: PlayerState) -> str:
         p.map_id = "world"
         nx, ny = DEFAULT_RESPAWN_X, DEFAULT_RESPAWN_Y
 
-    old_map, old_x, old_y = p.map_id, p.px, p.py
-    p.px, p.py = nx, ny
+    _old_map, old_x, old_y = p.map_id, p.px, p.py  # type: ignore[misc]
+    p.px, p.py = nx, ny  # type: ignore[assignment]
     p.dead = False
     p.death_reason = None
     p.vigor = max(RESPAWN_MIN_STAT, p.vigor_max // RESPAWN_RATIO)

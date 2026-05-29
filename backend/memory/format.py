@@ -6,8 +6,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.memory.entities import _get_all_entity_keywords
-
 
 def format_memories_for_prompt(mems: list[Any]) -> str:
     """把命中的记忆条整理为给 LLM 注入的文本。"""
@@ -177,7 +175,7 @@ def format_proactive_callbacks(mind: Any, player_name: str) -> str:
     return "\n".join(callback_lines)
 
 
-def format_topic_thread(hist_slice: list[dict[str, str]]) -> str:
+def format_topic_thread(hist_slice: list[dict[str, str | int]]) -> str:
     """对话话题线程跟踪。"""
     if len(hist_slice) < 2:
         return ""
@@ -188,7 +186,7 @@ def format_topic_thread(hist_slice: list[dict[str, str]]) -> str:
     topic_keywords: set[str] = set()
 
     for turn in recent:
-        user_msg = (turn.get("user") or "").lower()
+        user_msg = str(turn.get("user") or "").lower()
         for q_marker in ("?", "?", "吗", "呢", "如何", "怎么", "可否", "能否"):
             if q_marker in user_msg:
                 q_idx = user_msg.index(q_marker)

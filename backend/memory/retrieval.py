@@ -12,22 +12,23 @@ import logging
 import math
 import re
 import time
+from typing import Any
 
-from backend.memory_index import (
-    MemoryIndex,
-    tokenize,
-    check_retrieval_cache,
-    set_retrieval_cache,
-    get_cached_retrieval_key,
-)
 from backend.memory.entities import (
+    _MOOD_BIAS_THRESHOLD,
+    _MOOD_BIAS_WEIGHT,
     _get_all_entity_keywords,
     _get_person_names,
     _get_place_names,
     _get_thing_keywords,
-    _MOOD_BIAS_THRESHOLD,
-    _MOOD_BIAS_WEIGHT,
     sentiment_hint,
+)
+from backend.memory.index import (
+    MemoryIndex,
+    check_retrieval_cache,
+    get_cached_retrieval_key,
+    set_retrieval_cache,
+    tokenize,
 )
 
 log = logging.getLogger("memory.retrieval")
@@ -130,7 +131,7 @@ def retrieve(
 
     query_tokens = tokenize(query)
 
-    cache_key = get_cached_retrieval_key(id(mind), hash(query))
+    cache_key = get_cached_retrieval_key(str(id(mind)), hash(query))
     cached_ids = check_retrieval_cache(cache_key)
     if cached_ids is not None:
         id_to_mem = {m.id: m for m in mind.items}
@@ -157,8 +158,7 @@ def retrieve(
         else:
             rel = text_relevance(query, m.text)
         rels.append(rel)
-        if rel > rel_max:
-            rel_max = rel
+        rel_max = max(rel_max, rel)
 
     mood_valence = float(getattr(mind, 'affect_valence', 0.0) or 0.0)
     apply_mood_bias = abs(mood_valence) >= _MOOD_BIAS_THRESHOLD
@@ -190,7 +190,7 @@ def retrieve(
     return top
 
 
-def _resolve_deictic(user_message: str, hist_slice: list[dict[str, str]]) -> str:
+def _resolve_deictic(user_message: str, hist_slice: list[dict[str, str | int]]) -> str:
     """中文代词/指示词消解。"""
     if not hist_slice or len(hist_slice) < 1:
         return ""
@@ -203,7 +203,6 @@ def _resolve_deictic(user_message: str, hist_slice: list[dict[str, str]]) -> str
     PERSON_PRONOUNS = {"他们", "她们", "它们"}
     PERSON_PRONOUN_SINGLE = {"他", "她", "它", "其"}
     DEICTIC_NOUNS = {"这人", "那人", "此人", "彼", "这位", "那位", "该人"}
-    DEICTIC_PREFIX = {"这", "那", "此", "该"}
     DEICTIC_THINGS = {"这事", "那事", "那件事", "这件事", "这个", "那个", "这种", "那种"}
 
     has_person_pronoun = any(p in msg for p in PERSON_PRONOUNS)
@@ -238,8 +237,8 @@ def _resolve_deictic(user_message: str, hist_slice: list[dict[str, str]]) -> str
     seen: set[str] = set()
 
     for turn in recent:
-        assistant_text = (turn.get("assistant", "") or "").lower()
-        user_text = (turn.get("user", "") or "").lower()
+        assistant_text = str(turn.get("assistant", "") or "").lower()
+        user_text = str(turn.get("user", "") or "").lower()
         combined = assistant_text + " " + user_text
 
         for pn in _person_names:
@@ -259,7 +258,7 @@ def _resolve_deictic(user_message: str, hist_slice: list[dict[str, str]]) -> str
 
     if has_person_pronoun or has_deictic_noun or has_deictic_entity:
         for turn in reversed(recent):
-            assistant_text = (turn.get("assistant", "") or "").lower()
+            assistant_text = str(turn.get("assistant", "") or "").lower()
             for pn in _person_names:
                 if pn.lower() in assistant_text:
                     if pn not in resolved_terms:
@@ -273,7 +272,7 @@ def _resolve_deictic(user_message: str, hist_slice: list[dict[str, str]]) -> str
 
     if has_deictic_thing or has_deictic_entity:
         for turn in reversed(recent):
-            assistant_text = (turn.get("assistant", "") or "").lower()
+            assistant_text = str(turn.get("assistant", "") or "").lower()
             for tk in _thing_kws:
                 if tk.lower() in assistant_text:
                     if tk not in resolved_terms:
@@ -293,7 +292,7 @@ def _resolve_deictic(user_message: str, hist_slice: list[dict[str, str]]) -> str
     return f"{user_message} {resolved_phrase}"
 
 
-def build_retrieval_query(user_message: str, hist_slice: list[dict[str, str]]) -> str:
+def build_retrieval_query(user_message: str, hist_slice: list[dict[str, str | int]]) -> str:
     """上下文感知的记忆检索查询构建。"""
     pronoun_resolved = _resolve_deictic(user_message, hist_slice)
 
@@ -306,14 +305,14 @@ def build_retrieval_query(user_message: str, hist_slice: list[dict[str, str]]) -
     _all_kw = _get_all_entity_keywords()
     seen_words: set[str] = set()
     for turn in recent:
-        combined = (turn.get("user", "") + " " + turn.get("assistant", "")).lower()
+        combined = (str(turn.get("user", "")) + " " + str(turn.get("assistant", ""))).lower()
         for kw in _all_kw:
             if kw in combined and kw not in seen_words:
                 topic_words.append(kw)
                 seen_words.add(kw)
 
     for turn in recent:
-        user_msg = (turn.get("user") or "").lower()
+        user_msg = str(turn.get("user") or "").lower()
         for q_marker in ("?", "？", "吗", "呢", "如何", "怎么", "可否"):
             if q_marker in user_msg:
                 q_idx = max(0, user_msg.index(q_marker) - 20)
@@ -339,10 +338,12 @@ def build_retrieval_query(user_message: str, hist_slice: list[dict[str, str]]) -
 
 def condense_old_observations(mind: Any, world_day: int, world_shichen: str) -> int:
     """CMA式记忆凝结。"""
-    from backend.memory.entities import (
-        OBS_CONDENSE_THRESHOLD, OBS_CONDENSE_BATCH, OBS_KEEP_RECENT,
-    )
     from backend.memory import make_memory
+    from backend.memory.entities import (
+        OBS_CONDENSE_BATCH,
+        OBS_CONDENSE_THRESHOLD,
+        OBS_KEEP_RECENT,
+    )
 
     obs = [m for m in mind.items if m.kind == "observation" and not m.is_anchor]
     if len(obs) <= OBS_CONDENSE_THRESHOLD:
@@ -385,7 +386,7 @@ def condense_old_observations(mind: Any, world_day: int, world_shichen: str) -> 
     to_condense_ids = {m.id for m in to_condense}
     mind.items = [m for m in mind.items if m.id not in to_condense_ids]
 
-    summary_text = f"记忆凝结：回想往昔，" + ";".join(summaries)[:400]
+    summary_text = "记忆凝结：回想往昔，" + ";".join(summaries)[:400]
     mind.add(make_memory(
         kind="condensation",
         text=summary_text,

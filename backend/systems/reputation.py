@@ -1,19 +1,18 @@
 from __future__ import annotations
-from typing import Any
+
 from backend.data.factions import FACTIONS
 from backend.models.player import PlayerState
-from backend.systems.constants import MAX_REP_DELTA, MAX_REPUTATION, MAX_EVENT_LEN, MAX_EVENTS
+from backend.systems.constants import MAX_EVENT_LEN, MAX_EVENTS, MAX_REP_DELTA, MAX_REPUTATION
 from backend.systems.time_weather import shichen_name
+
 
 def clamp_rep_delta(d: dict[str, int]) -> dict[str, int]:
     out: dict[str, int] = {}
-    for k in FACTIONS.keys():
+    for k in FACTIONS:
         if k in d:
             v = int(d[k])
-            if v > MAX_REP_DELTA:
-                v = MAX_REP_DELTA
-            if v < -MAX_REP_DELTA:
-                v = -MAX_REP_DELTA
+            v = min(v, MAX_REP_DELTA)
+            v = max(v, -MAX_REP_DELTA)
             if v != 0:
                 out[k] = v
     return out

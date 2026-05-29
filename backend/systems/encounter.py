@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """动态奇遇系统：基于世界状态生成上下文感知的叙事碎片
 
 设计理念（2026 AI前沿落地）：
@@ -23,20 +24,21 @@ from __future__ import annotations
 - dynamic_encounter 是「你瞥见/听到/嗅到了什么」，是叙事碎片，不强制
 """
 import json
-import random
 import logging
+import random
 from typing import Any
 
-from backend.models.player import PlayerState
-from backend.data.npcs_data import NPCS, NPC_FACTION
-from backend.data.maps_data import MAPS
+from backend import memory as mem
+from backend.data.atmosphere import tile_atmosphere
 from backend.data.factions import FACTIONS
-from backend.data.atmosphere import tile_atmosphere, WORLD_REGIONS
-from backend.systems.pathfinding import tile_at
-from backend.systems.time_weather import shichen_name, is_night
+from backend.data.maps_data import MAPS
+from backend.data.npcs_data import NPC_FACTION, NPCS
 from backend.data.zones import is_safe_zone
-from backend.llm_params import ENCOUNTER_TEMPERATURE, ENCOUNTER_MAX_TOKENS
+from backend.llm.params import ENCOUNTER_MAX_TOKENS, ENCOUNTER_TEMPERATURE
+from backend.models.player import PlayerState
 from backend.systems.constants import RECENT_THRESHOLD_S
+from backend.systems.pathfinding import tile_at
+from backend.systems.time_weather import is_night, shichen_name
 
 log = logging.getLogger("encounter")
 
@@ -171,7 +173,7 @@ async def generate_dynamic_encounter(p: PlayerState) -> dict[str, Any] | None:
     ]
 
     try:
-        from backend.llm_client import chat_completion
+        from backend.llm.client import chat_completion
         raw = await chat_completion(
             messages,
             temperature=ENCOUNTER_TEMPERATURE,
@@ -225,10 +227,11 @@ def apply_encounter(p: PlayerState, encounter: dict[str, Any]) -> None:
     - 同势力NPC：与势力相关的事件记忆更深
     - 其他NPC：基础重要性，但可能「没留意到」
     """
+    from backend import memory as mem
+    from backend.agents import brain as agent_brain
+    from backend.agents.game_state import get_or_init_mind
+    from backend.systems.core import push_rumor
     from backend.systems.reputation import push_event
-    from backend.systems.core import push_rumor, npc_ids_for_player
-    from backend.game_state import get_or_init_mind
-    from backend import agent_brain, memory as mem
 
     scene = encounter.get("scene", "")
     hint = encounter.get("hint")
@@ -261,8 +264,8 @@ def apply_encounter(p: PlayerState, encounter: dict[str, Any]) -> None:
             if not npc_pos or npc_pos[0] != p.map_id:
                 continue
 
-        npc_short = meta.get("short", nid)
-        npc_name = meta.get("name", nid)
+        meta.get("short", nid)
+        meta.get("name", nid)
 
         # 记忆重要性差异化：基于NPC身份
         base_importance = 4.0  # 默认：中等，像是"似乎有点什么动静"
@@ -290,7 +293,7 @@ def apply_encounter(p: PlayerState, encounter: dict[str, Any]) -> None:
 
         # 情感记忆加权
         mind = get_or_init_mind(p, nid)
-        affective_imp = mem.affective_memory_importance(base_importance, mind)
+        affective_imp = mem.affective_memory_importance(base_importance, mind)  # type: ignore[call-arg]
 
         # 写入记忆流
         agent_brain.record_observation(
@@ -305,7 +308,7 @@ def apply_encounter(p: PlayerState, encounter: dict[str, Any]) -> None:
     p.last_dynamic_encounter_tick = int(getattr(p, "world_tick", 0) or 0)
 
 
-def format_encounter_perception_block(mind: "mem.AgentMind", world_shichen: str) -> str:
+def format_encounter_perception_block(mind: mem.AgentMind, world_shichen: str) -> str:
     """从NPC记忆流中抽取最近的奇遇感知记忆，生成可注入对话的提示块。
 
     SITS2026「感知代理→向量记忆」架构落地：

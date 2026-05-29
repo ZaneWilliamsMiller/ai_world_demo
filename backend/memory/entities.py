@@ -10,12 +10,6 @@ from __future__ import annotations
 
 import logging
 import random
-import re
-import time
-import uuid
-from collections.abc import Iterable
-from dataclasses import dataclass, field
-from typing import Any
 
 log = logging.getLogger("memory.entities")
 
@@ -62,7 +56,7 @@ _NEGATIVE_MEMORY_WORDS = {
 
 
 # ─── 动态实体关键词构建（从 NPCS/MAPS 数据自动同步）───
-_DYNAMIC_ENTITIES_CACHED: dict[str, tuple] | None = None
+_DYNAMIC_ENTITIES_CACHED: tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...], tuple[str, ...]] | None = None
 
 
 def _build_dynamic_entities() -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
@@ -79,8 +73,8 @@ def _build_dynamic_entities() -> tuple[tuple[str, ...], tuple[str, ...], tuple[s
     places: set[str] = set()
 
     try:
-        from backend.data.npcs_data import NPCS, NPC_HABITS
         from backend.data.maps_data import MAPS
+        from backend.data.npcs_data import NPC_HABITS, NPCS
 
         for nid, meta in NPCS.items():
             name = (meta.get("name") or "").strip()
@@ -113,7 +107,7 @@ def _build_dynamic_entities() -> tuple[tuple[str, ...], tuple[str, ...], tuple[s
                 if loc_name and len(loc_name) >= 2:
                     places.add(loc_name)
 
-        for mid, m in MAPS.items():
+        for _mid, m in MAPS.items():
             map_name = m.get("name", "")
             if map_name and len(map_name) >= 2:
                 places.add(map_name)

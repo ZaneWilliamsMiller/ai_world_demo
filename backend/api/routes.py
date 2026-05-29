@@ -8,7 +8,7 @@
 """
 from __future__ import annotations
 
-from typing import Any
+import os
 
 from fastapi import APIRouter
 
@@ -16,22 +16,25 @@ from backend.data.prompts import WORLD_NAME
 
 router = APIRouter()
 
-# ── 挂载子路由 ──
-from backend.api.player_routes import router as player_router
 from backend.api.npc_routes import router as npc_router
+from backend.api.player_routes import router as player_router
 from backend.api.save_routes import router as save_router
-from backend.api.test_routes import router as test_router
 
 router.include_router(player_router)
 router.include_router(npc_router)
 router.include_router(save_router)
-router.include_router(test_router)
+
+if os.environ.get("ENABLE_TEST_ROUTES", "0") == "1":
+    from backend.api.dev import router as test_router
+
+    router.include_router(test_router)
 
 
 @router.get("/api/health")
 async def health() -> dict[str, str]:
     try:
         from backend.config import settings
+
         llm_ok = bool(settings.llm_api_key and settings.llm_base_url)
     except Exception:
         llm_ok = False

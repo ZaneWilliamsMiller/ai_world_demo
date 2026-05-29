@@ -20,21 +20,20 @@
   - 与记忆系统集成：完成任务后写入记忆流
 """
 from __future__ import annotations
-import json
+
 import logging
 import random
 from typing import Any
 
-from backend.models.player import PlayerState
-from backend.data.npcs_data import NPCS
-from backend.data.factions import FACTIONS
-from backend.data.maps_data import MAPS, MAP_LOCATIONS
-from backend.systems.constants import BOUNTY_REFRESH_INTERVAL_DAYS, BOUNTY_COUNT_RANGE
-from backend.systems.time_weather import shichen_name
-from backend.systems.reputation import apply_rep_delta
-from backend.systems.core import push_rumor, apply_favor
-from backend.game_state import get_or_init_mind
 import backend.memory as mem
+from backend.agents.game_state import get_or_init_mind
+from backend.data.factions import FACTIONS
+from backend.data.maps_data import MAP_LOCATIONS
+from backend.data.npcs_data import NPCS
+from backend.models.player import PlayerState
+from backend.systems.constants import BOUNTY_COUNT_RANGE, BOUNTY_REFRESH_INTERVAL_DAYS
+from backend.systems.core import apply_favor
+from backend.systems.time_weather import shichen_name
 
 log = logging.getLogger("bounty")
 
@@ -131,7 +130,7 @@ def generate_bounties(p: PlayerState, count: int = 3) -> list[dict[str, Any]]:
             dest_id = target_id
         dest_meta = NPCS.get(dest_id, {})
         dest_name = dest_meta.get("name", dest_id)
-        dest_coords = MAP_LOCATIONS.get(map_id, {}).get(dest_name, (10, 16))
+        MAP_LOCATIONS.get(map_id, {}).get(dest_name, (10, 16))
 
         # 对于 location_npc：选一个在当前地点活跃的 NPC
         location_npc_id = target_id
@@ -280,7 +279,7 @@ def check_bounty_progress(p: PlayerState) -> dict[str, Any] | None:
                 progress["done"] = True
                 progress["reason"] = f"已抵达目的地坐标 ({t_px},{t_py})。"
             else:
-                progress["reason"] = f"尚在途中，未到目的地。"
+                progress["reason"] = "尚在途中，未到目的地。"
         else:
             # 兜底：检查最近的一次移动
             last_map = getattr(p, "last_move_map_id", None)
@@ -288,7 +287,7 @@ def check_bounty_progress(p: PlayerState) -> dict[str, Any] | None:
                 progress["done"] = True
                 progress["reason"] = f"已抵达{dest_map_id}。"
             else:
-                progress["reason"] = f"尚未到达目的地。"
+                progress["reason"] = "尚未到达目的地。"
 
     # ── 寻回类：需要获得物品 ──
     elif "have_item" in requires:
@@ -348,7 +347,7 @@ def complete_bounty(p: PlayerState) -> tuple[bool, str, dict[str, Any]]:
 
     # 写入记忆
     mind = get_or_init_mind(p, "jiang")  # 风闻子记录
-    mem.record_observation(
+    mem.record_observation(  # type: ignore[attr-defined]
         mind,
         f"完成悬赏「{bounty['title']}」，获{coins}文钱。",
         world_day=int(p.world_day),

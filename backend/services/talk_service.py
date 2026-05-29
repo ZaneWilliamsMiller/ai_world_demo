@@ -1,71 +1,80 @@
 from __future__ import annotations
+
 import logging
 import random
 from typing import Any
-from backend import agent_brain, memory as mem
-from backend.models.player import PlayerState
-from backend.data.npcs_data import NPCS, NPC_FACTION, STORY_ORDER
-from backend.data.factions import FACTIONS
-from backend.data.prompts import SOCIETY_BIBLE, MACHINE_TAIL_RULE, AUTONOMY_RULE, PERMADEATH_RULE
+
+from backend import memory as mem
+from backend.agents import brain as agent_brain
+from backend.agents.game_state import get_or_init_mind
+from backend.api.views import npcs_here, player_public
 from backend.data.atmosphere import scene_context
+from backend.data.factions import FACTIONS
+from backend.data.maps_data import MAPS
+from backend.data.npcs_data import NPC_FACTION, NPCS
+from backend.data.prompts import AUTONOMY_RULE, MACHINE_TAIL_RULE, PERMADEATH_RULE, SOCIETY_BIBLE
+from backend.data.relationships import relationship_context
+from backend.llm.client import cached_system
+from backend.memory import format_insight_block
+from backend.models.llm_schema import NpcResponseSchema
 from backend.models.npc import format_npc_character_sheet
-from backend.systems.core import (
-    clamp_delta,
-    apply_favor,
-    push_rumor,
-    try_clear_move_lock,
-    world_status_block,
-    recent_events_block,
-    vigor_status_block,
-    apply_vigor_delta,
-    apply_spirit_delta,
-    maybe_collapse_from_attrs,
-    survival_action_delta,
-    npc_state_for_dialogue,
-    npc_weather_awareness_block,
-    update_npc_state_dynamic,
-)
-from backend.systems.economy import apply_coin_delta, add_items, remove_items, format_economy_context, format_npc_inventory, apply_npc_trade
-from backend.systems.reputation import apply_rep_delta, push_event
+from backend.models.player import PlayerState
 from backend.systems.constants import (
-    MOOD_FAVOR_POS_MULT,
-    MOOD_FAVOR_NEG_MULT,
-    MOOD_COIN_MAX_EFFECT,
-    MOOD_COIN_DIVISOR,
-    MOOD_PERMADEATH_AROUSAL,
-    MOOD_PERMADEATH_VALENCE,
-    MOOD_ESCAPE_SUCCESS_AROUSAL,
-    MOOD_ESCAPE_SUCCESS_VALENCE,
-    MOOD_POSITIVE_WORD_VALENCE,
-    MOOD_NEGATIVE_WORD_VALENCE,
-    MOOD_NEGATIVE_WORD_AROUSAL,
-    MOOD_EVENT_AROUSAL_PER,
-    MOOD_EVENT_AROUSAL_MAX,
-    MOOD_ITEM_VALENCE_PER,
-    MOOD_ITEM_VALENCE_MAX,
-    MOOD_NIGHT_AROUSAL_PENALTY,
-    MOOD_INERTIA_POSITIVE_THRESHOLD,
-    MOOD_INERTIA_NEGATIVE_THRESHOLD,
-    MOOD_INERTIA_POS_POS_DAMPING,
-    MOOD_INERTIA_POS_NEG_DAMPING,
-    MOOD_INERTIA_NEG_NEG_AMPLIFY,
-    MOOD_INERTIA_NEG_POS_DAMPING,
-    MOOD_AROUSAL_HIGH_THRESHOLD,
-    MOOD_AROUSAL_LOW_THRESHOLD,
-    MOOD_AROUSAL_HIGH_POS_DAMPING,
     MOOD_AROUSAL_HIGH_NEG_AMPLIFY,
+    MOOD_AROUSAL_HIGH_POS_DAMPING,
+    MOOD_AROUSAL_HIGH_THRESHOLD,
     MOOD_AROUSAL_LOW_NEG_DAMPING,
     MOOD_AROUSAL_LOW_POS_AMPLIFY,
+    MOOD_AROUSAL_LOW_THRESHOLD,
+    MOOD_COIN_DIVISOR,
+    MOOD_COIN_MAX_EFFECT,
+    MOOD_ESCAPE_SUCCESS_AROUSAL,
+    MOOD_ESCAPE_SUCCESS_VALENCE,
+    MOOD_EVENT_AROUSAL_MAX,
+    MOOD_EVENT_AROUSAL_PER,
+    MOOD_FAVOR_NEG_MULT,
+    MOOD_FAVOR_POS_MULT,
+    MOOD_INERTIA_NEG_NEG_AMPLIFY,
+    MOOD_INERTIA_NEG_POS_DAMPING,
+    MOOD_INERTIA_NEGATIVE_THRESHOLD,
+    MOOD_INERTIA_POS_NEG_DAMPING,
+    MOOD_INERTIA_POS_POS_DAMPING,
+    MOOD_INERTIA_POSITIVE_THRESHOLD,
+    MOOD_ITEM_VALENCE_MAX,
+    MOOD_ITEM_VALENCE_PER,
+    MOOD_NEGATIVE_WORD_AROUSAL,
+    MOOD_NEGATIVE_WORD_VALENCE,
+    MOOD_NIGHT_AROUSAL_PENALTY,
+    MOOD_PERMADEATH_AROUSAL,
+    MOOD_PERMADEATH_VALENCE,
+    MOOD_POSITIVE_WORD_VALENCE,
 )
-from backend.systems.time_weather import shichen_name, advance_clock, is_night
-from backend.views import player_public, npcs_here
-from backend.llm_client import chat_completion, parse_npc_reply_json, cached_system
-from backend.models.llm_schema import NpcResponseSchema
-from backend.game_state import get_or_init_mind
+from backend.systems.core import (
+    apply_favor,
+    apply_spirit_delta,
+    apply_vigor_delta,
+    clamp_delta,
+    maybe_collapse_from_attrs,
+    npc_state_for_dialogue,
+    npc_weather_awareness_block,
+    push_rumor,
+    recent_events_block,
+    survival_action_delta,
+    try_clear_move_lock,
+    vigor_status_block,
+    world_status_block,
+)
+from backend.systems.economy import (
+    apply_coin_delta,
+    apply_npc_trade,
+    format_economy_context,
+    format_npc_inventory,
+    remove_items,
+)
 from backend.systems.encounter import format_encounter_perception_block
-from backend.memory import format_insight_block
-from backend.data.relationships import relationship_context
 from backend.systems.npc_gossip import format_gossip_awareness_block
+from backend.systems.reputation import apply_rep_delta, push_event
+from backend.systems.time_weather import advance_clock, is_night, shichen_name
 
 # ── LLM 调用失败时的优雅降级响应池 ──
 _GRACEFUL_FALLBACKS = [
@@ -94,7 +103,7 @@ def build_graceful_fallback(npc_id: str, error_msg: str) -> dict[str, Any]:
         "LLM call failed for npc=%s, graceful fallback used. Error: %s",
         npc_id, error_msg[:200],
     )
-    parsed = NpcResponseSchema(visible_text=text)
+    parsed = NpcResponseSchema(visible_text=text)  # type: ignore[call-arg]
     return {
         "visible_text": text,
         "parsed": parsed,
@@ -135,8 +144,8 @@ def _build_dynamic_prompt_parts(
     p: PlayerState,
     npc_id: str,
     user_message: str,
-    hist_slice: list[dict[str, str]],
-    mind: "mem.AgentMind",
+    hist_slice: list[dict[str, str | int]],
+    mind: mem.AgentMind,
 ) -> list[str]:
     dyn_parts: list[str] = []
 
@@ -248,7 +257,7 @@ def _build_dynamic_prompt_parts(
 def _assemble_messages(
     static_text: str,
     dyn_text: str,
-    hist_slice: list[dict[str, str]],
+    hist_slice: list[dict[str, str | int]],
     user_message: str,
     loc: str,
 ) -> list[dict[str, Any]]:
@@ -273,7 +282,7 @@ def build_npc_messages(
     p: PlayerState,
     npc_id: str,
     user_message: str,
-    hist_slice: list[dict[str, str]],
+    hist_slice: list[dict[str, str | int]],
 ) -> list[dict[str, str]]:
     npc = NPCS[npc_id]
     map_name = MAPS.get(p.map_id, {}).get("name", "未知之地")
@@ -462,7 +471,7 @@ def _decay_all_npc_moods(p: PlayerState) -> None:
     与 update_npc_states_from_habits（move 流程中调用）形成互补，
     确保纯对话长链中 NPC 情绪不会一直保持极端。"""
     sh_name = shichen_name(p.world_shichen)
-    for nid, mind in getattr(p, "minds", {}).items():
+    for _nid, mind in getattr(p, "minds", {}).items():
         if mind is not None and hasattr(mind, "affect_valence"):
             mind.mood_decay_tick(sh_name)
 
@@ -491,9 +500,7 @@ def _record_cross_npc_awareness(
         if not name:
             continue
         # 检测该 NPC 的名字/简称是否出现在对话中
-        if name in visible_lower or name in user_lower:
-            mentioned.add(nid)
-        elif short and (short in visible_lower or short in user_lower):
+        if name in visible_lower or name in user_lower or (short and (short in visible_lower or short in user_lower)):
             mentioned.add(nid)
 
     for target_id in mentioned:
@@ -555,16 +562,15 @@ def _summarize_for_memory(
         cause = getattr(mind, "affect_cause", "") or ""
         if cause:
             bits.append(f"心有所感：{cause[:40]}")
-    else:
-        # 平静：简洁摘要，只记核心
-        if first_line:
-            bits.append("我答：" + first_line[:50])
+    # 平静：简洁摘要，只记核心
+    elif first_line:
+        bits.append("我答：" + first_line[:50])
 
     return "；".join(bits)[:280]
 
 
 def _evolve_npc_mood(
-    mind: "mem.AgentMind",
+    mind: mem.AgentMind,
     npc_id: str,
     p: PlayerState,
     parsed: NpcResponseSchema,
@@ -666,7 +672,7 @@ def _evolve_npc_mood(
 
     cause_str = "；".join(causes[:3]) if causes else ""
     is_anchor = mind.update_mood(valence_delta=valence_d, arousal_delta=arousal_d, cause=cause_str)
-    
+
     # 情感锚点：当情绪大幅波动时，写入一条 anchor 记忆（永久性情感印记）
     if is_anchor and cause_str:
         anchor_text = f"{cause_str}——那一刻在我心里刻下了痕迹。"[:200]

@@ -1,10 +1,7 @@
-"""pytest 配置 — 让 `python -m pytest tests/` 自动发现测试文件
+from __future__ import annotations
 
-离线单元测试不依赖服务器，可直接运行。
-E2E 测试需要先启动后端服务器。
-"""
-import sys
 import os
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -14,10 +11,9 @@ if str(ROOT) not in sys.path:
 BASE_URL = os.environ.get("TESTS_BASE_URL", "http://127.0.0.1:8765")
 
 
-def make_player(**overrides):
-    """创建测试用 PlayerState 实例。"""
+def make_player(**overrides: int | str | bool):
     from backend.models.player import PlayerState
-    defaults = dict(
+    defaults: dict[str, int | str | bool] = dict(
         player_id="test_player",
         display_name="测试侠客",
         gender="男",
@@ -36,4 +32,4 @@ def make_player(**overrides):
         weather="薄阴",
     )
     defaults.update(overrides)
-    return PlayerState(**defaults)
+    return PlayerState(**defaults)  # type: ignore[arg-type]

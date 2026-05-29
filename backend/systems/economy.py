@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from backend.models.player import PlayerState
+from typing import Any
+
 from backend.data.maps_data import MAPS
 from backend.data.zones import zone_price_mod
+from backend.models.player import PlayerState
 from backend.systems.constants import MAX_COIN_DELTA, MAX_ITEM_NAME_LEN
 
 # ════════════════════════════════════════════════════════════════════
@@ -165,7 +167,7 @@ def suggest_item_price(item_name: str, player: Any = None, weather: str | None =
     entry = ITEM_PRICE_CATALOG.get(item_name)
     if not entry:
         return None
-    base = int(entry["base"])
+    base = int(entry["base"])  # type: ignore[arg-type]
     cat = str(entry.get("cat", ""))
 
     # 地区系数（根据玩家位置判断）
@@ -179,7 +181,7 @@ def suggest_item_price(item_name: str, player: Any = None, weather: str | None =
     weather_cat = WEATHER_CAT_MOD.get(weather or "", {}).get(cat, 1.0)
 
     total_mult = map_mult * weather_global * weather_cat
-    local = int(round(base * total_mult))
+    local = round(base * total_mult)
 
     # 构建天气提示
     weather_tip = ""
@@ -192,9 +194,8 @@ def suggest_item_price(item_name: str, player: Any = None, weather: str | None =
         weather_tip = "；".join(parts) if parts else ""
 
     # 构建市场行情提示（含地点与倍数）
-    map_id_hint = ""
     if player and hasattr(player, 'map_id'):
-        map_id_hint = str(getattr(player, 'map_id', ''))
+        str(getattr(player, 'map_id', ''))
     market_hint = f"{map_hint}，{item_name}当地约{local}文（基准{base}文）"
 
     return {
@@ -262,7 +263,6 @@ def format_npc_inventory(p: PlayerState, npc_id: str) -> str:
         # 非商贩型 NPC,但也可能在特定剧情中获得物品
         return ""
 
-    from backend.data.npcs_data import NPCS
     # 过滤掉数量为 0 的项
     active = {k: v for k, v in inv.items() if v > 0}
     if not active:
@@ -367,7 +367,7 @@ def format_economy_context(p: PlayerState, vendor_npc_id: str | None = None) -> 
         for name, count in sorted(p.inventory.items()):
             price_info = suggest_item_price(name, p, weather)
             if price_info:
-                local = price_info["local"]
+                local = int(price_info["local"])  # type: ignore[arg-type]
                 item_total = local * int(count)
                 inv_vals.append(f"{name}×{count}(≈{item_total}文)")
             else:
@@ -387,7 +387,7 @@ def format_economy_context(p: PlayerState, vendor_npc_id: str | None = None) -> 
         for name, entry in ITEM_PRICE_CATALOG.items():
             cat = str(entry.get("cat", ""))
             w_cat = weather_cat_data.get(cat, 1.0)
-            local_price = int(round(int(entry["base"]) * map_mult * weather_global * w_cat))
+            local_price = round(int(entry["base"]) * map_mult * weather_global * w_cat)  # type: ignore[arg-type]
             by_cat.setdefault(cat, []).append(f"{name}({local_price}文)")
 
         cat_names = {"食": "食水", "文": "文书", "药": "药物", "物": "杂物", "兵": "兵器"}
@@ -472,7 +472,7 @@ def restock_npc_inventories(p: PlayerState) -> list[str]:
         items_restocked: list[str] = []
         for item, _need in to_restock:
             seed_qty = seeds[item]
-            add_qty = max(1, int(round(seed_qty * ratio)))
+            add_qty = max(1, round(seed_qty * ratio))
             cur = inv.get(item, 0)
             # 不超出种子数量
             actual_add = min(add_qty, seed_qty - cur)
@@ -495,7 +495,7 @@ def restock_npc_inventories(p: PlayerState) -> list[str]:
 #  物品消耗 API — 玩家从背包中使用物品（🎮 游戏性）
 # ════════════════════════════════════════════════════════════════════
 
-def use_player_item(p: "PlayerState", item_name: str) -> dict[str, object]:
+def use_player_item(p: PlayerState, item_name: str) -> dict[str, object]:
     """玩家消耗一个背包物品，应用其身心效用并返回叙事描述。
 
     返回格式：
@@ -546,13 +546,13 @@ def use_player_item(p: "PlayerState", item_name: str) -> dict[str, object]:
         }
 
     # 日上限检查
-    max_per_day = int(effect.get("max_per_day", 0))
+    max_per_day = int(effect.get("max_per_day", 0) or 0)  # type: ignore[arg-type]
     if max_per_day > 0:
         if not hasattr(p, "item_use_tracker") or p.item_use_tracker is None:
             p.item_use_tracker = {}
         current_day = int(getattr(p, "world_day", 1) or 1)
         if p.item_use_tracker.get("_day") != current_day:
-            old_day = p.item_use_tracker.get("_day")
+            p.item_use_tracker.get("_day")
             p.item_use_tracker["_day"] = current_day
             keys_to_remove = [k for k in p.item_use_tracker if k != "_day" and not k.startswith("fish_") and not k.startswith("fruit_") and not k.startswith("rest_")]
             for k in keys_to_remove:
@@ -566,11 +566,11 @@ def use_player_item(p: "PlayerState", item_name: str) -> dict[str, object]:
             }
 
     # 应用效用
-    vigor_delta = int(effect.get("vigor", 0))
-    spirit_delta = int(effect.get("spirit", 0))
-    sleep_debt_delta = int(effect.get("sleep_debt", 0))
+    vigor_delta = int(effect.get("vigor", 0) or 0)  # type: ignore[arg-type]
+    spirit_delta = int(effect.get("spirit", 0) or 0)  # type: ignore[arg-type]
+    sleep_debt_delta = int(effect.get("sleep_debt", 0) or 0)  # type: ignore[arg-type]
 
-    from backend.systems.core import apply_vigor_delta, apply_spirit_delta
+    from backend.systems.core import apply_spirit_delta, apply_vigor_delta
     actual_vigor = apply_vigor_delta(p, vigor_delta)
     actual_spirit = apply_spirit_delta(p, spirit_delta)
 

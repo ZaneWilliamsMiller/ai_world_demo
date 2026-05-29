@@ -1,8 +1,8 @@
 """详细诊断NPC对话500错误"""
 import asyncio
-import json
 import os
 import traceback
+
 
 async def diagnose_500():
     import httpx
@@ -23,8 +23,8 @@ async def diagnose_500():
             print(f"响应头: {dict(r.headers)}")
             print(f"响应体:\n{r.text}")
 
-        except Exception as e:
-            print(f"\n请求异常:")
+        except Exception:
+            print("\n请求异常:")
             traceback.print_exc()
 
 if __name__ == "__main__":

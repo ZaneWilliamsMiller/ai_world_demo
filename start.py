@@ -12,20 +12,21 @@
   python start.py --frontend-port 8766  # 自定义前端端口
 """
 
-import os
-import sys
+import atexit
 import io
-import socket
-import subprocess
-import time
+import os
 import platform
 import signal
-import atexit
+import socket
+import subprocess
+import sys
+import time
 
 # Windows GBK 编码修复：强制使用 UTF-8 输出
 if sys.platform == "win32":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+import contextlib
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 # 项目根目录
@@ -48,10 +49,8 @@ def _cleanup_children():
                 proc.terminate()
                 proc.wait(timeout=3)
             except Exception:
-                try:
+                with contextlib.suppress(Exception):
                     proc.kill()
-                except Exception:
-                    pass
 
 
 def _signal_handler(signum, frame):
@@ -119,7 +118,7 @@ class CORSRequestHandler(SimpleHTTPRequestHandler):
         response = {
             "status": "running",
             "pid": os.getpid(),
-            "port": self.server.server_address[1]
+            "port": self.server.server_address[1]  # type: ignore[index]
         }
         self.wfile.write(json.dumps(response).encode('utf-8'))
 
@@ -158,7 +157,7 @@ def kill_port_process(port: int) -> bool:
     try:
         result = subprocess.run(
             ["netstat", "-ano"],
-            capture_output=True, text=True, timeout=5
+            capture_output=True, text=True, timeout=5, check=False
         )
         for line in result.stdout.splitlines():
             if f":{port}" in line and "LISTENING" in line:
@@ -166,7 +165,7 @@ def kill_port_process(port: int) -> bool:
                 pid = int(parts[-1])
                 if pid > 0:
                     subprocess.run(["taskkill", "/F", "/PID", str(pid)],
-                                   capture_output=True, timeout=5)
+                                   capture_output=True, timeout=5, check=False)
                     print(f"   已终止占用端口 {port} 的进程 (PID: {pid})")
                     time.sleep(1)
                     return True
@@ -180,7 +179,7 @@ def kill_port_process(port: int) -> bool:
 # ════════════════════════════════════════════════
 
 
-def start_backend(port: int = DEFAULT_BACKEND_PORT, frontend_port: int = None) -> subprocess.Popen | None:
+def start_backend(port: int = DEFAULT_BACKEND_PORT, frontend_port: int | None = None) -> subprocess.Popen | None:
     """启动后端服务"""
     print(f"🔧 启动后端服务 (端口 {port})...")
 
@@ -249,10 +248,8 @@ class StoppableHTTPServer(HTTPServer):
         def _shutdown():
             import time
             time.sleep(0.5)  # 让当前响应完成
-            try:
+            with contextlib.suppress(Exception):
                 HTTPServer.shutdown(self)
-            except Exception:
-                pass
 
         t = threading.Thread(target=_shutdown, daemon=True)
         t.start()
@@ -265,10 +262,10 @@ def run_web_server(port: int = DEFAULT_WEB_PORT, block: bool = True) -> subproce
     server_address = ("127.0.0.1", port)
     httpd = StoppableHTTPServer(server_address, CORSRequestHandler)
 
-    print(f"🌐 Web 前端服务器")
+    print("🌐 Web 前端服务器")
     print(f"📍 服务目录: {STATIC_DIR}")
     print(f"🔗 访问地址: http://127.0.0.1:{port}")
-    print(f"🚀 按 Ctrl+C 停止\n")
+    print("🚀 按 Ctrl+C 停止\n")
 
     if block:
         try:

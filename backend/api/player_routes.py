@@ -8,36 +8,48 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Path, status
 from pydantic import BaseModel, Field
 
+from backend.api.views import build_init_response
+from backend.api.views import factions_public as _factions_public
+from backend.api.views import map_locations_public as _map_locations_public
+from backend.api.views import npc_catalog as _npc_catalog
+from backend.api.views import npcs_here as _npcs_here
+from backend.api.views import player_public as _player_public
+from backend.data.atmosphere import scene_context
 from backend.data.maps_data import MAPS
 from backend.data.npcs_data import NPCS, STORY_ORDER
-from backend.systems.core import (
-    tile_forced_encounter,
-    enter_trap_state,
-    tile_hazard_reason,
-    apply_vigor_delta,
-    apply_spirit_delta,
-    maybe_collapse_from_attrs,
-    init_npc_positions,
-    maybe_wander_npcs,
-    update_npc_states_from_habits,
-    update_all_npc_states_dynamic,
-    perception_scan,
-    danger_sense_narrative,
-)
-from backend.systems.reputation import push_event
-from backend.systems.save_system import save_game, respawn_at_supply_point, delete_save
-from backend.systems.npc_gossip import maybe_npc_gossip
-from backend.systems.pathfinding import find_path, tile_at, tile_elevation, tile_cost, check_danger_and_injure, is_dangerous, path_cost, cost_to_ticks
-from backend.systems.perception import hazard_roll_death
-from backend.systems.constants import STEEP_VIGOR_DAMAGE, STEEP_SPIRIT_DAMAGE, DANGER_VIGOR_DAMAGE, DANGER_SPIRIT_DAMAGE
-from backend.systems.encounter import should_trigger_encounter, generate_dynamic_encounter, apply_encounter
-from backend.systems.time_weather import shichen_name, is_night, advance_clock
-from backend.data.atmosphere import scene_context
-from backend.systems.economy import init_npc_inventories
 from backend.services.agent_service import bg_plan_for_npcs
-from backend.views import player_public as _player_public, npcs_here as _npcs_here
-from backend.views import npc_catalog as _npc_catalog, maps_public as _maps_public, factions_public as _factions_public
-from backend.views import map_locations_public as _map_locations_public, build_init_response
+from backend.systems.constants import DANGER_SPIRIT_DAMAGE, DANGER_VIGOR_DAMAGE, STEEP_SPIRIT_DAMAGE, STEEP_VIGOR_DAMAGE
+from backend.systems.core import (
+    apply_spirit_delta,
+    apply_vigor_delta,
+    danger_sense_narrative,
+    enter_trap_state,
+    init_npc_positions,
+    maybe_collapse_from_attrs,
+    maybe_wander_npcs,
+    perception_scan,
+    tile_forced_encounter,
+    tile_hazard_reason,
+    update_all_npc_states_dynamic,
+    update_npc_states_from_habits,
+)
+from backend.systems.economy import init_npc_inventories
+from backend.systems.encounter import apply_encounter, generate_dynamic_encounter, should_trigger_encounter
+from backend.systems.npc_gossip import maybe_npc_gossip
+from backend.systems.pathfinding import (
+    check_danger_and_injure,
+    cost_to_ticks,
+    find_path,
+    is_dangerous,
+    path_cost,
+    tile_at,
+    tile_cost,
+    tile_elevation,
+)
+from backend.systems.perception import hazard_roll_death
+from backend.systems.reputation import push_event
+from backend.systems.save_system import delete_save, respawn_at_supply_point, save_game
+from backend.systems.time_weather import advance_clock, is_night
 
 router = APIRouter()
 
@@ -133,7 +145,7 @@ def _walk_path(p, path, allow_steep):
                 vigor_cost += apply_vigor_delta(p, -DANGER_VIGOR_DAMAGE)
                 spirit_cost += apply_spirit_delta(p, -DANGER_SPIRIT_DAMAGE)
                 injuries.append(reason)
-                if ch_to == "!" or ch_to == "~":
+                if ch_to in {"!", "~"}:
                     forced = {
                         "npc_id": "jiang",
                         "user_line": (
@@ -282,9 +294,8 @@ async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
         actual_path, vigor_cost, spirit_cost, injuries, forced = _walk_path(p, path, allow_steep)
         respawn_msg, _ = await _post_move_world_update(p, prev_map, actual_path, prev_day, bg)
 
-    if not p.dead and not p.ended and not getattr(p, "move_locked", False):
-        if should_trigger_encounter(p):
-            bg.add_task(_bg_encounter, p.player_id)
+    if not p.dead and not p.ended and not getattr(p, "move_locked", False) and should_trigger_encounter(p):
+        bg.add_task(_bg_encounter, p.player_id)
 
     return _build_move_response(p, prev_map, actual_path, forced, vigor_cost, spirit_cost, injuries, respawn_msg)
 

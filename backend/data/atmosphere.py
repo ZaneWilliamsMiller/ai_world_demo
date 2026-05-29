@@ -1,11 +1,13 @@
 from __future__ import annotations
+
 """地图格位的气氛描写数据
 
 每个 tile 符号对应一种「此地此刻」的环境笔触。
 在玩家入新图、或与 NPC 对话时，可随机取一条注入。
 """
-from typing import Any
 import random
+
+from backend.models.player import PlayerState
 
 # 按地格符号的气氛条目池
 TILE_ATMOSPHERE: dict[str, list[str]] = {
@@ -174,6 +176,8 @@ def _player_region(px: int, py: int) -> str:
 def tile_atmosphere(ch: str) -> str:
     """取一枚当前格的气氛句；若无则返回空地默认。"""
     pool = TILE_ATMOSPHERE.get(ch, TILE_ATMOSPHERE.get(","))
+    if not pool:
+        return ""
     return random.choice(pool)
 
 
@@ -186,9 +190,9 @@ def map_atmosphere(px: int, py: int) -> str:
     return random.choice(pool)
 
 
-def scene_context(p: "PlayerState") -> str:
+def scene_context(p: PlayerState) -> str:
     """生成注入对话的「此地此刻」气氛块（氛围感官，不写数值）。"""
-    from backend.systems.time_weather import shichen_name, is_night
+    from backend.systems.time_weather import is_night, shichen_name
     sh = shichen_name(p.world_shichen)
     night_tag = "（夜）" if is_night(p.world_shichen) else ""
     weather = p.weather

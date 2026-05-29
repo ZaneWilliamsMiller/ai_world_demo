@@ -7,29 +7,33 @@ import logging
 import random
 import time
 import traceback
+from collections import defaultdict
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Path
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from collections import defaultdict
 
-from backend.data.npcs_data import NPCS
+from backend.agents import brain as agent_brain
+from backend.agents.game_state import get_or_init_mind
+from backend.api.views import player_public as _player_public
 from backend.data.factions import FACTIONS
-from backend.data.prompts import WORLD_NAME, SOCIETY_BIBLE
-from backend.systems.core import npc_ids_for_player, perception_scan, danger_sense_narrative, update_npc_state_dynamic
-from backend.systems.time_weather import shichen_name
-from backend.llm_params import (
-    TALK_TEMPERATURE, TALK_LIGHT_MAX_TOKENS, TALK_FULL_MAX_TOKENS,
-    FINALE_TEMPERATURE, FINALE_MAX_TOKENS,
+from backend.data.npcs_data import NPCS
+from backend.data.prompts import SOCIETY_BIBLE, WORLD_NAME
+from backend.llm.client import chat_completion, parse_finale, parse_npc_reply_json
+from backend.llm.params import (
+    FINALE_MAX_TOKENS,
+    FINALE_TEMPERATURE,
+    TALK_FULL_MAX_TOKENS,
+    TALK_LIGHT_MAX_TOKENS,
+    TALK_TEMPERATURE,
 )
-from backend.game_state import get_or_init_mind
-from backend.services.talk_service import build_npc_messages, apply_npc_reply, build_graceful_fallback
-from backend.services.agent_service import bg_reflect
-from backend import agent_brain
-from backend.llm_client import chat_completion, parse_finale, parse_npc_reply_json
-from backend.views import player_public as _player_public
 from backend.models.player import PlayerState
+from backend.services.agent_service import bg_reflect
+from backend.services.talk_service import apply_npc_reply, build_graceful_fallback, build_npc_messages
+from backend.systems.core import danger_sense_narrative, npc_ids_for_player, perception_scan, update_npc_state_dynamic
+from backend.systems.time_weather import shichen_name
+
 
 class _RateLimiter:
     def __init__(self, max_requests: int = 10, window_s: float = 60.0, max_keys: int = 500):
@@ -140,7 +144,7 @@ async def use_item(body: UseItemBody) -> dict[str, Any]:
 
     if result.get("success"):
         from backend.systems.reputation import push_event
-        item_name = str(result.get("item_consumed", body.item))
+        str(result.get("item_consumed", body.item))
         note = str(result.get("note", ""))
         if note:
             push_event(p, f"{p.display_name}用掉了{note}", scope="self", actor=p.display_name)
@@ -153,8 +157,8 @@ async def use_item(body: UseItemBody) -> dict[str, Any]:
 
 @router.post("/api/rest")
 async def player_rest(body: RestBody) -> dict[str, Any]:
-    from backend.session.store import room
     from backend.data.atmosphere import scene_context
+    from backend.session.store import room
     p = room.players.get(body.player_id)
     if not p:
         raise HTTPException(404, f"未知 player_id: {body.player_id}")
@@ -197,14 +201,14 @@ async def npc_talk(body: TalkBody, bg: BackgroundTasks) -> dict[str, Any]:
     if _talk_limiter.is_limited(body.player_id):
         raise HTTPException(429, "对话过于频繁，请稍后再试")
     try:
-        p, npc = _validate_talk_request(body)
+        p, _npc = _validate_talk_request(body)
 
         async with p.lock:
             update_npc_state_dynamic(p, body.npc_id)
             hist = p.history.setdefault(body.npc_id, [])
             hist_slice = list(hist[-14:])
 
-        import backend.systems.prompt_compress as _pc
+        import backend.llm.prompt_compress as _pc
         if len(hist_slice) >= _pc.COMPRESS_THRESHOLD:
             hist_slice = await _pc.compress_conversation_history(
                 hist_slice, npc_name=NPCS.get(body.npc_id, {}).get("name", "")
@@ -247,26 +251,26 @@ async def npc_talk(body: TalkBody, bg: BackgroundTasks) -> dict[str, Any]:
         return out
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logging.getLogger("api.routes").error(
             "npc_talk UNHANDLED ERROR for npc=%s player=%s:\n%s",
             body.npc_id, body.player_id, traceback.format_exc()
         )
-        raise HTTPException(500, "NPC对话处理失败，请稍后重试")
+        raise HTTPException(500, "NPC对话处理失败，请稍后重试") from None
 
 
 @router.post("/api/npc/talk_stream")
 async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingResponse:
     if _talk_limiter.is_limited(body.player_id):
         raise HTTPException(429, "对话过于频繁，请稍后再试")
-    p, npc = _validate_talk_request(body)
+    p, _npc = _validate_talk_request(body)
 
     async with p.lock:
         update_npc_state_dynamic(p, body.npc_id)
         hist = p.history.setdefault(body.npc_id, [])
         hist_slice = list(hist[-14:])
 
-    import backend.systems.prompt_compress as _pc
+    import backend.llm.prompt_compress as _pc
     if len(hist_slice) >= _pc.COMPRESS_THRESHOLD:
         hist_slice = await _pc.compress_conversation_history(
             hist_slice, npc_name=NPCS.get(body.npc_id, {}).get("name", ""))
@@ -294,7 +298,7 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
             logging.getLogger("api.routes").info("SSE stream cancelled for npc=%s player=%s", body.npc_id, body.player_id)
             yield _sse({"done": True, "cancelled": True})
             return
-        except asyncio.TimeoutError:
+        except TimeoutError:
             is_fallback = True
             fb = build_graceful_fallback(body.npc_id, "LLM 响应超时")
             parsed = fb["parsed"]
@@ -322,7 +326,7 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
             logging.getLogger("api.routes").info("SSE stream cancelled during state write for npc=%s player=%s", body.npc_id, body.player_id)
             yield _sse({"done": True, "cancelled": True})
             return
-        except Exception as e:
+        except Exception:
             out = {"error": "状态写入失败，请重试"}
             yield _sse({"done": True, **out})
             return
@@ -466,8 +470,8 @@ async def agent_plan(body: AgentActBody) -> dict[str, Any]:
 
 @router.post("/api/finale")
 async def finale(body: FinaleBody) -> dict[str, Any]:
-    from backend.session.store import room
     from backend.data.prompts import FIXED_INTRO
+    from backend.session.store import room
     p = room.players.get(body.player_id)
     if not p:
         raise HTTPException(404, "未知 player_id")
@@ -510,11 +514,11 @@ async def finale(body: FinaleBody) -> dict[str, Any]:
         any_talk = True
         name = NPCS.get(nid, {}).get("name", nid)
         for turn in hist:
-            u = turn.get("user", "")[:1400]
-            a = turn.get("assistant", "")[:1400]
+            u = str(turn.get("user", ""))[:1400]
+            a = str(turn.get("assistant", ""))[:1400]
             stamp = ""
             if turn.get("day") and turn.get("shichen"):
-                stamp = f"〔第{turn['day']}日·{turn['shichen']}〕"
+                stamp = f"〔第{turn['day']}日·{turn['shichen']}〕"  # type: ignore[index]
             lines.append(f"{stamp}【{name}】玩家：{u}")
             lines.append(f"{stamp}【{name}】：{a}")
             lines.append("")
@@ -556,8 +560,8 @@ async def finale(body: FinaleBody) -> dict[str, Any]:
             chat_completion(messages, temperature=FINALE_TEMPERATURE, max_tokens=FINALE_MAX_TOKENS),
             timeout=90.0,
         )
-    except asyncio.TimeoutError:
-        raise HTTPException(504, "终局叙事超时，请稍后重试")
+    except TimeoutError:
+        raise HTTPException(504, "终局叙事超时，请稍后重试") from None
     epilogue, title = parse_finale(raw)
     if not title:
         title = "无名之夜"
@@ -579,16 +583,16 @@ async def finale(body: FinaleBody) -> dict[str, Any]:
 
 # ── 悬赏榜 API ──
 from backend.systems.bounty_board import (
-    generate_bounties,
-    can_accept_bounty,
+    abandon_bounty,
     accept_bounty,
     check_bounty_progress,
     complete_bounty,
-    abandon_bounty,
     format_bounty_board,
+    generate_bounties,
     refresh_bounties,
 )
 from backend.systems.constants import BOUNTY_COUNT_RANGE
+
 
 class RefreshBountyBody(BaseModel):
     player_id: str = Field(..., min_length=1, max_length=64)

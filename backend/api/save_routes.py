@@ -7,10 +7,10 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from backend.api.views import build_init_response
 from backend.systems.core import init_npc_positions
 from backend.systems.economy import init_npc_inventories
-from backend.systems.save_system import save_game, load_game, list_saves, delete_save
-from backend.views import build_init_response
+from backend.systems.save_system import delete_save, list_saves, load_game, save_game
 
 router = APIRouter()
 

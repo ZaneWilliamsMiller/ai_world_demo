@@ -11,18 +11,28 @@ from __future__ import annotations
 from typing import Any
 
 from backend.models.player import PlayerState
-from backend.systems.pathfinding import tile_at
 from backend.systems.constants import (
-    LIFE_BURN_TICKS, MAX_TRAP_ATTEMPTS,
-    SAFE_ZONE_X_RANGE, SAFE_ZONE_Y_RANGE,
-    SAFE_REST_VIGOR, SAFE_REST_SPIRIT, SAFE_REST_SLEEP_DEBT,
-    WILD_REST_VIGOR, WILD_REST_SPIRIT, WILD_REST_SLEEP_DEBT,
-    DRY_RATION_VIGOR, DRY_RATION_SPIRIT,
-    FISH_VIGOR, FISH_SPIRIT,
-    WILD_FRUIT_VIGOR, WILD_FRUIT_SPIRIT,
-    FISH_MAX_PER_DAY, FRUIT_MAX_PER_DAY, REST_MAX_PER_DAY,
+    DRY_RATION_SPIRIT,
+    DRY_RATION_VIGOR,
+    FISH_MAX_PER_DAY,
+    FISH_SPIRIT,
+    FISH_VIGOR,
+    FRUIT_MAX_PER_DAY,
+    LIFE_BURN_TICKS,
+    MAX_TRAP_ATTEMPTS,
+    REST_MAX_PER_DAY,
+    SAFE_REST_SLEEP_DEBT,
+    SAFE_REST_SPIRIT,
+    SAFE_REST_VIGOR,
+    SAFE_ZONE_X_RANGE,
+    SAFE_ZONE_Y_RANGE,
+    WILD_FRUIT_SPIRIT,
+    WILD_FRUIT_VIGOR,
+    WILD_REST_SLEEP_DEBT,
+    WILD_REST_SPIRIT,
+    WILD_REST_VIGOR,
 )
-
+from backend.systems.pathfinding import tile_at
 
 # ────────────────────── 体力 / 心气:带上限的可耗资源 ──────────────────────
 

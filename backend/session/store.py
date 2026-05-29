@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import asyncio
 import uuid
 from typing import Any
@@ -6,10 +7,10 @@ from typing import Any
 from backend.data.factions import FACTIONS
 from backend.models.player import PlayerState
 from backend.systems.constants import (
-    INITIAL_VIGOR,
-    INITIAL_VIGOR_MAX,
     INITIAL_SPIRIT,
     INITIAL_SPIRIT_MAX,
+    INITIAL_VIGOR,
+    INITIAL_VIGOR_MAX,
 )
 
 
@@ -106,9 +107,9 @@ class SessionStore:
                 st.spirit = 0
 
             if not hasattr(st, "reputation") or not isinstance(getattr(st, "reputation", None), dict):
-                st.reputation = {k: 0 for k in FACTIONS.keys()}
+                st.reputation = {k: 0 for k in FACTIONS}
             else:
-                for k in FACTIONS.keys():
+                for k in FACTIONS:
                     st.reputation.setdefault(k, 0)
 
         return st

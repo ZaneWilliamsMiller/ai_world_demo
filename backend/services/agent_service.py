@@ -1,8 +1,9 @@
 from __future__ import annotations
+
 import logging
 
-from backend import agent_brain
-from backend.game_state import get_or_init_mind
+from backend.agents import brain as agent_brain
+from backend.agents.game_state import get_or_init_mind
 from backend.data.npcs_data import NPCS
 from backend.session.store import room
 from backend.systems.time_weather import shichen_name
@@ -31,11 +32,10 @@ async def bg_reflect(player_id: str, npc_id: str) -> None:
     if not mind.needs_reflect():
         return
     # ── 夜间门禁 ──
-    if int(p.world_shichen) in NIGHT_REFLECT_BLOCKED_SHICHEN:
-        if getattr(mind, "affect_arousal", 5.0) < 8.0:
-            log.debug("bg_reflect skipped for npc=%s: night shichen=%s",
-                      npc_id, shichen_name(p.world_shichen))
-            return  # NPC 安睡中，不打扰
+    if int(p.world_shichen) in NIGHT_REFLECT_BLOCKED_SHICHEN and getattr(mind, "affect_arousal", 5.0) < 8.0:
+        log.debug("bg_reflect skipped for npc=%s: night shichen=%s",
+                  npc_id, shichen_name(p.world_shichen))
+        return  # NPC 安睡中，不打扰
         # 极端唤醒度（>=8.0）= 失眠/夜不能寐，允许反思
     try:
         await agent_brain.reflect(
@@ -55,7 +55,7 @@ async def bg_reflect(player_id: str, npc_id: str) -> None:
             world_day=int(p.world_day),
             world_shichen=shichen_name(p.world_shichen),
         )
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         log.warning("bg_reflect failed for npc=%s: %s", npc_id, e)
 
 async def bg_plan_for_npcs(player_id: str, npc_ids: list[str], world_day: int) -> None:
@@ -77,6 +77,6 @@ async def bg_plan_for_npcs(player_id: str, npc_ids: list[str], world_day: int) -
                 mind=mind,
                 world_day=world_day,
             )
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             log.warning("bg_plan_for_npcs failed for npc=%s: %s", nid, e)
             continue

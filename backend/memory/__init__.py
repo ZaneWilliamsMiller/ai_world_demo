@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 import logging
-import math
 import time
 import uuid
 from collections.abc import Iterable
@@ -21,66 +20,64 @@ from typing import Any
 log = logging.getLogger("memory")
 
 # ─── 从子模块重新导出（保持向后兼容；新代码请直接从子模块导入）───
-from backend.memory.entities import (           # noqa: F401
-    MOOD_LABELS,
-    ANCHOR_VALENCE_THRESHOLD,
+from backend.memory.entities import (  # noqa: F401
+    _MOOD_BIAS_THRESHOLD,
+    _MOOD_BIAS_WEIGHT,
+    _NEGATIVE_MEMORY_WORDS,
+    _POSITIVE_MEMORY_WORDS,
+    ALL_ENTITY_KEYWORDS,
     ANCHOR_AROUSAL_THRESHOLD,
-    ANCHOR_IMPORTANCE,
     ANCHOR_HALF_LIFE_S,
-    OBS_CONDENSE_THRESHOLD,
-    OBS_CONDENSE_BATCH,
-    OBS_KEEP_RECENT,
-    INSIGHT_LINK_THRESHOLD,
-    INSIGHT_IMPORTANCE_BOOST,
-    INSIGHT_MAX_PER_ADD,
+    ANCHOR_IMPORTANCE,
+    ANCHOR_VALENCE_THRESHOLD,
+    EVENT_KEYWORDS,
     INSIGHT_COOLDOWN_S,
+    INSIGHT_IMPORTANCE_BOOST,
+    INSIGHT_LINK_THRESHOLD,
+    INSIGHT_MAX_PER_ADD,
+    MOOD_LABELS,
+    OBS_CONDENSE_BATCH,
+    OBS_CONDENSE_THRESHOLD,
+    OBS_KEEP_RECENT,
     PERSON_NAMES,
     PLACE_NAMES,
     THING_KEYWORDS,
-    EVENT_KEYWORDS,
-    ALL_ENTITY_KEYWORDS,
-    _POSITIVE_MEMORY_WORDS,
-    _NEGATIVE_MEMORY_WORDS,
-    _MOOD_BIAS_THRESHOLD,
-    _MOOD_BIAS_WEIGHT,
-    init_entity_keywords,
-    generate_insight_text,
-    mood_from_valence_arousal,
-    sentiment_hint,
-    affective_memory_importance,
     _build_dynamic_entities,
+    _get_all_entity_keywords,
     _get_person_names,
     _get_place_names,
     _get_thing_keywords,
-    _get_all_entity_keywords,
+    affective_memory_importance,
+    generate_insight_text,
+    init_entity_keywords,
+    mood_from_valence_arousal,
+    sentiment_hint,
 )
-
-from backend.memory.retrieval import (           # noqa: F401
-    W_RECENCY,
-    W_IMPORTANCE,
-    W_RELEVANCE,
-    REFLECTION_IMPORTANCE_TRIGGER,
-    REFLECTION_MIN_INTERVAL_S,
-    text_relevance,
-    retrieve,
-    build_retrieval_query,
-    condense_old_observations,
-    _resolve_deictic,
-    _decay_recency,
-    ensure_mind_index,
-    mark_index_dirty,
-    add_to_index,
-)
-
-from backend.memory.format import (              # noqa: F401
+from backend.memory.format import (  # noqa: F401
+    format_insight_block,
     format_memories_for_prompt,
-    format_plan_for_prompt,
     format_mood_for_prompt,
-    format_plan_for_reflection,
     format_mood_for_reflection,
+    format_plan_for_prompt,
+    format_plan_for_reflection,
     format_proactive_callbacks,
     format_topic_thread,
-    format_insight_block,
+)
+from backend.memory.retrieval import (  # noqa: F401
+    REFLECTION_IMPORTANCE_TRIGGER,
+    REFLECTION_MIN_INTERVAL_S,
+    W_IMPORTANCE,
+    W_RECENCY,
+    W_RELEVANCE,
+    _decay_recency,
+    _resolve_deictic,
+    add_to_index,
+    build_retrieval_query,
+    condense_old_observations,
+    ensure_mind_index,
+    mark_index_dirty,
+    retrieve,
+    text_relevance,
 )
 
 
@@ -152,11 +149,7 @@ class AgentMind:
 
     def _try_evolve_on_new_observation(self, new_obs: Memory) -> None:
         """A-Mem 记忆演化落地。"""
-        from backend.memory.retrieval import _tokenize_internal, _mind_indexes
-        from backend.memory.entities import (
-            INSIGHT_COOLDOWN_S, INSIGHT_LINK_THRESHOLD,
-            INSIGHT_IMPORTANCE_BOOST, generate_insight_text,
-        )
+        from backend.memory.retrieval import _tokenize_internal
 
         now = time.time()
         if (now - self.last_insight_at) < INSIGHT_COOLDOWN_S:
@@ -223,13 +216,10 @@ class AgentMind:
         effective_threshold = self._emotion_adjusted_reflect_threshold()
         if self.importance_since_reflect < effective_threshold:
             return False
-        if (time.time() - self.last_reflect_at) < REFLECTION_MIN_INTERVAL_S:
-            return False
-        return True
+        return not time.time() - self.last_reflect_at < REFLECTION_MIN_INTERVAL_S
 
     def _emotion_adjusted_reflect_threshold(self) -> float:
         """情绪越极端，反思阈值越低。"""
-        from backend.memory.retrieval import REFLECTION_IMPORTANCE_TRIGGER
         threshold = REFLECTION_IMPORTANCE_TRIGGER
         valence_impact = max(0.0, abs(self.affect_valence) - 5.0) * 2.5
         threshold -= valence_impact
@@ -239,9 +229,6 @@ class AgentMind:
 
     def update_mood(self, valence_delta: float = 0.0, arousal_delta: float = 0.0, cause: str = "") -> bool:
         """演化 NPC 情绪。返回 True 表示产生了情感锚点。"""
-        from backend.memory.entities import (
-            ANCHOR_VALENCE_THRESHOLD, ANCHOR_AROUSAL_THRESHOLD, mood_from_valence_arousal,
-        )
 
         self.affect_valence = max(-10.0, min(10.0, self.affect_valence + valence_delta))
         self.affect_arousal = max(0.0, min(10.0, self.affect_arousal + arousal_delta))

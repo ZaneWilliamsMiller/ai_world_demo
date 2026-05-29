@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from typing import Any
+
 from .prompts import AUTONOMY_RULE
 
 # ──────────────────── NPC 状态枚举与可视化 ────────────────────

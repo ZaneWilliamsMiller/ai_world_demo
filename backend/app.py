@@ -5,21 +5,21 @@ from __future__ import annotations
   python -m uvicorn backend.app:app --host 127.0.0.1 --port 8765
 """
 import asyncio
-import logging
 import hmac
+import logging
 import os
 import threading
 import time as _time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-import httpx
 
+from backend.api.routes import router as api_router
 from backend.config import settings
 from backend.data.prompts import WORLD_NAME
-from backend.api.routes import router as api_router
 from backend.session.store import room
 from backend.systems.save_system import save_game
 
@@ -103,7 +103,7 @@ async def lifespan(app: FastAPI):
                     break
         if saved:
             _log.info("shutdown auto-saved %d active player(s)", saved)
-    from backend.llm_client import _close_client
+    from backend.llm.client import _close_client
     try:
         await _close_client()
     except (ConnectionError, TimeoutError, OSError) as close_err:
@@ -200,7 +200,7 @@ async def shutdown_server(request: Request):
             if saved:
                 _log.info("shutdown saved %d active player(s)", saved)
 
-            from backend.llm_client import _close_client_sync
+            from backend.llm.client import _close_client_sync
             try:
                 _close_client_sync()
             except Exception as e:

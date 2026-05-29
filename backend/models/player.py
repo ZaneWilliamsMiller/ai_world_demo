@@ -7,13 +7,13 @@ from typing import Any
 from backend.data.factions import FACTIONS
 from backend.memory import AgentMind
 from backend.systems.constants import (
+    INITIAL_COINS,
     INITIAL_PX,
     INITIAL_PY,
-    INITIAL_COINS,
-    INITIAL_VIGOR,
-    INITIAL_VIGOR_MAX,
     INITIAL_SPIRIT,
     INITIAL_SPIRIT_MAX,
+    INITIAL_VIGOR,
+    INITIAL_VIGOR_MAX,
 )
 
 
@@ -22,7 +22,7 @@ def _default_flags() -> dict[str, int]:
 
 
 def _default_reputation() -> dict[str, int]:
-    return {k: 0 for k in FACTIONS.keys()}
+    return {k: 0 for k in FACTIONS}
 
 
 @dataclass
@@ -38,7 +38,7 @@ class PlayerState:
     py: int = INITIAL_PY
     coins: int = INITIAL_COINS
     flags: dict[str, int] = field(default_factory=_default_flags)
-    history: dict[str, list[dict[str, str]]] = field(default_factory=dict)
+    history: dict[str, list[dict[str, str | int]]] = field(default_factory=dict)
     favor: dict[str, int] = field(default_factory=dict)
     rumors: list[str] = field(default_factory=list)
     move_locked: bool = False

@@ -16,16 +16,14 @@
 """
 from __future__ import annotations
 
+import logging
 import random
 import time
-import logging
-from typing import Any
 
+from backend import memory as mem
+from backend.agents.game_state import get_or_init_mind
 from backend.data.npcs_data import NPCS
 from backend.data.relationships import NPC_RELATIONSHIPS
-from backend.data.maps_data import MAPS
-from backend.game_state import get_or_init_mind
-from backend import memory as mem
 from backend.systems.time_weather import shichen_name
 
 log = logging.getLogger("npc_gossip")
@@ -59,7 +57,7 @@ _GOSSIP_CACHE_MAX = 256
 def _prune_gossip_cache() -> None:
     if len(_last_gossip) <= _GOSSIP_CACHE_MAX:
         return
-    sorted_keys = sorted(_last_gossip, key=_last_gossip.get, reverse=True)
+    sorted_keys = sorted(_last_gossip, key=lambda k: _last_gossip.get(k, 0.0), reverse=True)
     for k in sorted_keys[_GOSSIP_CACHE_MAX:]:
         del _last_gossip[k]
 
@@ -167,7 +165,6 @@ def maybe_npc_gossip(p, *, ticks: int = 1) -> int:
     同一地图格子上的有关系的 NPC 小概率闲聊，
     闲聊内容基于各自最近的观察记忆 + 关系数据。
     """
-    from backend.models.player import PlayerState
     from backend.systems.core import init_npc_positions
 
     if ticks <= 0:

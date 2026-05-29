@@ -10,51 +10,47 @@ from __future__ import annotations
 
 from typing import Any
 
+from backend.data.npcs_data import NPCS
 from backend.models.player import PlayerState
-from backend.data.npcs_data import NPCS, NPC_FACTION, NPC_HABITS, NPC_STATE, LONG_DISTANCE_WANDERERS
-from backend.data.factions import FACTIONS
-from backend.data.maps_data import MAPS, MAP_LOCATIONS, LOCATION_KEYWORDS
-from backend.systems.pathfinding import tile_at, can_step_between, find_path, apply_portal, is_dangerous
-from backend.systems.time_weather import is_night, shichen_name
 from backend.systems.constants import (
-    MAX_STATE_DELTA, MAX_FAVOR_DELTA, MAX_FAVOR,
-    MAX_RUMOR_LEN, MAX_RUMORS,
+    MAX_FAVOR,
+    MAX_FAVOR_DELTA,
+    MAX_RUMOR_LEN,
+    MAX_RUMORS,
+    MAX_STATE_DELTA,
+)
+from backend.systems.npc_state import (  # noqa: F401
+    maybe_wander_npcs,
+    npc_state_for_dialogue,
+    npc_weather_awareness_block,
+    update_all_npc_states_dynamic,
+    update_npc_state_dynamic,
+    update_npc_states_from_habits,
+)
+from backend.systems.perception import (  # noqa: F401
+    can_rest_at,
+    danger_sense_narrative,
+    hazard_roll_death,
+    perception_scan,
+    recent_events_block,
+    relevant_events_for,
+    rest_at_location,
+    tile_forced_encounter,
+    val_in_range,
+    world_status_block,
 )
 
 # ── 从子模块 re-export（保持向后兼容；新代码请直接从子模块导入）──
-from backend.systems.trap import (                    # noqa: F401
-    apply_vigor_delta,
+from backend.systems.trap import (  # noqa: F401
     apply_spirit_delta,
-    vigor_status_block,
+    apply_vigor_delta,
     enter_trap_state,
-    tile_hazard_reason,
     maybe_collapse_from_attrs,
-    try_clear_move_lock,
     survival_action_delta,
+    tile_hazard_reason,
+    try_clear_move_lock,
+    vigor_status_block,
 )
-
-from backend.systems.npc_state import (               # noqa: F401
-    maybe_wander_npcs,
-    update_npc_states_from_habits,
-    update_npc_state_dynamic,
-    update_all_npc_states_dynamic,
-    npc_state_for_dialogue,
-    npc_weather_awareness_block,
-)
-
-from backend.systems.perception import (              # noqa: F401
-    perception_scan,
-    danger_sense_narrative,
-    tile_forced_encounter,
-    hazard_roll_death,
-    can_rest_at,
-    rest_at_location,
-    relevant_events_for,
-    world_status_block,
-    recent_events_block,
-    val_in_range,
-)
-
 
 # ─── 基础工具函数 ─────────────────────
 
@@ -63,10 +59,8 @@ def clamp_delta(d: dict[str, int]) -> dict[str, int]:
     out: dict[str, int] = {}
     for k in keys:
         v = int(d.get(k, 0))
-        if v > MAX_STATE_DELTA:
-            v = MAX_STATE_DELTA
-        if v < -MAX_STATE_DELTA:
-            v = -MAX_STATE_DELTA
+        v = min(v, MAX_STATE_DELTA)
+        v = max(v, -MAX_STATE_DELTA)
         out[k] = v
     return out
 
@@ -83,10 +77,8 @@ def apply_favor(p: PlayerState, npc_id: str, delta: int | None) -> None:
     d = clamp_favor_delta(delta)
     cur = int(p.favor.get(npc_id, 0))
     nxt = cur + d
-    if nxt > MAX_FAVOR:
-        nxt = MAX_FAVOR
-    if nxt < -MAX_FAVOR:
-        nxt = -MAX_FAVOR
+    nxt = min(nxt, MAX_FAVOR)
+    nxt = max(nxt, -MAX_FAVOR)
     p.favor[npc_id] = nxt
 
 def push_rumor(p: PlayerState, snippet: str) -> None:

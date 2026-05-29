@@ -8,22 +8,19 @@
 """
 from __future__ import annotations
 
-from typing import Any
-
-from backend.models.player import PlayerState
-from backend.data.npcs_data import NPCS, NPC_FACTION, NPC_HABITS, NPC_STATE, LONG_DISTANCE_WANDERERS
 from backend.data.factions import FACTIONS
 from backend.data.maps_data import MAPS
+from backend.data.npcs_data import LONG_DISTANCE_WANDERERS, NPC_FACTION, NPC_HABITS, NPC_STATE, NPCS
+from backend.models.player import PlayerState
 from backend.systems.constants import (
-    NPC_WANDER_BASE_CHANCE,
-    NPC_HOSTILE_REP_THRESHOLD,
-    NPC_HOSTILE_FAVOR_THRESHOLD,
-    NPC_ALERT_REP_THRESHOLD,
     NPC_ALERT_FAVOR_THRESHOLD,
+    NPC_ALERT_REP_THRESHOLD,
+    NPC_HOSTILE_FAVOR_THRESHOLD,
+    NPC_HOSTILE_REP_THRESHOLD,
+    NPC_WANDER_BASE_CHANCE,
 )
 from backend.systems.pathfinding import can_step_between
 from backend.systems.time_weather import is_night, shichen_name
-
 
 # ── 天气驱动 NPC 游走行为 ──
 WEATHER_SHELTER = {"骤雨", "湿瘴", "重雾", "寒露", "夜霜"}
@@ -46,6 +43,7 @@ def _tile_is_sheltered(ch: str) -> bool:
 
 def maybe_wander_npcs(p: PlayerState, ticks: int = 1) -> None:
     import random
+
     from backend.systems.core import init_npc_positions
     if ticks <= 0:
         return
@@ -123,9 +121,8 @@ def is_active_at(active_val: tuple | list, sh: int, *, nocturnal: bool = False) 
     a0, a1 = int(active_val[0]), int(active_val[1])
     hour = (sh * 2 + 23) % 24
     in_active = (a0 <= hour <= a1) or (a0 <= hour + 24 <= a1)
-    if sh in (0, 1, 2):
-        if not nocturnal:
-            in_active = False
+    if sh in (0, 1, 2) and not nocturnal:
+        in_active = False
     return in_active
 
 
@@ -186,11 +183,10 @@ def update_npc_state_dynamic(p: PlayerState, npc_id: str) -> str | None:
         new_state = "hostile"
     elif rep_v <= NPC_ALERT_REP_THRESHOLD or fav <= NPC_ALERT_FAVOR_THRESHOLD or is_trap_target:
         new_state = "alert"
+    elif current in ("hostile", "alert"):
+        new_state = "idle"
     else:
-        if current in ("hostile", "alert"):
-            new_state = "idle"
-        else:
-            return None
+        return None
 
     if new_state != current:
         p.npc_states[npc_id] = new_state

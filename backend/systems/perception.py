@@ -10,31 +10,30 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.models.player import PlayerState
-from backend.data.npcs_data import NPCS, NPC_FACTION
 from backend.data.factions import FACTIONS
 from backend.data.maps_data import MAPS
+from backend.data.npcs_data import NPC_FACTION, NPCS
+from backend.models.player import PlayerState
 from backend.systems.constants import (
-    HAZARD_PROB_INN,
-    HAZARD_PROB_BUSH,
-    HAZARD_PROB_WATER,
-    HAZARD_NIGHT_MULT,
-    HAZARD_RAIN_WATER_MULT,
-    HAZARD_RAIN_OTHER_MULT,
-    HAZARD_FOG_MULT,
-    HAZARD_LULIN_PROTECT_MULT,
     HAZARD_CAOBANG_PROTECT_MULT,
-    HAZARD_POOR_COIN_MULT,
-    HAZARD_RICH_COIN_MULT,
-    HAZARD_MAX_DEATH_PROB,
     HAZARD_COIN_POOR_THRESHOLD,
     HAZARD_COIN_RICH_THRESHOLD,
+    HAZARD_FOG_MULT,
+    HAZARD_LULIN_PROTECT_MULT,
+    HAZARD_MAX_DEATH_PROB,
+    HAZARD_NIGHT_MULT,
+    HAZARD_POOR_COIN_MULT,
+    HAZARD_PROB_BUSH,
+    HAZARD_PROB_INN,
+    HAZARD_PROB_WATER,
+    HAZARD_RAIN_OTHER_MULT,
+    HAZARD_RAIN_WATER_MULT,
     HAZARD_REP_PROTECT_THRESHOLD,
+    HAZARD_RICH_COIN_MULT,
 )
-from backend.systems.pathfinding import tile_at, is_dangerous
+from backend.systems.pathfinding import is_dangerous, tile_at
 from backend.systems.time_weather import is_night, shichen_name, shichen_phase
-from backend.systems.trap import apply_vigor_delta, apply_spirit_delta
-
+from backend.systems.trap import apply_spirit_delta, apply_vigor_delta
 
 # ════════════════════════════════════════════════════════════════
 # 感知扫描系统 🎮 游戏性 - 危险直觉预警
@@ -94,13 +93,12 @@ def perception_scan(p: PlayerState) -> dict[str, Any] | None:
                             "dist": dist,
                             "note": "草丛深处似有动静",
                         })
-                elif ch == "I":
-                    if dist <= 1:
-                        suspicions.append({
-                            "x": nx, "y": ny,
-                            "dist": dist,
-                            "note": "这户门半掩，不太对劲",
-                        })
+                elif ch == "I" and dist <= 1:
+                    suspicions.append({
+                        "x": nx, "y": ny,
+                        "dist": dist,
+                        "note": "这户门半掩，不太对劲",
+                    })
 
     if not warnings and not suspicions:
         return None
@@ -299,7 +297,7 @@ def rest_at_location(p: PlayerState) -> dict[str, object]:
             "note": f"你在{mood}略坐了坐——时辰不声不响地溜了过去。",
         }
 
-    from backend.systems.time_weather import advance_clock, shichen_name
+    from backend.systems.time_weather import advance_clock
     actual_vigor = apply_vigor_delta(p, actual_v) if actual_v > 0 else 0
     actual_spirit = apply_spirit_delta(p, actual_s) if actual_s > 0 else 0
     if actual_sd < 0:
@@ -357,9 +355,7 @@ def relevant_events_for(p: PlayerState, npc_id: str, k: int = 4) -> list[dict[st
     rest: list[dict[str, Any]] = []
     for e in out:
         a = e.get("actor") or ""
-        if fac and (fac in a or FACTIONS.get(fac, "") in a):
-            pri.append(e)
-        elif npc_map and npc_map in a:
+        if (fac and (fac in a or FACTIONS.get(fac, "") in a)) or (npc_map and npc_map in a):
             pri.append(e)
         else:
             rest.append(e)

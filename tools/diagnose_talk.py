@@ -2,7 +2,13 @@
 import asyncio
 import json
 import os
+import sys
 import time
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
 
 async def diagnose():
     import httpx
@@ -80,7 +86,6 @@ async def diagnose():
         print("第4步：直接测试LLM API调用（JSON格式）")
         print("=" * 60)
         try:
-            from backend.config import settings
             API_KEY = os.environ.get("LLM_API_KEY", "")
             if not API_KEY:
                 print("  ⚠️ 未设置环境变量 LLM_API_KEY，跳过JSON格式测试")

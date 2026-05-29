@@ -1,12 +1,14 @@
 from __future__ import annotations
+
+from backend.models.player import PlayerState
 from backend.systems.constants import (
-    SLEEP_DEBT_DIVISOR,
     COMA_RECOVER_SLEEP_DEBT,
     COMA_RECOVER_SPIRIT,
     COMA_RECOVER_VIGOR,
+    RAIN_PROB,
+    SLEEP_DEBT_DIVISOR,
     WEATHER_CHANGE_PERIOD,
     WEATHER_CHANGE_PROB,
-    RAIN_PROB,
 )
 
 SHICHEN: tuple[str, ...] = (
@@ -48,7 +50,7 @@ def shichen_phase(idx: int) -> str:
     return "夜里"
 
 
-def advance_clock(p: "PlayerState", ticks: int = 1) -> None:
+def advance_clock(p: PlayerState, ticks: int = 1) -> None:
     """推进世界时钟。每次 tick = 一时辰；溢出转入下一日；附带可能的天气演替。"""
     if ticks <= 0:
         return
@@ -103,5 +105,5 @@ def advance_clock(p: "PlayerState", ticks: int = 1) -> None:
             restock_logs = restock_npc_inventories(p)
             for msg in restock_logs:
                 log.info("restock: %s", msg)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             log.warning("restock check failed: %s", e)
