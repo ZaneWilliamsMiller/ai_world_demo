@@ -40,15 +40,23 @@ saves/
 *.db
 *.sqlite
 *.tmp
+*.pid
+*.seed
 backups/
 
 # ── Node.js ──
 node_modules/
 
+# ── 前端构建产物 ──
+static/js/*.min.js
+static/css/*.min.css
+
 # ── Godot ──
 godot/.godot/
 godot/builds/
 godot/exports/
+*.import
+godot/editor/
 
 # ── IDE / 编辑器 ──
 .vscode/

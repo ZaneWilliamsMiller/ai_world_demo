@@ -11,16 +11,17 @@ import sys
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi import Path as FastPath
 from pydantic import BaseModel
+
+from backend.config import settings
 
 TESTS_DIR = Path(__file__).resolve().parents[2] / "tests"
 _run_lock = asyncio.Lock()
 
 
 def _guard_test_routes() -> None:
-    if os.environ.get("ENABLE_TEST_ROUTES", "0") != "1":
-        raise HTTPException(403, "测试路由已禁用。设置环境变量 ENABLE_TEST_ROUTES=1 以启用。")
+    if not settings.enable_test_routes:
+        raise HTTPException(403, "测试路由已禁用。设置 ENABLE_TEST_ROUTES=1 以启用。")
 
 
 router = APIRouter(
@@ -58,24 +59,26 @@ def _get_test_description(file_path: Path) -> str:
 async def list_tests():
     tests = []
     if TESTS_DIR.exists():
-        for f in sorted(TESTS_DIR.glob("test_*.py")):
+        for f in sorted(TESTS_DIR.rglob("test_*.py")):
+            rel = str(f.relative_to(TESTS_DIR)).replace("\\", "/")
             tests.append(TestInfo(
-                name=f.stem,
+                name=rel,
                 description=_get_test_description(f),
                 file_path=str(f.relative_to(TESTS_DIR.parent))
             ))
     return {"count": len(tests), "tests": tests}
 
 
-@router.post("/run/{test_name}")
-async def run_test(test_name: str = FastPath(..., min_length=1, max_length=64, pattern=r'^[a-zA-Z_][a-zA-Z0-9_]*$')):
-    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', test_name):
-        raise HTTPException(400, "无效的测试名称")
-    test_file = TESTS_DIR / f"{test_name}.py"
+@router.post("/run/{test_path:path}")
+async def run_test(test_path: str):
+    test_name = test_path.replace("/", os.sep).replace("\\", os.sep)
+    if ".." in test_name or not re.match(r'^[\w/\\]+\.py$', test_name.replace(os.sep, "/")):
+        raise HTTPException(400, "无效的测试路径")
+    test_file = TESTS_DIR / test_name
     if not test_file.resolve().is_relative_to(TESTS_DIR.resolve()):
         raise HTTPException(403, "路径越界")
     if not test_file.exists():
-        raise HTTPException(404, f"测试 {test_name} 不存在")
+        raise HTTPException(404, f"测试 {test_path} 不存在")
 
     if _run_lock.locked():
         raise HTTPException(429, "已有测试正在运行，请稍后再试")
@@ -95,7 +98,7 @@ async def run_test(test_name: str = FastPath(..., min_length=1, max_length=64, p
             output = stdout.decode("utf-8", errors="replace")
 
             return TestResult(
-                test_name=test_name,
+                test_name=test_path,
                 success=(proc.returncode == 0),
                 output=output,
                 exit_code=proc.returncode

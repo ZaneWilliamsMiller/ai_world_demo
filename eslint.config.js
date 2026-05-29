@@ -58,11 +58,11 @@ export default [
         },
         {
           selector: "Literal[value=/https?:\\/\\/localhost/]",
-          message: "禁止硬编码 localhost URL。请使用 App.BACKEND_URL 或 App.API。"
+          message: "禁止硬编码 localhost URL。请使用 App.API（同源相对路径）。"
         },
         {
           selector: "Literal[value=/127\\.0\\.0\\.1/]",
-          message: "禁止硬编码 127.0.0.1。请使用 App.BACKEND_URL 或 App.API。"
+          message: "禁止硬编码 127.0.0.1。请使用 App.API（同源相对路径）。"
         }
       ],
     },

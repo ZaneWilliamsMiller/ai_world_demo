@@ -6,12 +6,28 @@ window.App = window.App || {};
   var stats = { total: 0, running: 0, success: 0, error: 0 };
 
   function apiBase() {
-    return App.BACKEND_URL || window.location.origin;
+    return App.API;
+  }
+
+  function safeId(name) {
+    return name.replace(/[\/\\\.]/g, '_');
   }
 
   async function loadTests() {
     try {
-      var resp = await fetch(apiBase() + '/api/tests/list');
+      var resp = await fetch(apiBase() + '/tests/list');
+
+      if (resp.status === 404) {
+        showTestError('\u274c \u6d4b\u8bd5\u8def\u7531\u672a\u542f\u7528',
+          '\u8bf7\u5728 .env \u4e2d\u8bbe\u7f6e ENABLE_TEST_ROUTES=1 \u540e\u91cd\u542f\u670d\u52a1');
+        return;
+      }
+      if (resp.status === 403) {
+        showTestError('\u274c \u6d4b\u8bd5\u8def\u7531\u5df2\u7981\u7528',
+          '\u8bf7\u5728 .env \u4e2d\u8bbe\u7f6e ENABLE_TEST_ROUTES=1 \u540e\u91cd\u542f\u670d\u52a1');
+        return;
+      }
+
       var data = await resp.json();
 
       document.getElementById('totalTests').textContent = data.count;
@@ -27,24 +43,29 @@ window.App = window.App || {};
 
     } catch (err) {
       console.error('Failed to load tests:', err);
-      var grid = document.getElementById('testGrid');
-      grid.innerHTML = '';
-      var errDiv = document.createElement('div');
-      errDiv.style.cssText = 'text-align:center;padding:40px;color:#ff4757;';
-      errDiv.textContent = '\u274c \u65e0\u6cd5\u8fde\u63a5\u5230\u540e\u7aef\u670d\u52a1';
-      var small = document.createElement('small');
-      small.style.cssText = 'color:#a0a0b0;';
-      small.textContent = '\u8bf7\u786e\u4fdd\u540e\u7aef\u5df2\u5728\u8fd0\u884c (python start.py)';
-      errDiv.appendChild(document.createElement('br'));
-      errDiv.appendChild(small);
-      grid.appendChild(errDiv);
+      showTestError('\u274c \u65e0\u6cd5\u8fde\u63a5\u5230\u540e\u7aef\u670d\u52a1',
+        '\u8bf7\u786e\u4fdd\u540e\u7aef\u5df2\u5728\u8fd0\u884c (python start.py)');
     }
+  }
+
+  function showTestError(title, subtitle) {
+    var grid = document.getElementById('testGrid');
+    grid.innerHTML = '';
+    var errDiv = document.createElement('div');
+    errDiv.style.cssText = 'text-align:center;padding:40px;color:#ff4757;';
+    errDiv.textContent = title;
+    var small = document.createElement('small');
+    small.style.cssText = 'color:#a0a0b0;';
+    small.textContent = subtitle;
+    errDiv.appendChild(document.createElement('br'));
+    errDiv.appendChild(small);
+    grid.appendChild(errDiv);
   }
 
   function createTestCard(test) {
     var card = document.createElement('div');
     card.className = 'test-card';
-    card.id = 'card-' + test.name;
+    card.id = 'card-' + safeId(test.name);
 
     var headerDiv = document.createElement('div');
     headerDiv.className = 'test-header';
@@ -64,7 +85,7 @@ window.App = window.App || {};
     actionsRow.className = 'actions-row';
     var runBtn = document.createElement('button');
     runBtn.className = 'test-center-btn test-center-btn-primary';
-    runBtn.id = 'btn-' + test.name;
+    runBtn.id = 'btn-' + safeId(test.name);
     runBtn.textContent = '\u25b6 \u8fd0\u884c\u6d4b\u8bd5';
     runBtn.addEventListener('click', function() { runTest(test.name, runBtn); });
     actionsRow.appendChild(runBtn);
@@ -77,7 +98,7 @@ window.App = window.App || {};
 
     var outputSection = document.createElement('div');
     outputSection.className = 'output-section';
-    outputSection.id = 'output-' + test.name;
+    outputSection.id = 'output-' + safeId(test.name);
     var outputHeader = document.createElement('div');
     outputHeader.className = 'output-header';
     var outputLabel = document.createElement('span');
@@ -86,12 +107,12 @@ window.App = window.App || {};
     outputHeader.appendChild(outputLabel);
     var statusBadge = document.createElement('span');
     statusBadge.className = 'status-badge';
-    statusBadge.id = 'status-' + test.name;
+    statusBadge.id = 'status-' + safeId(test.name);
     outputHeader.appendChild(statusBadge);
     outputSection.appendChild(outputHeader);
     var resultBox = document.createElement('pre');
     resultBox.className = 'output-box';
-    resultBox.id = 'result-' + test.name;
+    resultBox.id = 'result-' + safeId(test.name);
     resultBox.textContent = '\u7b49\u5f85\u6267\u884c...';
     outputSection.appendChild(resultBox);
     card.appendChild(outputSection);
@@ -107,9 +128,10 @@ window.App = window.App || {};
     btn.appendChild(spinner);
     btn.appendChild(document.createTextNode('\u8fd0\u884c\u4e2d...'));
 
-    var outputSection = document.getElementById('output-' + testName);
-    var resultBox = document.getElementById('result-' + testName);
-    var statusBadge = document.getElementById('status-' + testName);
+    var sid = safeId(testName);
+    var outputSection = document.getElementById('output-' + sid);
+    var resultBox = document.getElementById('result-' + sid);
+    var statusBadge = document.getElementById('status-' + sid);
 
     outputSection.classList.add('show');
     statusBadge.className = 'status-badge status-running';
@@ -121,7 +143,7 @@ window.App = window.App || {};
 
     try {
       var startTime = Date.now();
-      var resp = await fetch(apiBase() + '/api/tests/run/' + testName, { method: 'POST' });
+      var resp = await fetch(apiBase() + '/tests/run/' + testName, { method: 'POST' });
       var data = await resp.json();
       var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
@@ -152,7 +174,7 @@ window.App = window.App || {};
   }
 
   function toggleOutput(testName) {
-    var section = document.getElementById('output-' + testName);
+    var section = document.getElementById('output-' + safeId(testName));
     if (section) section.classList.toggle('show');
   }
 

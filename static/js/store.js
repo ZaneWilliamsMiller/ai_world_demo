@@ -1,13 +1,13 @@
 // ═══════════════════════════════════════════════════════
-//  store.js — 全局应用状态（独立 Web 前端）
+//  store.js — 全局应用状态
 // ═══════════════════════════════════════════════════════
 window.App = window.App || {};
 
 (function(App) {
   "use strict";
 
-  // ── API 配置（可切换后端/独立模式）──
-  // 自动推导后端地址：同源时使用当前 host，否则默认 localhost:8765
+  // ── API 配置 ──
+  // 后端同时提供 API 和静态文件，同源部署
   // 用户可通过配置面板覆盖此值
   (function() {
     var saved = null;
@@ -29,14 +29,11 @@ window.App = window.App || {};
   // 当前模式: "backend" | "standalone"
   App.apiMode = "backend";
 
-  // 检测是否由后端 serve（同源），是则使用相对路径（前后端分离时永远为false）
-  const _sameOrigin = false;
-
-  // 便捷属性：当前 API 基地址
+  // 便捷属性：当前 API 基地址（同源部署，使用相对路径）
   Object.defineProperty(App, "API", {
     get: function() {
       if (App.apiMode === "backend") {
-        return _sameOrigin ? "/api" : App.BACKEND_URL + "/api";
+        return "/api";
       }
       return App.LLM_API_URL;
     }
@@ -102,16 +99,10 @@ window.App = window.App || {};
 
   App.saveConfig = function() {
     try {
-      // 只保存非敏感配置信息
-      // 注意：故意不保存 LLM_API_KEY、LLM_API_URL 等敏感字段
       localStorage.setItem("lp_config", JSON.stringify({
         apiMode: App.apiMode,
         backendUrl: App.BACKEND_URL,
-        // 敏感字段已移除，不再持久化：
-        // - llmApiUrl: LLM API 地址可能包含认证信息
-        // - llmApiKey: API 密钥，绝对不能存储在客户端
-        // - llmModel: 模型名称相对安全，但为保持一致性也不存储
-        llmModel: App.LLM_MODEL  // 模型名称不敏感，可以保存以提升用户体验
+        llmModel: App.LLM_MODEL
       }));
     } catch(e) {
       console.warn("[App] 保存配置失败:", e);
@@ -127,7 +118,6 @@ window.App = window.App || {};
 
       // ════════════════════════════════════
       // 数据迁移：清理旧版本中存储的敏感信息
-      // 如果检测到旧配置包含敏感字段，清除它们并警告用户
       // ════════════════════════════════════
       if (cfg.llmApiKey || cfg.llmApiUrl) {
         console.warn(
@@ -136,20 +126,14 @@ window.App = window.App || {};
           "请重新通过配置面板输入您的 API 配置。"
         );
 
-        // 清理 localStorage 中的敏感数据
         const safeCfg = {
           apiMode: cfg.apiMode || App.apiMode,
           backendUrl: cfg.backendUrl || App.BACKEND_URL,
           llmModel: cfg.llmModel || ""
         };
         localStorage.setItem("lp_config", JSON.stringify(safeCfg));
-
-        // 不再从旧配置加载敏感信息到内存
-        // App.LLM_API_URL 和 App.LLM_API_KEY 保持为空字符串
-        // 用户需要重新输入
       }
 
-      // 只加载非敏感的模型名称（如果有）
       if (cfg.llmModel) App.LLM_MODEL = cfg.llmModel;
 
     } catch(e) {

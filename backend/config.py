@@ -51,6 +51,12 @@ class Settings(BaseSettings):
     # ── CORS ──
     cors_allow_origins: str = "*"
 
+    # ── 测试路由 ──
+    enable_test_routes: bool = False
+
+    # ── 安全与控制 ──
+    shutdown_secret: str = ""
+
     @field_validator('llm_api_key')
     def warn_empty_key(cls, v):
         if not v:

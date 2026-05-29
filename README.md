@@ -256,9 +256,8 @@ LLM_BASE_URL=https://your-llm-api.example.com/v1
 LLM_API_KEY=sk-your-api-key-here
 LLM_MODEL=your-model-name
 
-# 服务端口（可选，有默认值）
+# 服务端口（可选，有默认值，后端同时提供 API 和静态文件）
 BACKEND_PORT=8765
-FRONTEND_PORT=8766
 ```
 
 > **推荐模型**：DeepSeek V3/V4、Qwen 系列、或任何兼容 OpenAI API 的模型
@@ -268,30 +267,21 @@ FRONTEND_PORT=8766
 #### 方式 A：一键启动（推荐）⭐
 
 ```bash
-# 启动后端 + Web 前端
+# 启动服务（后端 + Web 前端，同端口）
 python start.py
 
-# 启动后端 + Godot 前端
+# 启动服务 + Godot 前端
 python start.py godot
 
 # 自定义端口
-python start.py --backend-port 8765 --frontend-port 8766
-
-# 仅启动前端静态服务器（不启动后端）
-python start.py --serve-only 8766
+python start.py --port 8765
 ```
 
 #### 方式 B：手动启动
 
-**后端**：
 ```bash
 python -m uvicorn backend.app:app --host 127.0.0.1 --port 8765
-```
-
-**Web 前端**：
-```bash
-python start.py --serve-only 8766
-# 浏览器访问 http://127.0.0.1:8766
+# 浏览器访问 http://127.0.0.1:8765
 ```
 
 **Godot 前端**：
@@ -405,7 +395,7 @@ python start.py --serve-only 8766
 
 **方式 1：Web 测试中心**（推荐）
 ```
-浏览器访问 http://127.0.0.1:8766/tests.html
+浏览器访问 http://127.0.0.1:8765/tests.html
 → 点击 "▶ 运行" 按钮
 → 查看实时输出和执行结果
 ```

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 """
-运行（在 ai_world_demo 目录下）:
+运行:
+  python start.py
+  或
   python -m uvicorn backend.app:app --host 127.0.0.1 --port 8765
 """
 import asyncio
@@ -13,9 +15,10 @@ import time as _time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from backend.api.routes import router as api_router
 from backend.config import settings
@@ -137,55 +140,43 @@ async def log_requests(request: Request, call_next):
 
     return response
 
-# 真正的前后端分离：后端只提供API，不提供静态文件
-# if STATIC.exists():
-#     app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
+if STATIC.is_dir():
+    @app.get("/")
+    async def _index():
+        index_path = STATIC / "index.html"
+        if not index_path.is_file():
+            raise HTTPException(500, "缺少 static/index.html")
+        return FileResponse(index_path)
+
+    @app.get("/tests.html")
+    async def _tests():
+        tests_path = STATIC / "tests.html"
+        if not tests_path.is_file():
+            raise HTTPException(404)
+        return FileResponse(tests_path)
+
+    app.mount("/", StaticFiles(directory=str(STATIC)), name="static")
 
 
 @app.post("/api/shutdown")
 async def shutdown_server(request: Request):
-    """关闭后端服务（仅用于开发环境）"""
+    """关闭服务（仅用于开发环境）"""
 
     secret = request.headers.get("X-Shutdown-Secret", "")
-    expected = os.environ.get("SHUTDOWN_SECRET", "")
+    expected = settings.shutdown_secret
     if not expected:
         raise HTTPException(403, "未配置 SHUTDOWN_SECRET，拒绝远程关闭")
     if not hmac.compare_digest(secret, expected):
         raise HTTPException(403, "无权关闭服务")
 
-    frontend_port = os.environ.get("FRONTEND_PORT")
-    frontend_host = os.environ.get("FRONTEND_HOST", "127.0.0.1")
-
     shutdown_log = _log.getChild("shutdown")
     shutdown_log.info("收到关闭请求")
     global _shutdown_requested
     _shutdown_requested = True
-    shutdown_log.info("前端端口: %s", frontend_port)
-
-    if frontend_port:
-        try:
-            frontend_url = f"http://{frontend_host}:{frontend_port}/__shutdown__"
-            shutdown_log.info("通知前端服务器关闭: %s", frontend_url)
-
-            def notify_frontend():
-                _time.sleep(0.5)
-                try:
-                    with httpx.Client(timeout=5.0) as client:
-                        resp = client.get(frontend_url)
-                        shutdown_log.info("前端响应: %d", resp.status_code)
-                except Exception as e:
-                    shutdown_log.warning("通知前端失败: %s", e)
-
-            notifier = threading.Thread(target=notify_frontend, daemon=True)
-            notifier.start()
-        except Exception as e:
-            shutdown_log.warning("准备通知前端时出错: %s", e)
-    else:
-        shutdown_log.info("未设置 FRONTEND_PORT，跳过前端通知")
 
     def delayed_shutdown():
         _time.sleep(3.0)
-        _log.info("后端进程即将退出...")
+        _log.info("进程即将退出...")
 
         try:
             saved = 0
@@ -216,16 +207,5 @@ async def shutdown_server(request: Request):
     return {
         "status": "shutting_down",
         "message": "服务正在关闭",
-        "frontend_port": frontend_port,
-        "method": "http_notification",
-        "hint": "检查后端终端窗口查看详细日志"
+        "hint": "检查终端窗口查看详细日志"
     }
-
-
-# 真正的前后端分离：后端只提供API，不提供静态文件
-# @app.get("/")
-# async def index() -> FileResponse:
-#     index_path = STATIC / "index.html"
-#     if not index_path.is_file():
-#         raise HTTPException(500, "缺少 static/index.html")
-#     return FileResponse(index_path)

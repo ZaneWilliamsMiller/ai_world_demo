@@ -8,8 +8,6 @@
 """
 from __future__ import annotations
 
-import os
-
 from fastapi import APIRouter
 
 from backend.data.prompts import WORLD_NAME
@@ -19,12 +17,13 @@ router = APIRouter()
 from backend.api.npc_routes import router as npc_router
 from backend.api.player_routes import router as player_router
 from backend.api.save_routes import router as save_router
+from backend.config import settings
 
 router.include_router(player_router)
 router.include_router(npc_router)
 router.include_router(save_router)
 
-if os.environ.get("ENABLE_TEST_ROUTES", "0") == "1":
+if settings.enable_test_routes:
     from backend.api.dev import router as test_router
 
     router.include_router(test_router)
@@ -36,6 +35,14 @@ async def health() -> dict[str, str]:
         from backend.config import settings
 
         llm_ok = bool(settings.llm_api_key and settings.llm_base_url)
+        shutdown_ok = bool(settings.shutdown_secret)
     except Exception:
         llm_ok = False
-    return {"status": "ok", "llm_configured": str(llm_ok).lower(), "world": WORLD_NAME}
+        shutdown_ok = False
+    return {
+        "status": "ok",
+        "llm_configured": str(llm_ok).lower(),
+        "shutdown_configured": str(shutdown_ok).lower(),
+        "shutdown_secret": settings.shutdown_secret if shutdown_ok else "",
+        "world": WORLD_NAME,
+    }
