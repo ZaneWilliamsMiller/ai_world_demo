@@ -8,12 +8,39 @@ window.App = window.App || {};
   var modules = [];
   var testResults = {};
 
+  var interactiveVerbose = false;
+  var interactiveModules = [];
+  var interactiveResults = {};
+  var interactiveStats = { success: 0, failed: 0 };
+
   function apiBase() {
     return App.API;
   }
 
   function safeId(name) {
     return name.replace(/[\/\\\.]/g, '_');
+  }
+
+  function switchTab(tab) {
+    var funcPanel = document.getElementById('functionalPanel');
+    var intPanel = document.getElementById('interactivePanel');
+    var tabFunc = document.getElementById('tabFunctional');
+    var tabInt = document.getElementById('tabInteractive');
+
+    if (tab === 'functional') {
+      funcPanel.style.display = '';
+      intPanel.style.display = 'none';
+      tabFunc.classList.add('active');
+      tabInt.classList.remove('active');
+    } else {
+      funcPanel.style.display = 'none';
+      intPanel.style.display = '';
+      tabFunc.classList.remove('active');
+      tabInt.classList.add('active');
+      if (interactiveModules.length === 0) {
+        loadInteractiveModules();
+      }
+    }
   }
 
   async function loadModules() {
@@ -46,6 +73,25 @@ window.App = window.App || {};
     }
   }
 
+  async function loadInteractiveModules() {
+    try {
+      var resp = await fetch(apiBase() + '/tests/interactive/modules');
+      if (!resp.ok) {
+        document.getElementById('interactiveModuleList').innerHTML =
+          '<div style="text-align:center;padding:40px;color:#ff4757;">\u274c \u65e0\u6cd5\u52a0\u8f7d\u4ea4\u4e92\u6d4b\u8bd5\u6a21\u5757</div>';
+        return;
+      }
+      var data = await resp.json();
+      interactiveModules = data.modules;
+      document.getElementById('interactiveTotal').textContent = data.count;
+      renderInteractiveModules();
+    } catch (err) {
+      console.error('Failed to load interactive modules:', err);
+      document.getElementById('interactiveModuleList').innerHTML =
+        '<div style="text-align:center;padding:40px;color:#ff4757;">\u274c \u8fde\u63a5\u5931\u8d25</div>';
+    }
+  }
+
   function showError(title, subtitle) {
     var container = document.getElementById('moduleList');
     container.innerHTML = '';
@@ -65,70 +111,89 @@ window.App = window.App || {};
     container.innerHTML = '';
 
     modules.forEach(function(mod) {
-      var section = document.createElement('div');
-      section.className = 'module-section';
-      section.id = 'module-' + safeId(mod.id);
+      var section = createModuleSection(mod, false);
+      container.appendChild(section);
+    });
+  }
 
-      var header = document.createElement('div');
-      header.className = 'module-header';
+  function createModuleSection(mod, isInteractive) {
+    var section = document.createElement('div');
+    section.className = 'module-section';
+    section.id = (isInteractive ? 'imod-' : 'module-') + safeId(mod.id);
 
-      var leftDiv = document.createElement('div');
-      leftDiv.className = 'module-header-left';
+    var header = document.createElement('div');
+    header.className = 'module-header';
 
-      var expandBtn = document.createElement('button');
-      expandBtn.className = 'expand-btn';
-      expandBtn.textContent = '\u25b6';
-      expandBtn.addEventListener('click', function() {
-        toggleModule(mod.id, expandBtn);
-      });
-      leftDiv.appendChild(expandBtn);
+    var leftDiv = document.createElement('div');
+    leftDiv.className = 'module-header-left';
 
-      var iconSpan = document.createElement('span');
-      iconSpan.className = 'module-icon';
-      iconSpan.textContent = getModuleIcon(mod.id);
-      leftDiv.appendChild(iconSpan);
+    var expandBtn = document.createElement('button');
+    expandBtn.className = 'expand-btn';
+    expandBtn.textContent = '\u25b6';
+    expandBtn.addEventListener('click', function() {
+      toggleModule(mod.id, expandBtn, isInteractive);
+    });
+    leftDiv.appendChild(expandBtn);
 
-      var titleDiv = document.createElement('div');
-      titleDiv.className = 'module-title';
+    var iconSpan = document.createElement('span');
+    iconSpan.className = 'module-icon';
+    iconSpan.textContent = isInteractive ? (mod.icon || '\ud83e\udde0') : getModuleIcon(mod.id);
+    leftDiv.appendChild(iconSpan);
 
-      var nameSpan = document.createElement('span');
-      nameSpan.className = 'module-name';
-      nameSpan.textContent = mod.label;
-      titleDiv.appendChild(nameSpan);
+    var titleDiv = document.createElement('div');
+    titleDiv.className = 'module-title';
 
-      var countSpan = document.createElement('span');
-      countSpan.className = 'module-count';
-      countSpan.textContent = mod.count + ' \u4e2a\u6d4b\u8bd5';
-      titleDiv.appendChild(countSpan);
+    var nameSpan = document.createElement('span');
+    nameSpan.className = 'module-name';
+    nameSpan.textContent = mod.label;
+    titleDiv.appendChild(nameSpan);
 
-      var badge = document.createElement('span');
-      badge.className = 'module-badge';
-      badge.id = 'badge-' + safeId(mod.id);
-      badge.textContent = '\u23f3 \u5f85\u6d4b';
-      titleDiv.appendChild(badge);
+    var countSpan = document.createElement('span');
+    countSpan.className = 'module-count';
+    countSpan.textContent = mod.count + ' \u4e2a\u6d4b\u8bd5';
+    titleDiv.appendChild(countSpan);
 
-      leftDiv.appendChild(titleDiv);
-      header.appendChild(leftDiv);
+    var badge = document.createElement('span');
+    badge.className = 'module-badge';
+    badge.id = (isInteractive ? 'ibadge-' : 'badge-') + safeId(mod.id);
+    badge.textContent = '\u23f3 \u5f85\u6d4b';
+    titleDiv.appendChild(badge);
 
-      var runBtn = document.createElement('button');
-      runBtn.className = 'test-center-btn test-center-btn-primary module-run-btn';
-      runBtn.id = 'modbtn-' + safeId(mod.id);
-      runBtn.textContent = '\u25b6 \u4e00\u952e\u6d4b\u8bd5';
+    leftDiv.appendChild(titleDiv);
+    header.appendChild(leftDiv);
+
+    var runBtn = document.createElement('button');
+    runBtn.className = 'test-center-btn test-center-btn-primary module-run-btn';
+    runBtn.id = (isInteractive ? 'imodbtn-' : 'modbtn-') + safeId(mod.id);
+    runBtn.textContent = '\u25b6 \u4e00\u952e\u6d4b\u8bd5';
+    if (isInteractive) {
+      runBtn.addEventListener('click', function() { runInteractiveModule(mod.id, runBtn); });
+    } else {
       runBtn.addEventListener('click', function() { runModule(mod.id, runBtn); });
-      header.appendChild(runBtn);
+    }
+    header.appendChild(runBtn);
 
-      section.appendChild(header);
+    section.appendChild(header);
 
-      var body = document.createElement('div');
-      body.className = 'module-body';
-      body.id = 'modbody-' + safeId(mod.id);
+    var body = document.createElement('div');
+    body.className = 'module-body';
+    body.id = (isInteractive ? 'imodbody-' : 'modbody-') + safeId(mod.id);
 
-      mod.tests.forEach(function(test) {
-        var row = createTestRow(test, mod.id);
-        body.appendChild(row);
-      });
+    mod.tests.forEach(function(test) {
+      var row = isInteractive ? createInteractiveTestRow(test, mod) : createTestRow(test, mod.id);
+      body.appendChild(row);
+    });
 
-      section.appendChild(body);
+    section.appendChild(body);
+    return section;
+  }
+
+  function renderInteractiveModules() {
+    var container = document.getElementById('interactiveModuleList');
+    container.innerHTML = '';
+
+    interactiveModules.forEach(function(mod) {
+      var section = createModuleSection(mod, true);
       container.appendChild(section);
     });
   }
@@ -149,8 +214,9 @@ window.App = window.App || {};
     return icons[id] || '\ud83d\udcc1';
   }
 
-  function toggleModule(moduleId, btn) {
-    var body = document.getElementById('modbody-' + safeId(moduleId));
+  function toggleModule(moduleId, btn, isInteractive) {
+    var prefix = isInteractive ? 'imodbody-' : 'modbody-';
+    var body = document.getElementById(prefix + safeId(moduleId));
     if (!body) return;
     var expanded = body.classList.toggle('expanded');
     btn.textContent = expanded ? '\u25bc' : '\u25b6';
@@ -202,6 +268,59 @@ window.App = window.App || {};
     var resultBox = document.createElement('pre');
     resultBox.className = 'output-box';
     resultBox.id = 'rowresult-' + safeId(test.name);
+    outputSection.appendChild(resultBox);
+
+    row.appendChild(outputSection);
+
+    return row;
+  }
+
+  function createInteractiveTestRow(test, mod) {
+    var row = document.createElement('div');
+    row.className = 'test-row interactive-test-row';
+    row.id = 'irow-' + safeId(test.name);
+
+    var leftDiv = document.createElement('div');
+    leftDiv.className = 'test-row-left';
+
+    var nameSpan = document.createElement('span');
+    nameSpan.className = 'test-row-name';
+    nameSpan.textContent = test.name.split('/').pop().replace('.py', '').replace('test_', '');
+    leftDiv.appendChild(nameSpan);
+
+    var descSpan = document.createElement('span');
+    descSpan.className = 'test-row-desc';
+    descSpan.textContent = test.description;
+    leftDiv.appendChild(descSpan);
+
+    row.appendChild(leftDiv);
+
+    var rightDiv = document.createElement('div');
+    rightDiv.className = 'test-row-right';
+
+    var statusBadge = document.createElement('span');
+    statusBadge.className = 'test-row-status';
+    statusBadge.id = 'irowstatus-' + safeId(test.name);
+    statusBadge.textContent = '\u23f3';
+    rightDiv.appendChild(statusBadge);
+
+    var runBtn = document.createElement('button');
+    runBtn.className = 'test-center-btn test-center-btn-sm';
+    runBtn.id = 'irowbtn-' + safeId(test.name);
+    runBtn.textContent = '\u25b6';
+    runBtn.addEventListener('click', function() { runInteractiveSingleTest(test.name, runBtn); });
+    rightDiv.appendChild(runBtn);
+
+    row.appendChild(rightDiv);
+
+    var outputSection = document.createElement('div');
+    outputSection.className = 'test-row-output';
+    outputSection.id = 'irowout-' + safeId(test.name);
+    outputSection.setAttribute('data-test-name', test.name);
+
+    var resultBox = document.createElement('pre');
+    resultBox.className = 'output-box';
+    resultBox.id = 'irowresult-' + safeId(test.name);
     outputSection.appendChild(resultBox);
 
     row.appendChild(outputSection);
@@ -397,6 +516,159 @@ window.App = window.App || {};
     btn.textContent = '\u25b6 \u5168\u90e8\u6d4b\u8bd5';
   }
 
+  async function runInteractiveSingleTest(testName, btn) {
+    btn.disabled = true;
+    btn.textContent = '\u23f3';
+
+    var sid = safeId(testName);
+    var statusEl = document.getElementById('irowstatus-' + sid);
+    var outputEl = document.getElementById('irowout-' + sid);
+    var resultEl = document.getElementById('irowresult-' + sid);
+
+    statusEl.className = 'test-row-status status-running';
+    statusEl.textContent = '\u23f3 \u8c03\u7528LLM...';
+    outputEl.classList.add('show');
+    resultEl.textContent = '\u6b63\u5728\u4e0eNPC\u5bf9\u8bdd\uff0c\u8bf7\u7b49\u5f85...';
+
+    try {
+      var resp = await fetch(apiBase() + '/tests/interactive/run/' + testName, { method: 'POST' });
+      var data = await resp.json();
+      var elapsed = data.elapsed ? data.elapsed.toFixed(1) : '?';
+
+      interactiveResults[testName] = data;
+
+      if (data.success) {
+        statusEl.className = 'test-row-status status-success';
+        statusEl.textContent = '\u2705 ' + elapsed + 's';
+        interactiveStats.success++;
+      } else {
+        statusEl.className = 'test-row-status status-error';
+        statusEl.textContent = '\u274c ' + elapsed + 's';
+        interactiveStats.failed++;
+      }
+
+      resultEl.textContent = formatInteractiveOutput(data, elapsed);
+
+    } catch (err) {
+      statusEl.className = 'test-row-status status-error';
+      statusEl.textContent = '\u274c \u9519\u8bef';
+      resultEl.textContent = '\u8bf7\u6c42\u5931\u8d25: ' + err.message;
+      interactiveStats.failed++;
+    }
+
+    updateInteractiveStats();
+    btn.disabled = false;
+    btn.textContent = '\u25b6';
+  }
+
+  async function runInteractiveModule(moduleId, btn, fromRunAll) {
+    if (!fromRunAll) {
+      btn.disabled = true;
+      btn.textContent = '\u23f3 \u8fd0\u884c\u4e2d...';
+    }
+
+    var sid = safeId(moduleId);
+    var badge = document.getElementById('ibadge-' + sid);
+    badge.className = 'module-badge badge-running';
+    badge.textContent = '\u23f3 \u8c03\u7528LLM...';
+
+    var body = document.getElementById('imodbody-' + sid);
+    if (body && !body.classList.contains('expanded')) {
+      body.classList.add('expanded');
+      var expandBtn = body.parentElement.querySelector('.expand-btn');
+      if (expandBtn) expandBtn.textContent = '\u25bc';
+    }
+
+    try {
+      var startTime = Date.now();
+      var resp = await fetch(apiBase() + '/tests/interactive/run-module/' + moduleId, { method: 'POST' });
+
+      if (!resp.ok) {
+        var errText = '';
+        try { var errData = await resp.json(); errText = errData.detail || resp.statusText; } catch(e) { errText = resp.statusText; }
+        throw new Error(errText);
+      }
+
+      var data = await resp.json();
+      var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+      var modPassed = 0, modFailed = 0;
+
+      data.results.forEach(function(r) {
+        interactiveResults[r.test_name] = r;
+
+        var rsid = safeId(r.test_name);
+        var statusEl = document.getElementById('irowstatus-' + rsid);
+        var resultEl = document.getElementById('irowresult-' + rsid);
+        var outputEl = document.getElementById('irowout-' + rsid);
+        var rElapsed = r.elapsed ? r.elapsed.toFixed(1) : '?';
+
+        if (r.success) {
+          modPassed++;
+          interactiveStats.success++;
+          if (statusEl) {
+            statusEl.className = 'test-row-status status-success';
+            statusEl.textContent = '\u2705 ' + rElapsed + 's';
+          }
+        } else {
+          modFailed++;
+          interactiveStats.failed++;
+          if (statusEl) {
+            statusEl.className = 'test-row-status status-error';
+            statusEl.textContent = '\u274c ' + rElapsed + 's';
+          }
+        }
+
+        if (resultEl) {
+          resultEl.textContent = formatInteractiveOutput(r, rElapsed);
+          if (outputEl) outputEl.classList.add('show');
+        }
+      });
+
+      var badgeText = data.total + '\u603b ' + modPassed + '\u901a\u8fc7';
+      if (modFailed > 0) badgeText += ' ' + modFailed + '\u5931\u8d25';
+      badgeText += ' (' + elapsed + 's)';
+
+      if (modFailed === 0) {
+        badge.className = 'module-badge badge-success';
+        badge.textContent = '\u2705 ' + badgeText;
+      } else {
+        badge.className = 'module-badge badge-error';
+        badge.textContent = '\u274c ' + badgeText;
+      }
+
+    } catch (err) {
+      badge.className = 'module-badge badge-error';
+      badge.textContent = '\u274c \u8fd0\u884c\u5931\u8d25: ' + err.message;
+    }
+
+    updateInteractiveStats();
+
+    if (!fromRunAll) {
+      btn.disabled = false;
+      btn.textContent = '\u25b6 \u4e00\u952e\u6d4b\u8bd5';
+    }
+  }
+
+  async function runInteractiveAll() {
+    var btn = document.getElementById('interactiveRunAllBtn');
+    btn.disabled = true;
+    btn.textContent = '\u23f3 \u6d4b\u8bd5\u4e2d...';
+
+    interactiveStats.success = 0;
+    interactiveStats.failed = 0;
+    updateInteractiveStats();
+
+    for (var i = 0; i < interactiveModules.length; i++) {
+      var mod = interactiveModules[i];
+      var modBtn = document.getElementById('imodbtn-' + safeId(mod.id));
+      await runInteractiveModule(mod.id, modBtn, true);
+    }
+
+    btn.disabled = false;
+    btn.textContent = '\u25b6 \u5168\u90e8\u4ea4\u4e92\u6d4b\u8bd5';
+  }
+
   function formatOutput(testName, data, elapsed) {
     if (verbose) {
       return '[' + testName + '] \u8017\u65f6: ' + elapsed + 's [\u9000\u51fa\u7801: ' + (data.exit_code ?? '?') + ']\n\n' + data.output;
@@ -421,6 +693,28 @@ window.App = window.App || {};
       }
     }
     return '\u274c \u5931\u8d25: ' + lastErr;
+  }
+
+  function formatInteractiveOutput(data, elapsed) {
+    if (interactiveVerbose) {
+      return (data.success ? '\u2705' : '\u274c') + ' ' + (data.test_name || '') + ' (' + elapsed + 's)\n\n' + data.output;
+    }
+    if (data.success) {
+      return '\u2705 \u901a\u8fc7 (' + elapsed + 's)';
+    }
+    var output = data.output || '';
+    var lines = output.trim().split('\n');
+    var firstFail = '';
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].indexOf('FAIL:') >= 0 || lines[i].indexOf('ERROR:') >= 0) {
+        firstFail = lines[i].trim();
+        break;
+      }
+    }
+    if (firstFail) {
+      return '\u274c ' + firstFail;
+    }
+    return '\u274c \u5931\u8d25 (' + elapsed + 's)\n' + output.substring(0, 200);
   }
 
   function extractSummary(output) {
@@ -507,7 +801,7 @@ window.App = window.App || {};
   function toggleVerbose() {
     verbose = document.getElementById('verboseToggle').checked;
 
-    document.querySelectorAll('.test-row-output').forEach(function(el) {
+    document.querySelectorAll('#functionalPanel .test-row-output').forEach(function(el) {
       var testName = el.getAttribute('data-test-name');
       var resultEl = el.querySelector('.output-box');
 
@@ -529,6 +823,31 @@ window.App = window.App || {};
     });
   }
 
+  function toggleInteractiveVerbose() {
+    interactiveVerbose = document.getElementById('interactiveVerboseToggle').checked;
+
+    document.querySelectorAll('#interactivePanel .test-row-output').forEach(function(el) {
+      var testName = el.getAttribute('data-test-name');
+      var resultEl = el.querySelector('.output-box');
+
+      if (!interactiveVerbose) {
+        if (interactiveResults[testName] && interactiveResults[testName].success) {
+          el.classList.remove('show');
+        }
+      } else {
+        if (interactiveResults[testName]) {
+          el.classList.add('show');
+        }
+      }
+
+      if (resultEl && interactiveResults[testName]) {
+        var r = interactiveResults[testName];
+        var e = r.elapsed ? r.elapsed.toFixed(1) : '?';
+        resultEl.textContent = formatInteractiveOutput(r, e);
+      }
+    });
+  }
+
   function updateStats() {
     var runningEl = document.getElementById('runningCount');
     if (runningEl) runningEl.textContent = stats.running;
@@ -538,9 +857,20 @@ window.App = window.App || {};
     if (errorEl) errorEl.textContent = stats.error;
   }
 
+  function updateInteractiveStats() {
+    var successEl = document.getElementById('interactiveSuccess');
+    if (successEl) successEl.textContent = interactiveStats.success;
+    var failedEl = document.getElementById('interactiveFailed');
+    if (failedEl) failedEl.textContent = interactiveStats.failed;
+  }
+
   window.TestCenter = {
     runAll: runAll,
     toggleVerbose: toggleVerbose,
+    switchTab: switchTab,
+    runInteractiveAll: runInteractiveAll,
+    runInteractiveModule: runInteractiveModule,
+    toggleInteractiveVerbose: toggleInteractiveVerbose,
   };
 
   document.addEventListener('DOMContentLoaded', loadModules);
