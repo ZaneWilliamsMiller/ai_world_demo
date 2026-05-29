@@ -89,8 +89,12 @@ def _module_id_from_rel(rel: str) -> str:
 
 _MODULE_LABELS: dict[str, str] = {
     "integration": "集成测试",
+    "unit/agents": "Agent 模块",
+    "unit/api": "API 路由",
     "unit/llm": "LLM 模块",
     "unit/memory": "记忆模块",
+    "unit/services": "服务层",
+    "unit/session": "会话存储",
     "unit/systems": "游戏系统",
 }
 
@@ -149,7 +153,9 @@ async def _run_single(test_path: str) -> TestResult:
 
     proc = await asyncio.create_subprocess_exec(
         sys.executable,
+        "-m", "pytest",
         str(test_file),
+        "-v", "--tb=short", "--no-header",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
         cwd=project_root,

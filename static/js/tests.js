@@ -312,9 +312,11 @@ window.App = window.App || {};
           }
         }
 
-        if (resultEl && verbose) {
+        if (resultEl) {
           resultEl.textContent = formatOutput(r.test_name, r, '?');
-          if (outputEl) outputEl.classList.add('show');
+          if (outputEl && (verbose || !r.success || formatOutput(r.test_name, r, '?').indexOf('\n') > 0)) {
+            outputEl.classList.add('show');
+          }
         }
       });
 
@@ -365,7 +367,15 @@ window.App = window.App || {};
       return '[' + testName + '] \u8017\u65f6: ' + elapsed + 's [\u9000\u51fa\u7801: ' + (data.exit_code ?? '?') + ']\n\n' + data.output;
     }
     if (data.success) {
+      var summary = extractSummary(data.output);
+      if (summary) {
+        return '\u2705 \u901a\u8fc7 (' + elapsed + 's)\n' + summary;
+      }
       return '\u2705 \u901a\u8fc7 (' + elapsed + 's)';
+    }
+    var failInfo = extractFailure(data.output);
+    if (failInfo) {
+      return '\u274c \u5931\u8d25: ' + failInfo;
     }
     var lines = data.output.trim().split('\n');
     var lastErr = '';
@@ -376,6 +386,38 @@ window.App = window.App || {};
       }
     }
     return '\u274c \u5931\u8d25: ' + lastErr;
+  }
+
+  function extractSummary(output) {
+    if (!output) return '';
+    var lines = output.trim().split('\n');
+    for (var i = lines.length - 1; i >= 0; i--) {
+      var line = lines[i].trim();
+      if (line.indexOf('passed') >= 0 || line.indexOf('PASSED') >= 0) {
+        return line;
+      }
+    }
+    return '';
+  }
+
+  function extractFailure(output) {
+    if (!output) return '';
+    var lines = output.trim().split('\n');
+    var failLine = '';
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (line.indexOf('FAILED') >= 0) {
+        failLine = line;
+      }
+    }
+    if (failLine) return failLine;
+    for (var i = lines.length - 1; i >= 0; i--) {
+      var line = lines[i].trim();
+      if (line && line.indexOf('=') < 0 && line.indexOf('-') !== 0) {
+        return line;
+      }
+    }
+    return '';
   }
 
   function updateModuleBadge(testName) {
