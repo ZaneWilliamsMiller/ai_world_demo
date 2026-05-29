@@ -221,10 +221,9 @@ window.App = window.App || {};
     updateStats();
 
     try {
-      var startTime = Date.now();
       var resp = await fetch(apiBase() + '/tests/run/' + testName, { method: 'POST' });
       var data = await resp.json();
-      var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      var elapsed = data.elapsed ? data.elapsed.toFixed(1) : '?';
 
       testResults[testName] = data;
 
@@ -299,22 +298,23 @@ window.App = window.App || {};
         var statusEl = document.getElementById('rowstatus-' + rsid);
         var resultEl = document.getElementById('rowresult-' + rsid);
         var outputEl = document.getElementById('rowout-' + rsid);
+        var rElapsed = r.elapsed ? r.elapsed.toFixed(1) : '?';
 
         if (statusEl) {
           if (r.success) {
             statusEl.className = 'test-row-status status-success';
-            statusEl.textContent = '\u2705';
+            statusEl.textContent = '\u2705 ' + rElapsed + 's';
             stats.success++;
           } else {
             statusEl.className = 'test-row-status status-error';
-            statusEl.textContent = '\u274c';
+            statusEl.textContent = '\u274c ' + rElapsed + 's';
             stats.error++;
           }
         }
 
         if (resultEl) {
-          resultEl.textContent = formatOutput(r.test_name, r, '?');
-          if (outputEl && (verbose || !r.success || formatOutput(r.test_name, r, '?').indexOf('\n') > 0)) {
+          resultEl.textContent = formatOutput(r.test_name, r, rElapsed);
+          if (outputEl && (verbose || !r.success || formatOutput(r.test_name, r, rElapsed).indexOf('\n') > 0)) {
             outputEl.classList.add('show');
           }
         }
@@ -346,20 +346,75 @@ window.App = window.App || {};
   async function runAll() {
     var btn = document.getElementById('runAllBtn');
     btn.disabled = true;
-    btn.textContent = '\u23f3 \u8fd0\u884c\u4e2d...';
+    btn.textContent = '\u23f3 \u6d4b\u8bd5\u4e2d...';
 
     stats.success = 0;
     stats.error = 0;
+    stats.running++;
     updateStats();
 
-    for (var i = 0; i < modules.length; i++) {
-      var mod = modules[i];
-      var modBtn = document.getElementById('modbtn-' + safeId(mod.id));
-      await runModule(mod.id, modBtn);
+    modules.forEach(function(mod) {
+      var sid = safeId(mod.id);
+      var badge = document.getElementById('badge-' + sid);
+      if (badge) {
+        badge.className = 'module-badge badge-running';
+        badge.textContent = '\u23f3 \u8fd0\u884c\u4e2d...';
+      }
+      mod.tests.forEach(function(t) {
+        var statusEl = document.getElementById('rowstatus-' + safeId(t.name));
+        if (statusEl) {
+          statusEl.className = 'test-row-status status-running';
+          statusEl.textContent = '\u23f3';
+        }
+      });
+    });
+
+    try {
+      var resp = await fetch(apiBase() + '/tests/run-all', { method: 'POST' });
+      var data = await resp.json();
+
+      data.results.forEach(function(r) {
+        testResults[r.test_name] = r;
+
+        var rsid = safeId(r.test_name);
+        var statusEl = document.getElementById('rowstatus-' + rsid);
+        var resultEl = document.getElementById('rowresult-' + rsid);
+        var outputEl = document.getElementById('rowout-' + rsid);
+        var rElapsed = r.elapsed ? r.elapsed.toFixed(1) : '?';
+
+        if (statusEl) {
+          if (r.success) {
+            statusEl.className = 'test-row-status status-success';
+            statusEl.textContent = '\u2705 ' + rElapsed + 's';
+            stats.success++;
+          } else {
+            statusEl.className = 'test-row-status status-error';
+            statusEl.textContent = '\u274c ' + rElapsed + 's';
+            stats.error++;
+          }
+        }
+
+        if (resultEl) {
+          resultEl.textContent = formatOutput(r.test_name, r, rElapsed);
+          if (outputEl && (verbose || !r.success || formatOutput(r.test_name, r, rElapsed).indexOf('\n') > 0)) {
+            outputEl.classList.add('show');
+          }
+        }
+      });
+
+      modules.forEach(function(mod) {
+        recalcModuleBadge(mod);
+      });
+
+    } catch (err) {
+      console.error('Run all failed:', err);
     }
 
+    stats.running--;
+    updateStats();
+
     btn.disabled = false;
-    btn.textContent = '\u25b6 \u5168\u90e8\u8fd0\u884c';
+    btn.textContent = '\u25b6 \u5168\u90e8\u6d4b\u8bd5';
   }
 
   function formatOutput(testName, data, elapsed) {
@@ -479,7 +534,8 @@ window.App = window.App || {};
 
       if (resultEl && testResults[testName]) {
         var r = testResults[testName];
-        resultEl.textContent = formatOutput(testName, r, '?');
+        var e = r.elapsed ? r.elapsed.toFixed(1) : '?';
+        resultEl.textContent = formatOutput(testName, r, e);
       }
     });
   }

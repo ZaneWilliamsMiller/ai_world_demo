@@ -42,6 +42,7 @@ class TestResult(BaseModel):
     success: bool
     output: str
     exit_code: int | None = None
+    elapsed: float = 0.0
 
 
 class ModuleInfo(BaseModel):
@@ -162,7 +163,9 @@ async def _run_single(test_path: str) -> TestResult:
         env=env,
     )
 
+    t0 = asyncio.get_event_loop().time()
     stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
+    elapsed = round(asyncio.get_event_loop().time() - t0, 1)
     output = stdout.decode("utf-8", errors="replace")
 
     return TestResult(
@@ -170,6 +173,7 @@ async def _run_single(test_path: str) -> TestResult:
         success=(proc.returncode == 0),
         output=output,
         exit_code=proc.returncode,
+        elapsed=elapsed,
     )
 
 
