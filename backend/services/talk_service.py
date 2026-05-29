@@ -214,9 +214,10 @@ def _build_dynamic_prompt_parts(
     fac = NPC_FACTION.get(npc_id)
     if fac:
         rep_v = int(p.reputation.get(fac, 0))
+        fac_name = FACTIONS.get(fac, fac)
         dyn_parts.append(
-            f"【你心里的算盘】你与{FACTIONS[fac]}有牵连；"
-            f"此人在{FACTIONS[fac]}里的名声目前为 {rep_v:+d}（百格制，越高越受待见）。"
+            f"【你心里的算盘】你与{fac_name}有牵连；"
+            f"此人在{fac_name}里的名声目前为 {rep_v:+d}（百格制，越高越受待见）。"
             f"在你眼里 {('值得抬手' if rep_v >= 25 else '可结纳' if rep_v >= 8 else '陌路一个' if rep_v > -8 else '面相可疑' if rep_v > -25 else '该被刁难')}。"
         )
 
@@ -274,10 +275,8 @@ def build_npc_messages(
     user_message: str,
     hist_slice: list[dict[str, str]],
 ) -> list[dict[str, str]]:
-    update_npc_state_dynamic(p, npc_id)
-
     npc = NPCS[npc_id]
-    map_name = MAPS[p.map_id]["name"]
+    map_name = MAPS.get(p.map_id, {}).get("name", "未知之地")
     loc = f"地图「{map_name}」格坐标 ({p.px},{p.py})；性别：{p.gender}。"
     ch = format_npc_character_sheet(npc)
 
@@ -332,7 +331,7 @@ def _apply_parsed_effects(
         if l not in items_lost:
             items_lost.append(l)
 
-    actor_tag = f"{NPCS[npc_id]['short']}@{MAPS[p.map_id]['name']}"
+    actor_tag = f"{NPCS[npc_id]['short']}@{MAPS.get(p.map_id, {}).get('name', '未知之地')}"
     for ev in parsed.events:
         push_event(p, ev, scope="near", actor=actor_tag)
 

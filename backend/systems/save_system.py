@@ -162,6 +162,9 @@ def _deserialize_player(data: dict[str, Any]) -> PlayerState:
     if int(getattr(p, "spirit", 0)) < 0:
         p.spirit = 0
 
+    for k in ("order", "truth", "hope", "chaos"):
+        p.flags.setdefault(k, 0)
+
     from backend.data.maps_data import MAPS
     if p.map_id not in MAPS:
         p.map_id = 'world'

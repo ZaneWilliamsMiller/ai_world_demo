@@ -193,7 +193,7 @@ async def _post_move_world_update(p, prev_map, actual_path, prev_day, bg):
             p.death_reason = reason
             p.move_locked = False
             p.move_lock_npc_id = None
-            push_event(p, f"{p.display_name}于{MAPS[p.map_id]['name']}遭难:{reason[:24]}", scope="near", actor="天意")
+            push_event(p, f"{p.display_name}于{MAPS.get(p.map_id, {}).get('name', '未知之地')}遭难:{reason[:24]}", scope="near", actor="天意")
             await asyncio.to_thread(save_game, p)
             try:
                 delete_save(p.player_id)

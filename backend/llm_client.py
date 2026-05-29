@@ -154,7 +154,7 @@ def _close_client_sync() -> None:
         inst._client = None
         inst._custom_clients.clear()
     except Exception:
-        pass
+        log.debug("close_client_sync failed", exc_info=True)
 
 
 async def _get_semaphore() -> asyncio.Semaphore:
@@ -289,7 +289,9 @@ async def _handle_llm_response(response_data: dict[str, Any], cache, circuit_bre
             prompt_tokens, completion_tokens, total_tokens, cached_tokens,
         )
 
-    content = response_data["choices"][0]["message"]["content"] or ""
+    choices = response_data.get("choices") or []
+    content = choices[0]["message"]["content"] if choices else ""
+    content = content or ""
 
     await cache.set(messages, content, temperature=temperature, model=model, max_tokens=max_tokens)
     await circuit_breaker.success()
@@ -388,11 +390,28 @@ async def chat_completion(
             llm_base_url or settings.llm_base_url,
             llm_api_key or settings.llm_api_key,
         )
-        r = await client.post(url, json=body, headers=headers)
-        r.raise_for_status()
-        data = r.json()
-        content = data["choices"][0]["message"]["content"] or ""
-        return content
+        max_retries = 2
+        last_exc: Exception | None = None
+        for attempt in range(max_retries + 1):
+            r = None
+            try:
+                r = await client.post(url, json=body, headers=headers)
+                r.raise_for_status()
+                data = r.json()
+                choices = data.get("choices") or []
+                content = choices[0]["message"]["content"] if choices else ""
+                content = content or ""
+                return content
+            except Exception as exc:
+                last_exc = exc
+                status = getattr(r, "status_code", 0) if r else 0
+                if status not in RETRYABLE_HTTP_STATUSES or attempt == max_retries:
+                    raise
+                import random as _rng
+                backoff = (2 ** attempt) + _rng.uniform(0, RETRY_BACKOFF_JITTER_MAX)
+                log.warning("custom LLM retry %d/%d after %.1fs: %s", attempt + 1, max_retries, backoff, exc)
+                await asyncio.sleep(backoff)
+        raise last_exc
     
     cache = get_llm_cache()
     cb = get_circuit_breaker()
@@ -609,7 +628,7 @@ def _cleanup() -> None:
             else:
                 loop.run_until_complete(mgr._client.aclose())
         except Exception:
-            pass
+            log.debug("_cleanup close client failed", exc_info=True)
         finally:
             mgr._client = None
     for key, client in list(mgr._custom_clients.items()):
@@ -619,7 +638,7 @@ def _cleanup() -> None:
                 if not loop.is_running():
                     loop.run_until_complete(client.aclose())
             except Exception:
-                pass
+                log.debug("_cleanup close custom client failed", exc_info=True)
     mgr._custom_clients.clear()
 
 

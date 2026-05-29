@@ -16,7 +16,7 @@ from collections import defaultdict
 from backend.data.npcs_data import NPCS
 from backend.data.factions import FACTIONS
 from backend.data.prompts import WORLD_NAME, SOCIETY_BIBLE
-from backend.systems.core import npc_ids_for_player, perception_scan, danger_sense_narrative
+from backend.systems.core import npc_ids_for_player, perception_scan, danger_sense_narrative, update_npc_state_dynamic
 from backend.systems.time_weather import shichen_name
 from backend.llm_params import (
     TALK_TEMPERATURE, TALK_LIGHT_MAX_TOKENS, TALK_FULL_MAX_TOKENS,
@@ -191,6 +191,7 @@ async def npc_talk(body: TalkBody, bg: BackgroundTasks) -> dict[str, Any]:
         p, npc = _validate_talk_request(body)
 
         async with p.lock:
+            update_npc_state_dynamic(p, body.npc_id)
             hist = p.history.setdefault(body.npc_id, [])
             hist_slice = list(hist[-14:])
 
@@ -252,6 +253,7 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
     p, npc = _validate_talk_request(body)
 
     async with p.lock:
+        update_npc_state_dynamic(p, body.npc_id)
         hist = p.history.setdefault(body.npc_id, [])
         hist_slice = list(hist[-14:])
 
@@ -453,7 +455,7 @@ async def finale(body: FinaleBody) -> dict[str, Any]:
     lines = [
         FIXED_INTRO, "",
         f"玩家性别:{p.gender};真实江湖(永久死亡):{'开' if p.permadeath else '关'}，",
-        f"终局前最后位置，地图「{MAPS[p.map_id]['name']}」坐标({p.px},{p.py});持{p.coins} 文钱",
+        f"终局前最后位置，地图「{MAPS.get(p.map_id, {}).get('name', '未知之地')}」坐标({p.px},{p.py});持{p.coins} 文钱",
         f"江湖行迹至第 {p.world_day} 日· {shichen_name(p.world_shichen)}(天气「{p.weather}」)",
         f"{inv_line}。{rep_line}", "",
         SOCIETY_BIBLE, "",

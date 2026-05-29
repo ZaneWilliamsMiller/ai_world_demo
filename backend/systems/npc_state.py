@@ -76,6 +76,8 @@ def maybe_wander_npcs(p: PlayerState, ticks: int = 1) -> None:
         rows = MAPS.get(mid, {}).get("rows", [])
         if not rows:
             continue
+        if y < 0 or y >= len(rows) or x < 0 or x >= len(rows[0]):
+            continue
         ch_here = rows[y][x]
         if night and ch_here in (",", "F", ";", "~", "&", "m", "/"):
             continue
