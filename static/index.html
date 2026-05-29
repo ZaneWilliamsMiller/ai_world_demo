@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>活纸 · 江湖行纪</title>
+  <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/game.css">
 </head>
 <body>
@@ -36,7 +37,7 @@
         <div class="saves-list" id="savesList"></div>
         <button onclick="App.loadGame()">继续江湖</button>
         <button onclick="App.deleteSave()"
-                style="background:transparent;color:#ef4444;margin-top:4px;">
+                class="btn-delete-save">
           删除存档
         </button>
         <button onclick="App.showLoginForm()"

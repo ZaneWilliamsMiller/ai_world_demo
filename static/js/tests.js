@@ -3,18 +3,15 @@ window.App = window.App || {};
 (function(App) {
   "use strict";
 
-  var API_BASE = (function() {
-    try {
-      var cfg = JSON.parse(localStorage.getItem('lp_config') || '{}');
-      return cfg.backendUrl || (window.location.port === '8765' ? window.location.origin : 'http://localhost:8765');
-    } catch(e) { return 'http://localhost:8765'; }
-  })();
-
   var stats = { total: 0, running: 0, success: 0, error: 0 };
+
+  function apiBase() {
+    return App.BACKEND_URL || window.location.origin;
+  }
 
   async function loadTests() {
     try {
-      var resp = await fetch(API_BASE + '/api/tests/list');
+      var resp = await fetch(apiBase() + '/api/tests/list');
       var data = await resp.json();
 
       document.getElementById('totalTests').textContent = data.count;
@@ -120,7 +117,7 @@ window.App = window.App || {};
 
     try {
       var startTime = Date.now();
-      var resp = await fetch(API_BASE + '/api/tests/run/' + testName, { method: 'POST' });
+      var resp = await fetch(apiBase() + '/api/tests/run/' + testName, { method: 'POST' });
       var data = await resp.json();
       var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 

@@ -1,8 +1,6 @@
 .test-center-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: #1a1a2e;
-  color: #eaeaea;
   line-height: 1.6;
+  overflow: auto;
 }
 
 .test-center-container {
@@ -15,19 +13,19 @@
   text-align: center;
   margin-bottom: 30px;
   padding: 20px;
-  background: linear-gradient(135deg, #16213e 0%, #0f3460 100%);
+  background: linear-gradient(135deg, var(--bg-panel) 0%, var(--bg-card) 100%);
   border-radius: 12px;
-  border: 1px solid #e94560;
+  border: 1px solid var(--accent-red);
 }
 
 .test-center-header h1 {
   font-size: 2em;
   margin-bottom: 8px;
-  color: #e94560;
+  color: var(--accent-red);
 }
 
 .test-center-header p {
-  color: #a0a0b0;
+  color: var(--text-muted);
 }
 
 .stats-bar {
@@ -38,21 +36,21 @@
 }
 
 .stat-card {
-  background: #16213e;
+  background: var(--bg-card);
   padding: 20px;
   border-radius: 8px;
-  border: 1px solid #0f3460;
+  border: 1px solid var(--glass-border);
   text-align: center;
 }
 
 .stat-card h3 {
   font-size: 2em;
-  color: #e94560;
+  color: var(--accent-red);
   margin-bottom: 5px;
 }
 
 .stat-card p {
-  color: #a0a0b0;
+  color: var(--text-muted);
   font-size: 0.9em;
 }
 
@@ -62,17 +60,17 @@
 }
 
 .test-card {
-  background: #16213e;
+  background: var(--bg-card);
   border-radius: 8px;
-  border: 1px solid #0f3460;
+  border: 1px solid var(--glass-border);
   padding: 20px;
   transition: all 0.3s ease;
 }
 
 .test-card:hover {
-  border-color: #e94560;
+  border-color: var(--accent-red);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(233, 69, 96, 0.2);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
 }
 
 .test-header {
@@ -85,11 +83,11 @@
 .test-name {
   font-size: 1.2em;
   font-weight: 600;
-  color: #fff;
+  color: var(--text-main);
 }
 
 .test-desc {
-  color: #a0a0b0;
+  color: var(--text-muted);
   font-size: 0.95em;
   margin-bottom: 15px;
 }
@@ -105,7 +103,7 @@
 }
 
 .test-center-btn-primary {
-  background: #e94560;
+  background: var(--accent-red);
   color: white;
 }
 
@@ -121,12 +119,12 @@
 
 .test-center-btn-secondary {
   background: transparent;
-  color: #e94560;
-  border: 1px solid #e94560;
+  color: var(--accent-red);
+  border: 1px solid var(--accent-red);
 }
 
 .test-center-btn-secondary:hover {
-  background: rgba(233, 69, 96, 0.1);
+  background: rgba(239, 68, 68, 0.1);
 }
 
 .output-section {
@@ -147,7 +145,7 @@
 
 .output-label {
   font-weight: 600;
-  color: #fff;
+  color: var(--text-main);
 }
 
 .status-badge {
@@ -158,23 +156,23 @@
 }
 
 .status-success {
-  background: rgba(46, 213, 115, 0.2);
-  color: #2ed573;
+  background: rgba(34, 197, 94, 0.2);
+  color: var(--accent-green);
 }
 
 .status-error {
-  background: rgba(255, 71, 87, 0.2);
-  color: #ff4757;
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--accent-red);
 }
 
 .status-running {
-  background: rgba(255, 165, 2, 0.2);
-  color: #ffa502;
+  background: rgba(234, 179, 8, 0.2);
+  color: var(--accent-yellow);
 }
 
 pre.output-box {
-  background: #0f0f1e;
-  border: 1px solid #0f3460;
+  background: var(--bg-dark);
+  border: 1px solid var(--glass-border);
   border-radius: 6px;
   padding: 15px;
   overflow-x: auto;
@@ -196,7 +194,7 @@ pre.output-box {
 .back-link {
   display: inline-block;
   margin-top: 20px;
-  color: #e94560;
+  color: var(--accent-red);
   text-decoration: none;
   font-weight: 500;
 }

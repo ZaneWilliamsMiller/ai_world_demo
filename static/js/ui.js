@@ -9,8 +9,6 @@ window.App = window.App || {};
     var p = data.player || {};
     App.currentMapId = p.map_id;
     App.npcCatalog  = data.npc_catalog || App.npcCatalog || [];
-    App._playerX = p.px;
-    App._playerY = p.py;
     App._mapLocations = data.map_locations || App._mapLocations || {};
 
     updateTopbar(p);
