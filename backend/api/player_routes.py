@@ -153,7 +153,7 @@ def _walk_path(p, path, allow_steep):
                 enter_trap_state(
                     p,
                     reason=str(forced.get("blurb") or "骤入险局"),
-                    lock_npc_id=str(forced["npc_id"]),
+                    lock_npc_id=str(forced.get("npc_id", "jiang")),
                 )
                 break
             hazard_reason = tile_hazard_reason(p)
@@ -311,28 +311,29 @@ async def get_state(player_id: str = Path(..., min_length=1, max_length=64)) -> 
     p = room.players.get(player_id)
     if not p:
         raise HTTPException(404, "未知 player_id")
-    scan = perception_scan(p)
-    danger_sense = danger_sense_narrative(p, scan) if scan else None
-
-    return {
-        "display_name": p.display_name,
-        "player": _player_public(p),
-        "npcs_here": _npcs_here(p),
-        "danger_sense": {
-            "alert": danger_sense or None,
-            "scan": scan,
-        },
-        "flags": p.flags,
-        "ended": p.ended,
-        "ending_label": p.ending_label,
-        "favor": dict(p.favor),
-        "rumors": list(p.rumors),
-        "atmosphere": scene_context(p),
-        "events": list(p.events[-10:]),
-        "factions": _factions_public(),
-        "npc_catalog": _npc_catalog(p),
-        "map_locations": _map_locations_public(),
-    }
+    async with p.lock:
+        scan = perception_scan(p)
+        danger_sense = danger_sense_narrative(p, scan) if scan else None
+        result = {
+            "display_name": p.display_name,
+            "player": _player_public(p),
+            "npcs_here": _npcs_here(p),
+            "danger_sense": {
+                "alert": danger_sense or None,
+                "scan": scan,
+            },
+            "flags": dict(p.flags),
+            "ended": p.ended,
+            "ending_label": p.ending_label,
+            "favor": dict(p.favor),
+            "rumors": list(p.rumors),
+            "atmosphere": scene_context(p),
+            "events": list(p.events[-10:]),
+            "factions": _factions_public(),
+            "npc_catalog": _npc_catalog(p),
+            "map_locations": _map_locations_public(),
+        }
+    return result
 
 
 @router.get("/api/journal/{player_id}")
@@ -341,18 +342,20 @@ async def journal(player_id: str = Path(..., min_length=1, max_length=64)) -> di
     p = room.players.get(player_id)
     if not p:
         raise HTTPException(404, "未知 player_id")
-    out: list[dict[str, Any]] = []
-    for nid in STORY_ORDER:
-        hist = p.history.get(nid) or []
-        if not hist:
-            continue
-        out.append({
-            "npc_id": nid,
-            "npc_name": NPCS.get(nid, {}).get("name", nid),
-            "turns": list(hist),
-        })
-    return {
-        "history": out,
-        "events": list(p.events),
-        "rumors": list(p.rumors),
-    }
+    async with p.lock:
+        out: list[dict[str, Any]] = []
+        for nid in STORY_ORDER:
+            hist = p.history.get(nid) or []
+            if not hist:
+                continue
+            out.append({
+                "npc_id": nid,
+                "npc_name": NPCS.get(nid, {}).get("name", nid),
+                "turns": list(hist),
+            })
+        result = {
+            "history": out,
+            "events": list(p.events),
+            "rumors": list(p.rumors),
+        }
+    return result

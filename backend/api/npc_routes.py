@@ -9,7 +9,7 @@ import time
 import traceback
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends, Path
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Path
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from collections import defaultdict
@@ -323,7 +323,7 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
             yield _sse({"done": True, "cancelled": True})
             return
         except Exception as e:
-            out = {"error": f"状态写入失败: {e}"}
+            out = {"error": "状态写入失败，请重试"}
             yield _sse({"done": True, **out})
             return
 
@@ -360,6 +360,10 @@ async def agent_mind(player_id: str = Path(..., min_length=1, max_length=64), np
     p = room.players.get(player_id)
     if not p:
         raise HTTPException(404, "未知 player_id")
+    if p.dead:
+        raise HTTPException(400, "角色已故")
+    if p.ended:
+        raise HTTPException(400, "本局已收束")
     if npc_id not in NPCS:
         raise HTTPException(404, "未知 npc_id")
     mind = p.minds.get(npc_id)
@@ -547,7 +551,13 @@ async def finale(body: FinaleBody) -> dict[str, Any]:
         {"role": "user", "content": user_block},
     ]
     t0 = time.perf_counter()
-    raw = await chat_completion(messages, temperature=FINALE_TEMPERATURE, max_tokens=FINALE_MAX_TOKENS)
+    try:
+        raw = await asyncio.wait_for(
+            chat_completion(messages, temperature=FINALE_TEMPERATURE, max_tokens=FINALE_MAX_TOKENS),
+            timeout=90.0,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(504, "终局叙事超时，请稍后重试")
     epilogue, title = parse_finale(raw)
     if not title:
         title = "无名之夜"
