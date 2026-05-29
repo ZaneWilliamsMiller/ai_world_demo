@@ -358,6 +358,8 @@ def complete_bounty(p: PlayerState) -> tuple[bool, str, dict[str, Any]]:
 
     # 清除活跃悬赏
     p.active_bounty = None
+    p.last_talk_npc_id = None
+    p.last_talk_message = None
 
     return True, f"悬赏完成！获得{coins}文钱。", reward
 

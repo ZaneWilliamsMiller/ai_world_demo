@@ -191,6 +191,7 @@ async def reflect(
         insights = data.get("insights", [])
     except Exception as e:  # noqa: BLE001
         log.warning("reflect LLM failed for %s: %s", npc_id, e)
+        mind.importance_since_reflect *= 0.5
         return []
 
     insights = [i for i in (s.strip().strip("「」『』\"'") for s in insights) if i]
@@ -472,6 +473,8 @@ async def plan_day(
         by_shichen = data.get("schedule", {})
     except Exception as e:  # noqa: BLE001
         log.warning("plan_day LLM failed for %s: %s", npc_id, e)
+        mind.plan_day = int(world_day)
+        mind.plan_summary = "（计划未定，随遇而安）"
         return False
 
     valid_shichen = {}

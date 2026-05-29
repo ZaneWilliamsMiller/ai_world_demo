@@ -309,7 +309,8 @@ def apply_npc_trade(
         current = inv.get(name, 0)
         if current > 0:
             inv[name] = current - 1
-        # 如果 NPC 没有但 LLM 卖了,则不扣负,允许"剧情给物"
+        else:
+            continue
 
     # NPC 得到的物（从玩家收的）
     for raw in items_given_by_player:

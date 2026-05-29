@@ -22,6 +22,15 @@ _npc_labels_cache: dict | None = None
 _ambush_markers_cache: list | None = None
 
 
+def _strip_private(d: Any) -> Any:
+    """递归移除字典中下划线开头的键，防止泄露内部判定逻辑。"""
+    if isinstance(d, dict):
+        return {k: _strip_private(v) for k, v in d.items() if not k.startswith("_")}
+    if isinstance(d, list):
+        return [_strip_private(i) for i in d]
+    return d
+
+
 def player_public(p: PlayerState) -> dict[str, Any]:
     """将 PlayerState 序列化为前端可用的公开字典。"""
     return {
@@ -33,6 +42,8 @@ def player_public(p: PlayerState) -> dict[str, Any]:
         "permadeath": p.permadeath,
         "dead": p.dead,
         "death_reason": p.death_reason,
+        "ended": bool(getattr(p, "ended", False)),
+        "ending_label": getattr(p, "ending_label", None),
         "move_locked": bool(getattr(p, "move_locked", False)),
         "move_lock_npc_id": getattr(p, "move_lock_npc_id", None),
         "trap_reason": getattr(p, "trap_reason", None),
@@ -57,8 +68,8 @@ def player_public(p: PlayerState) -> dict[str, Any]:
         "inventory": dict(p.inventory),
         "reputation": dict(p.reputation),
         "npc_states": dict(getattr(p, "npc_states", {}) or {}),
-        "bounties": getattr(p, "bounties", None) or [],
-        "active_bounty": getattr(p, "active_bounty", None),
+        "bounties": _strip_private(getattr(p, "bounties", None) or []),
+        "active_bounty": _strip_private(getattr(p, "active_bounty", None)),
         "completed_bounties": getattr(p, "completed_bounties", None) or [],
         "flags": dict(getattr(p, "flags", {}) or {}),
         "favor": dict(getattr(p, "favor", {}) or {}),

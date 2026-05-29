@@ -219,7 +219,9 @@ def survival_action_delta(p: PlayerState, user_message: str) -> dict[str, Any]:
     spirit = 0
     note = ""
 
-    tracker = p.item_use_tracker if p.item_use_tracker else {}
+    if not p.item_use_tracker:
+        p.item_use_tracker = {}
+    tracker = p.item_use_tracker
     day_key = str(p.world_day)
 
     if any(k in msg for k in ("吃干粮", "啃干粮", "干粮")) and int(p.inventory.get("干粮", 0)) > 0:
