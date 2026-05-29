@@ -136,8 +136,14 @@ window.App = window.App || {};
   function getModuleIcon(id) {
     var icons = {
       'integration': '\ud83d\udd2c',
+      'unit/agents': '\ud83e\uddd9',
+      'unit/api': '\ud83c\udf10',
+      'unit/data': '\ud83d\udcc4',
       'unit/llm': '\ud83e\udde0',
       'unit/memory': '\ud83d\udcda',
+      'unit/models': '\ud83d\udce6',
+      'unit/services': '\u26a1',
+      'unit/session': '\ud83d\udcbe',
       'unit/systems': '\u2699\ufe0f',
     };
     return icons[id] || '\ud83d\udcc1';
