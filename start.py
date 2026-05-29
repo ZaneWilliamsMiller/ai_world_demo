@@ -22,6 +22,9 @@ import subprocess
 import sys
 import time
 
+_CREATE_NEW_CONSOLE: int = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
+_CREATE_NO_WINDOW: int = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 # Windows GBK 编码修复：强制使用 UTF-8 输出
 if sys.platform == "win32":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -196,9 +199,7 @@ def start_backend(port: int = DEFAULT_BACKEND_PORT, frontend_port: int | None = 
     cmd = [sys.executable, "-m", "uvicorn", "backend.app:app",
            "--host", "127.0.0.1", "--port", str(port)]
 
-    creationflags = 0
-    if platform.system() == "Windows":
-        creationflags = subprocess.CREATE_NEW_CONSOLE
+    creationflags = _CREATE_NEW_CONSOLE if platform.system() == "Windows" else 0
 
     proc = subprocess.Popen(
         cmd,
@@ -274,9 +275,7 @@ def run_web_server(port: int = DEFAULT_WEB_PORT, block: bool = True) -> subproce
             print("\n👋 服务器已停止")
             sys.exit(0)
     else:
-        creationflags = 0
-        if platform.system() == "Windows":
-            creationflags = subprocess.CREATE_NEW_CONSOLE
+        creationflags = _CREATE_NEW_CONSOLE if platform.system() == "Windows" else 0
 
         proc = subprocess.Popen(
             [sys.executable, __file__, "--serve-only", str(port)],
@@ -363,9 +362,7 @@ def start_godot_frontend(godot_path: str | None = None) -> None:
     print(f"🎮 启动Godot前端 ({godot_path})...")
 
     cmd = [godot_path, "--path", godot_project]
-    creationflags = 0
-    if platform.system() == "Windows":
-        creationflags = subprocess.CREATE_NO_WINDOW
+    creationflags = _CREATE_NO_WINDOW if platform.system() == "Windows" else 0
 
     subprocess.Popen(cmd, cwd=PROJECT_ROOT, creationflags=creationflags)
     print(f"✅ Godot已启动 → 项目: {godot_project}")
