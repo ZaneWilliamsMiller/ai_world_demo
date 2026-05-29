@@ -1,5 +1,11 @@
 # pyright: reportArgumentType=false
 """Unit tests for backend.memory.index — MemoryIndex & retrieval cache."""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
 import time
 import unittest
 from unittest.mock import MagicMock, patch

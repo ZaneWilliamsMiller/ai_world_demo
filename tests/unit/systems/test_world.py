@@ -8,7 +8,8 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from backend.agents.brain import (
     _deduplicate_observations,
     import_seeds,

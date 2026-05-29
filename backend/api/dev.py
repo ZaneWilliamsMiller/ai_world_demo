@@ -44,6 +44,21 @@ class TestResult(BaseModel):
     exit_code: int | None = None
 
 
+class ModuleInfo(BaseModel):
+    id: str
+    label: str
+    count: int
+    tests: list[TestInfo]
+
+
+class ModuleResult(BaseModel):
+    module_id: str
+    total: int
+    passed: int
+    failed: int
+    results: list[TestResult]
+
+
 def _get_test_description(file_path: Path) -> str:
     try:
         content = file_path.read_text(encoding="utf-8")
@@ -55,18 +70,101 @@ def _get_test_description(file_path: Path) -> str:
         return file_path.stem
 
 
+def _discover_tests() -> list[tuple[Path, str]]:
+    if not TESTS_DIR.exists():
+        return []
+    results = []
+    for f in sorted(TESTS_DIR.rglob("test_*.py")):
+        rel = str(f.relative_to(TESTS_DIR)).replace("\\", "/")
+        results.append((f, rel))
+    return results
+
+
+def _module_id_from_rel(rel: str) -> str:
+    parts = rel.split("/")
+    if len(parts) >= 2:
+        return "/".join(parts[:-1])
+    return ""
+
+
+_MODULE_LABELS: dict[str, str] = {
+    "integration": "集成测试",
+    "unit/llm": "LLM 模块",
+    "unit/memory": "记忆模块",
+    "unit/systems": "游戏系统",
+}
+
+
 @router.get("/list")
 async def list_tests():
     tests = []
-    if TESTS_DIR.exists():
-        for f in sorted(TESTS_DIR.rglob("test_*.py")):
-            rel = str(f.relative_to(TESTS_DIR)).replace("\\", "/")
-            tests.append(TestInfo(
-                name=rel,
-                description=_get_test_description(f),
-                file_path=str(f.relative_to(TESTS_DIR.parent))
-            ))
+    for f, rel in _discover_tests():
+        tests.append(TestInfo(
+            name=rel,
+            description=_get_test_description(f),
+            file_path=str(f.relative_to(TESTS_DIR.parent))
+        ))
     return {"count": len(tests), "tests": tests}
+
+
+@router.get("/modules")
+async def list_modules():
+    all_tests = _discover_tests()
+    module_map: dict[str, list[TestInfo]] = {}
+
+    for f, rel in all_tests:
+        mid = _module_id_from_rel(rel)
+        if mid not in module_map:
+            module_map[mid] = []
+        module_map[mid].append(TestInfo(
+            name=rel,
+            description=_get_test_description(f),
+            file_path=str(f.relative_to(TESTS_DIR.parent))
+        ))
+
+    modules = []
+    for mid in sorted(module_map.keys()):
+        label = _MODULE_LABELS.get(mid, mid.replace("/", " · ").title())
+        modules.append(ModuleInfo(
+            id=mid,
+            label=label,
+            count=len(module_map[mid]),
+            tests=module_map[mid],
+        ))
+
+    return {"count": len(all_tests), "modules": modules}
+
+
+async def _run_single(test_path: str) -> TestResult:
+    test_name = test_path.replace("/", os.sep).replace("\\", os.sep)
+    test_file = TESTS_DIR / test_name
+
+    env = os.environ.copy()
+    project_root = str(TESTS_DIR.parent)
+    pythonpath = env.get("PYTHONPATH", "")
+    if pythonpath:
+        env["PYTHONPATH"] = project_root + os.pathsep + pythonpath
+    else:
+        env["PYTHONPATH"] = project_root
+
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable,
+        str(test_file),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+        cwd=project_root,
+        env=env,
+    )
+
+    stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
+    output = stdout.decode("utf-8", errors="replace")
+
+    return TestResult(
+        test_name=test_path,
+        success=(proc.returncode == 0),
+        output=output,
+        exit_code=proc.returncode,
+    )
 
 
 @router.post("/run/{test_path:path}")
@@ -85,25 +183,7 @@ async def run_test(test_path: str):
 
     async with _run_lock:
         try:
-            proc = await asyncio.create_subprocess_exec(
-                sys.executable,
-                str(test_file),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                cwd=str(test_file.parent.parent)
-            )
-
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
-
-            output = stdout.decode("utf-8", errors="replace")
-
-            return TestResult(
-                test_name=test_path,
-                success=(proc.returncode == 0),
-                output=output,
-                exit_code=proc.returncode
-            )
-
+            return await _run_single(test_path)
         except TimeoutError:
             try:
                 proc.kill()
@@ -113,3 +193,78 @@ async def run_test(test_path: str):
             raise HTTPException(408, f"Test timed out: {test_name}") from None
         except Exception as e:
             raise HTTPException(500, f"Failed to run test: {e!s}") from e
+
+
+@router.post("/run-module/{module_id:path}")
+async def run_module(module_id: str):
+    if ".." in module_id or not re.match(r'^[\w/]*$', module_id):
+        raise HTTPException(400, "无效的模块路径")
+
+    all_tests = _discover_tests()
+    module_tests = [(f, rel) for f, rel in all_tests if _module_id_from_rel(rel) == module_id]
+
+    if not module_tests:
+        raise HTTPException(404, f"模块 {module_id} 不存在或没有测试")
+
+    if _run_lock.locked():
+        raise HTTPException(429, "已有测试正在运行，请稍后再试")
+
+    async with _run_lock:
+        results = []
+        for f, rel in module_tests:
+            try:
+                r = await _run_single(rel)
+                results.append(r)
+            except TimeoutError:
+                results.append(TestResult(
+                    test_name=rel, success=False,
+                    output="TIMEOUT (120s)", exit_code=-1,
+                ))
+            except Exception as e:
+                results.append(TestResult(
+                    test_name=rel, success=False,
+                    output=str(e), exit_code=-1,
+                ))
+
+    passed = sum(1 for r in results if r.success)
+    return ModuleResult(
+        module_id=module_id,
+        total=len(results),
+        passed=passed,
+        failed=len(results) - passed,
+        results=results,
+    )
+
+
+@router.post("/run-all")
+async def run_all():
+    if _run_lock.locked():
+        raise HTTPException(429, "已有测试正在运行，请稍后再试")
+
+    all_tests = _discover_tests()
+
+    async with _run_lock:
+        results = []
+        for f, rel in all_tests:
+            try:
+                r = await _run_single(rel)
+                results.append(r)
+            except TimeoutError:
+                results.append(TestResult(
+                    test_name=rel, success=False,
+                    output="TIMEOUT (120s)", exit_code=-1,
+                ))
+            except Exception as e:
+                results.append(TestResult(
+                    test_name=rel, success=False,
+                    output=str(e), exit_code=-1,
+                ))
+
+    passed = sum(1 for r in results if r.success)
+    return ModuleResult(
+        module_id="",
+        total=len(results),
+        passed=passed,
+        failed=len(results) - passed,
+        results=results,
+    )

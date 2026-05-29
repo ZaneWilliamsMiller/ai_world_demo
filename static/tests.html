@@ -24,17 +24,29 @@
       <h3 id="runningCount">0</h3>
       <p>正在运行</p>
     </div>
-    <div class="stat-card">
+    <div class="stat-card stat-card-success">
       <h3 id="successCount">0</h3>
       <p>成功</p>
     </div>
-    <div class="stat-card">
+    <div class="stat-card stat-card-error">
       <h3 id="errorCount">0</h3>
       <p>失败</p>
     </div>
   </div>
 
-  <div class="test-grid" id="testGrid"></div>
+  <div class="toolbar">
+    <button class="test-center-btn test-center-btn-primary" id="runAllBtn" onclick="TestCenter.runAll()">
+      ▶ 全部运行
+    </button>
+    <div class="toolbar-right">
+      <label class="toggle-label">
+        <input type="checkbox" id="verboseToggle" onchange="TestCenter.toggleVerbose()">
+        详细输出
+      </label>
+    </div>
+  </div>
+
+  <div id="moduleList"></div>
 
   <a href="/" class="back-link">← 返回游戏主页</a>
 
