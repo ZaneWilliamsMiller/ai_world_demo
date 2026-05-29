@@ -71,6 +71,10 @@ venv = "."
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::DeprecationWarning:jieba",
+    "ignore::DeprecationWarning:pkg_resources",
+]
 markers = [
     "slow: marks tests as slow",
     "e2e: marks end-to-end tests requiring server",
