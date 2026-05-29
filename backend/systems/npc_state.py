@@ -111,6 +111,24 @@ def maybe_wander_npcs(p: PlayerState, ticks: int = 1) -> None:
             p.npc_positions[nid] = random.choice(cands)
 
 
+def is_active_at(active_val: tuple | list, sh: int, *, nocturnal: bool = False) -> bool:
+    """判断 NPC 在时辰 sh 是否处于活跃时段。
+
+    active_val: (start, end) 24小时制，如 (18, 29) 表示 18:00 到次日 05:00。
+    sh: 当前时辰 0-11（子时=0, 丑时=1, ..., 亥时=11）。
+    nocturnal: 是否为夜行 NPC（影响子时/丑时/寅时的判定）。
+    """
+    if not isinstance(active_val, (list, tuple)) or len(active_val) < 2:
+        return True
+    a0, a1 = int(active_val[0]), int(active_val[1])
+    hour = (sh * 2 + 23) % 24
+    in_active = (a0 <= hour <= a1) or (a0 <= hour + 24 <= a1)
+    if sh in (0, 1, 2):
+        if not nocturnal:
+            in_active = False
+    return in_active
+
+
 def update_npc_states_from_habits(p: PlayerState) -> dict[str, str]:
     """基于 NPC_HABITS 的活跃时段自动更新 NPC 状态。"""
     if not getattr(p, "npc_states", None):
@@ -126,14 +144,8 @@ def update_npc_states_from_habits(p: PlayerState) -> dict[str, str]:
             continue
 
         active_val = habits.get("active", (4, 21))
-        if not isinstance(active_val, (list, tuple)) or len(active_val) < 2:
-            continue
-        a0, a1 = int(active_val[0]), int(active_val[1])
-        in_active = (a0 <= sh <= a1) or (a0 <= sh + 12 <= a1)
-
-        if sh in (0, 1, 2):
-            if not habits.get("nocturnal", False):
-                in_active = False
+        nocturnal = habits.get("nocturnal", False)
+        in_active = is_active_at(active_val, sh, nocturnal=nocturnal)
 
         old_state = p.npc_states.get(nid, "idle")
         new_state = "idle" if in_active else "resting"
