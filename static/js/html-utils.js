@@ -1,3 +1,4 @@
+/* eslint-disable no-restricted-syntax */
 window.App = window.App || {};
 
 (function(App) {

@@ -46,3 +46,14 @@ jobs:
         run: npm ci
       - name: ESLint
         run: npm run lint
+
+  arch-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Frontend architecture check
+        run: python tools/check_arch.py

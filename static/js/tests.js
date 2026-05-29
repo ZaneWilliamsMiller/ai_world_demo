@@ -101,7 +101,11 @@ window.App = window.App || {};
 
   async function runTest(testName, btn) {
     btn.disabled = true;
-    btn.innerHTML = '<span class="loading-spinner"></span>\u8fd0\u884c\u4e2d...';
+    btn.textContent = '';
+    var spinner = document.createElement('span');
+    spinner.className = 'loading-spinner';
+    btn.appendChild(spinner);
+    btn.appendChild(document.createTextNode('\u8fd0\u884c\u4e2d...'));
 
     var outputSection = document.getElementById('output-' + testName);
     var resultBox = document.getElementById('result-' + testName);
