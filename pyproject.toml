@@ -1,0 +1,77 @@
+[project]
+name = "living-paper"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+src = ["backend", "tests", "tools"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific
+    "PTH",  # pathlib
+    "PL",   # pylint
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "PLR0913",# too many arguments
+    "PLR2004",# magic value comparison
+    "SIM108", # ternary operator (readability)
+    "B008",   # function call in default argument (FastAPI Depends)
+    "B905",   # zip without strict
+    "B007",   # unused loop variable (common in game loops)
+    "RUF001", # ambiguous unicode character (Chinese text)
+    "RUF002", # ambiguous unicode character (Chinese text)
+    "RUF003", # ambiguous unicode character (Chinese text)
+    "PTH100", # os.path.abspath
+    "PTH105", # os.replace
+    "PTH108", # os.unlink
+    "PTH120", # os.path.dirname
+    "PTH123", # open() usage
+    "PLC0415",# import outside top-level (lazy imports by design)
+    "PLW0603",# global statement (game state pattern)
+    "PLW0602",# global variable not assigned
+    "PLR0912",# too many branches
+    "PLR0915",# too many statements
+    "PLR0911",# too many return statements
+    "E701",   # multiple statements on one line
+    "E402",   # module import not at top
+    "B005",   # strip with multi-characters
+    "PLC0206",# dict-index-missing-items
+    "PLW2901",# redefined-loop-name
+    "E741",   # ambiguous variable name
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["PLC0415", "F841", "SIM117", "B011", "RUF059", "PLR0133", "SIM300"]
+"start.py" = ["PTH", "SIM105", "SIM112", "RUF013"]
+"tools/*" = ["SIM102", "PLR1730"]
+
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "basic"
+include = ["backend", "tests", "tools", "start.py"]
+reportOptionalSubscript = "warning"
+reportOptionalMemberAccess = "warning"
+reportGeneralTypeIssues = "warning"
+reportMissingImports = true
+reportMissingModuleSource = false
+venvPath = "."
+venv = "."
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "slow: marks tests as slow",
+    "e2e: marks end-to-end tests requiring server",
+]
