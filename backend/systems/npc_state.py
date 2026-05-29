@@ -129,12 +129,7 @@ def update_npc_states_from_habits(p: PlayerState) -> dict[str, str]:
         if not isinstance(active_val, (list, tuple)) or len(active_val) < 2:
             continue
         a0, a1 = int(active_val[0]), int(active_val[1])
-        a0_mod, a1_mod = a0 % 12, a1 % 12
-
-        if a0_mod <= a1_mod:
-            in_active = (a0_mod <= sh <= a1_mod)
-        else:
-            in_active = (sh >= a0_mod or sh <= a1_mod)
+        in_active = (a0 <= sh <= a1) or (a0 <= sh + 12 <= a1)
 
         if sh in (0, 1, 2):
             if not habits.get("nocturnal", False):

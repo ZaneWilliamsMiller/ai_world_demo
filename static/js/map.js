@@ -640,6 +640,7 @@ window.App = window.App || {};
   // ─── 步行动画
   App.moveTo = async function(tx, ty) {
     if (App._isMoving) return;
+    App._isMoving = true;
     
     _hoverX = -1;
     _hoverY = -1;
@@ -652,7 +653,6 @@ window.App = window.App || {};
 
       if (path.length === 0) {
         App.addMsg("system", "此路不通");
-        App._isMoving = false;
         return;
       }
 
@@ -693,9 +693,9 @@ window.App = window.App || {};
       } else {
         App.addMsg("system", errorMsg);
       }
+    } finally {
+      App._isMoving = false;
     }
-
-    App._isMoving = false;
   };
 
   // ─── 键盘控制

@@ -64,6 +64,8 @@ async def _auto_save_loop():
         except Exception as e:
             _save_log.error("auto-save loop error: %s", e, exc_info=True)
 
+_shutdown_requested = False
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _auto_save_task
@@ -73,31 +75,34 @@ async def lifespan(app: FastAPI):
     yield
     if _auto_save_task and not _auto_save_task.done():
         _auto_save_task.cancel()
-    saved = 0
-    for pid, p in list(room.players.items()):
-        if p.dead or p.ended:
-            continue
-        max_save_retries = 2
-        for save_attempt in range(max_save_retries):
-            try:
-                await asyncio.to_thread(save_game, p)
-                saved += 1
-                break
-            except (ConnectionError, TimeoutError, OSError) as transient_err:
-                if save_attempt < max_save_retries - 1:
-                    _log.warning(
-                        "auto-save transient error for %s (attempt %d/%d): %s: %s",
-                        pid, save_attempt + 1, max_save_retries,
-                        type(transient_err).__name__, transient_err,
-                    )
-                    await asyncio.sleep(0.5 * (save_attempt + 1))
-                    continue
-                _log.error("auto-save failed after retries for %s: %s", pid, transient_err)
-            except Exception as e:
-                _log.error("auto-save non-retryable error for %s: %s: %s", pid, type(e).__name__, e)
-                break
-    if saved:
-        _log.info("shutdown auto-saved %d active player(s)", saved)
+    if _shutdown_requested:
+        _log.info("shutdown already saved by shutdown endpoint, skipping lifespan save")
+    else:
+        saved = 0
+        for pid, p in list(room.players.items()):
+            if p.dead or p.ended:
+                continue
+            max_save_retries = 2
+            for save_attempt in range(max_save_retries):
+                try:
+                    await asyncio.to_thread(save_game, p)
+                    saved += 1
+                    break
+                except (ConnectionError, TimeoutError, OSError) as transient_err:
+                    if save_attempt < max_save_retries - 1:
+                        _log.warning(
+                            "auto-save transient error for %s (attempt %d/%d): %s: %s",
+                            pid, save_attempt + 1, max_save_retries,
+                            type(transient_err).__name__, transient_err,
+                        )
+                        await asyncio.sleep(0.5 * (save_attempt + 1))
+                        continue
+                    _log.error("auto-save failed after retries for %s: %s", pid, transient_err)
+                except Exception as e:
+                    _log.error("auto-save non-retryable error for %s: %s: %s", pid, type(e).__name__, e)
+                    break
+        if saved:
+            _log.info("shutdown auto-saved %d active player(s)", saved)
     from backend.llm_client import _close_client
     try:
         await _close_client()
@@ -153,6 +158,8 @@ async def shutdown_server(request: Request):
 
     shutdown_log = _log.getChild("shutdown")
     shutdown_log.info("收到关闭请求")
+    global _shutdown_requested
+    _shutdown_requested = True
     shutdown_log.info("前端端口: %s", frontend_port)
 
     if frontend_port:

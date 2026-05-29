@@ -498,7 +498,7 @@ async def stream_chat_completion(
                         yield piece
             except Exception as stream_err:
                 log.error(f"Custom config stream error: {stream_err}")
-                yield f"[STREAM_ERROR] {stream_err}"
+                yield "[STREAM_ERROR] 流式响应异常"
         return
     
     else:
@@ -537,7 +537,7 @@ async def stream_chat_completion(
                         except Exception as stream_err:
                             stream_had_error = True
                             log.error(f"Stream processing error (attempt {attempt + 1}): {stream_err}")
-                            yield f"[STREAM_ERROR] {stream_err}"
+                            yield "[STREAM_ERROR] 流式响应异常"
                             raise
 
                     # 流式成功 → 熔断器记录成功
@@ -580,7 +580,7 @@ async def stream_chat_completion(
 def parse_npc_reply_json(text: str) -> NpcResponseSchema:
     """尝试将 LLM 输出解析为 NpcResponseSchema"""
     import re
-    json_match = re.search(r"\{.*\}", text, re.DOTALL)
+    json_match = re.search(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", text, re.DOTALL)
     json_str = json_match.group(0) if json_match else text
 
     try:

@@ -200,11 +200,11 @@ def _resolve_deictic(user_message: str, hist_slice: list[dict[str, str]]) -> str
         return ""
 
     # ── 中文指代词检测 ──
-    PERSON_PRONOUNS = {"他们", "她们", "它们", "其"}
-    PERSON_PRONOUN_SINGLE = {"他", "她", "它"}
+    PERSON_PRONOUNS = {"他们", "她们", "它们"}
+    PERSON_PRONOUN_SINGLE = {"他", "她", "它", "其"}
     DEICTIC_NOUNS = {"这人", "那人", "此人", "彼", "这位", "那位", "该人"}
     DEICTIC_PREFIX = {"这", "那", "此", "该"}
-    DEICTIC_THINGS = {"这事", "那事", "那件事", "这件事", "此", "这个", "那个", "这种", "那种"}
+    DEICTIC_THINGS = {"这事", "那事", "那件事", "这件事", "这个", "那个", "这种", "那种"}
 
     has_person_pronoun = any(p in msg for p in PERSON_PRONOUNS)
     if not has_person_pronoun:

@@ -78,7 +78,12 @@ def player_public(p: PlayerState) -> dict[str, Any]:
 
 def npcs_here(p: PlayerState) -> list[dict[str, str]]:
     """返回当前格子上的 NPC 列表。"""
-    return [{"id": i, "name": NPCS[i]["name"]} for i in npc_ids_for_player(p)]
+    result = []
+    for i in npc_ids_for_player(p):
+        meta = NPCS.get(i, {})
+        name = meta.get("name", i)
+        result.append({"id": i, "name": name})
+    return result
 
 
 def npc_catalog(p: PlayerState) -> list[dict[str, Any]]:
