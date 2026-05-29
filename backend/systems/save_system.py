@@ -168,7 +168,7 @@ def _deserialize_player(data: dict[str, Any]) -> PlayerState:
     from backend.data.maps_data import MAPS
     if p.map_id not in MAPS:
         p.map_id = 'world'
-    rows = MAPS[p.map_id]['rows']
+    rows = MAPS.get(p.map_id, {}).get("rows", [])
     max_y = len(rows) - 1
     max_x = max(len(r) for r in rows) - 1 if rows else 0
     p.px = max(0, min(max_x, p.px))
@@ -246,7 +246,8 @@ def list_saves() -> list[dict[str, Any]]:
                 "spirit": data.get("spirit", 0),
                 "ended": data.get("ended", False),
             })
-        except Exception:
+        except Exception as e:
+            log.warning("跳过损坏的存档文件 %s: %s", fp.name, e)
             continue
     return result
 
@@ -282,7 +283,7 @@ def respawn_at_supply_point(p: PlayerState) -> str:
     # 先在当前地图找
     m = MAPS.get(p.map_id)
     if m:
-        rows = m["rows"]
+        rows = m.get("rows", [])
         for y, row in enumerate(rows):
             for x, ch in enumerate(row):
                 if ch in supply_tiles:

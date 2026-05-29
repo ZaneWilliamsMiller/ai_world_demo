@@ -398,8 +398,8 @@ def recent_events_block(p: PlayerState, npc_id: str) -> str:
         return ""
     lines = ["【近日江湖事(可作闲笔印证或反驳,不必逐字复述)】"]
     for e in evs:
-        tag = f"[{e['shichen']}]"
-        lines.append(f"· {tag} {e['text']}")
+        tag = f"[{e.get('shichen', '?')}]"
+        lines.append(f"· {tag} {e.get('text', '')}")
     return "\n".join(lines)
 
 

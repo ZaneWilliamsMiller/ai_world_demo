@@ -25,21 +25,20 @@ COMPRESS_WINDOW = 8
 
 
 async def compress_conversation_history(
-    hist: list[dict[str, str]],
+    hist: list[dict[str, Any]],
     npc_name: str = "",
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     """压缩对话历史：将早期轮次摘要化，保留最近轮次原文。
 
-    输入 hlist: list of {"role": "user"|"assistant", "content": "..."}
-    输出：压缩后的历史（长度 ≤ COMPRESS_THRESHOLD）
+    输入 hist: list of {"user": "...", "assistant": "...", ...}
+    输出：压缩后的历史（长度 ≤ COMPRESS_THRESHOLD），格式与输入一致
 
-    非破坏性：如果 hlist 不大则不修改。
+    非破坏性：如果 hist 不大则不修改。
     """
     n = len(hist)
     if n <= COMPRESS_THRESHOLD:
-        return hist  # 无需压缩
+        return hist
 
-    # 分离：需要压缩的区域 vs 保留的区域
     compress_end = n - KEEP_RECENT
     if compress_end <= 0:
         return hist
@@ -47,44 +46,38 @@ async def compress_conversation_history(
     to_compress = hist[:compress_end]
     to_keep = hist[compress_end:]
 
-    # 取 COMPRESS_WINDOW 轮进行压缩
     compress_window = to_compress[-COMPRESS_WINDOW:] if len(to_compress) > COMPRESS_WINDOW else to_compress
 
-    # 只有最近的 COMPRESS_WINDOW 轮有意义的信息在老对话里
     old_span = None
     if len(to_compress) > COMPRESS_WINDOW:
         old_span = to_compress[:-COMPRESS_WINDOW]
 
-    # 构建压缩 prompt
     dialog_text = ""
-    for msg in compress_window:
-        role_label = "玩家" if msg["role"] == "user" else npc_name or "NPC"
-        dialog_text += f"{role_label}: {msg['content'][:120]}\n"
+    for turn in compress_window:
+        user_msg = turn.get("user", "")
+        asst_msg = turn.get("assistant", "")
+        dialog_text += f"玩家: {user_msg[:120]}\n{npc_name or 'NPC'}: {asst_msg[:120]}\n"
 
     try:
         summary = await _llm_summarize(dialog_text, npc_name)
     except Exception as e:
         log.warning("compress_history failed: %s; keeping uncompressed", e)
-        return hist  # LLM 压缩失败 → 保持原文（优雅降级）
+        return hist
 
-    # 重建压缩后的历史
-    compressed: list[dict[str, str]] = []
+    compressed: list[dict[str, Any]] = []
 
-    # 如果还有更早的对话（被跳过的那部分），保留一行极简提要
     if old_span:
         old_count = len(old_span)
         compressed.append({
-            "role": "user",
-            "content": f"[系统:此前还有{old_count}轮对话，从略。]",
+            "user": f"[系统:此前还有{old_count}轮对话，从略。]",
+            "assistant": "(知晓)",
         })
 
-    # 插入压缩摘要
     compressed.append({
-        "role": "user",
-        "content": f"[系统:此前{len(compress_window)}轮对话概要——{summary}]",
+        "user": f"[系统:此前{len(compress_window)}轮对话概要——{summary}]",
+        "assistant": "(知晓)",
     })
 
-    # 保留最近 K 轮原文
     compressed.extend(to_keep)
 
     return compressed

@@ -62,7 +62,9 @@ def maybe_wander_npcs(p: PlayerState, ticks: int = 1) -> None:
             continue
         if random.random() > base_chance * weather_mult:
             continue
-        mid, x, y = pos
+        if not isinstance(pos, (list, tuple)) or len(pos) < 3:
+            continue
+        mid, x, y = str(pos[0]), int(pos[1]), int(pos[2])
         anchor = meta.get("cell")
         unbounded = nid in LONG_DISTANCE_WANDERERS or bool(meta.get("wander_unbounded", False))
         anchor_radius = int(meta.get("wander_anchor_radius", 3) or 3)
@@ -76,7 +78,7 @@ def maybe_wander_npcs(p: PlayerState, ticks: int = 1) -> None:
         rows = MAPS.get(mid, {}).get("rows", [])
         if not rows:
             continue
-        if y < 0 or y >= len(rows) or x < 0 or x >= len(rows[0]):
+        if y < 0 or y >= len(rows) or x < 0 or x >= len(rows[y]):
             continue
         ch_here = rows[y][x]
         if night and ch_here in (",", "F", ";", "~", "&", "m", "/"):
@@ -86,7 +88,7 @@ def maybe_wander_npcs(p: PlayerState, ticks: int = 1) -> None:
         shelter_cands: list[tuple[str, int, int]] = []
         for dx, dy in dirs:
             nx, ny = x + dx, y + dy
-            if ny < 0 or ny >= len(rows) or nx < 0 or nx >= len(rows[0]):
+            if ny < 0 or ny >= len(rows) or nx < 0 or nx >= len(rows[ny]):
                 continue
             a = rows[y][x]
             b = rows[ny][nx]
@@ -115,14 +117,18 @@ def update_npc_states_from_habits(p: PlayerState) -> dict[str, str]:
         p.npc_states = {}
 
     changes: dict[str, str] = {}
-    sh = int(getattr(p, "world_shichen", 6) or 6)
+    raw_sh = getattr(p, "world_shichen", None)
+    sh = int(raw_sh) if raw_sh is not None else 6
 
     for nid, habits in NPC_HABITS.items():
         meta = NPCS.get(nid, {})
         if meta.get("always") or meta.get("hidden"):
             continue
 
-        a0, a1 = habits.get("active", (4, 21))
+        active_val = habits.get("active", (4, 21))
+        if not isinstance(active_val, (list, tuple)) or len(active_val) < 2:
+            continue
+        a0, a1 = int(active_val[0]), int(active_val[1])
         a0_mod, a1_mod = a0 % 12, a1 % 12
 
         if a0 <= a1:

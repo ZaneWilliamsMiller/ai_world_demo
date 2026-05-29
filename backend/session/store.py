@@ -81,10 +81,10 @@ class SessionStore:
                 if not hasattr(st, attr):
                     setattr(st, attr, default() if isinstance(default, type) else default)
 
-            if int(getattr(st, "vigor", 0)) <= 0:
-                st.vigor = INITIAL_VIGOR
-            if int(getattr(st, "spirit", 0)) <= 0:
-                st.spirit = INITIAL_SPIRIT
+            if int(getattr(st, "vigor", 0)) < 0:
+                st.vigor = 0
+            if int(getattr(st, "spirit", 0)) < 0:
+                st.spirit = 0
 
             if not hasattr(st, "reputation") or not isinstance(getattr(st, "reputation", None), dict):
                 st.reputation = {k: 0 for k in FACTIONS.keys()}

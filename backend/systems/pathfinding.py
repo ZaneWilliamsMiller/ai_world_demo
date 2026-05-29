@@ -133,7 +133,9 @@ def _dijkstra(
     ty: int,
     allow_steep: bool = False,
 ) -> list[tuple[int, int]] | None:
-    rows = MAPS[map_id]["rows"]
+    rows = MAPS.get(map_id, {}).get("rows")
+    if not rows:
+        return None
     w, h = grid_size(rows)
     if not (0 <= tx < w and 0 <= ty < h and 0 <= sx < w and 0 <= sy < h):
         return None
@@ -177,7 +179,9 @@ def _dijkstra(
     return path
 
 def path_cost(map_id: str, path: list[tuple[int, int]]) -> int:
-    rows = MAPS[map_id]["rows"]
+    rows = MAPS.get(map_id, {}).get("rows")
+    if not rows:
+        return 0
     total = 0
     for x, y in path:
         try:

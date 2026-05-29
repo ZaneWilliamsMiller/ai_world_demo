@@ -239,8 +239,8 @@ def _build_dynamic_prompt_parts(
         )
 
     dyn_parts.append(
-        f"【秩序{p.flags['order']} 求真{p.flags['truth']} "
-        f"希望{p.flags['hope']} 混乱{p.flags['chaos']}】（仅作笔触参考，**勿在正文复述数字**）"
+        f"【秩序{p.flags.get('order', 0)} 求真{p.flags.get('truth', 0)} "
+        f"希望{p.flags.get('hope', 0)} 混乱{p.flags.get('chaos', 0)}】（仅作笔触参考，**勿在正文复述数字**）"
     )
     return dyn_parts
 

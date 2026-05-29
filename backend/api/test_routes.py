@@ -101,6 +101,11 @@ async def run_test(test_name: str = FastPath(..., min_length=1, max_length=64, p
             )
 
         except asyncio.TimeoutError:
+            try:
+                proc.kill()
+                await proc.wait()
+            except Exception:
+                pass
             raise HTTPException(408, f"Test timed out: {test_name}")
         except Exception as e:
             raise HTTPException(500, f"Failed to run test: {str(e)}")

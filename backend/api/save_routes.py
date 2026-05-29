@@ -39,7 +39,8 @@ async def save_player(body: SaveBody) -> dict[str, Any]:
     p = room.players.get(body.player_id)
     if not p:
         raise HTTPException(404, "未知 player_id")
-    await asyncio.to_thread(save_game, p)
+    async with p.lock:
+        await asyncio.to_thread(save_game, p)
     return {"ok": True}
 
 
@@ -54,8 +55,9 @@ async def load_player(body: LoadBody) -> dict[str, Any]:
     if loaded.ended:
         raise HTTPException(400, "此角色的故事已收束，不可再入")
     await room.set_player(body.player_id, loaded)
-    init_npc_positions(loaded)
-    init_npc_inventories(loaded)
+    async with loaded.lock:
+        init_npc_positions(loaded)
+        init_npc_inventories(loaded)
     return build_init_response(loaded)
 
 

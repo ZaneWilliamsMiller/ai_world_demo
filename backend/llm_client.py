@@ -290,7 +290,10 @@ async def _handle_llm_response(response_data: dict[str, Any], cache, circuit_bre
         )
 
     choices = response_data.get("choices") or []
-    content = choices[0]["message"]["content"] if choices else ""
+    content = ""
+    if choices:
+        msg = choices[0].get("message", {})
+        content = msg.get("content") or ""
     content = content or ""
 
     await cache.set(messages, content, temperature=temperature, model=model, max_tokens=max_tokens)
@@ -399,7 +402,10 @@ async def chat_completion(
                 r.raise_for_status()
                 data = r.json()
                 choices = data.get("choices") or []
-                content = choices[0]["message"]["content"] if choices else ""
+                content = ""
+                if choices:
+                    msg = choices[0].get("message", {})
+                    content = msg.get("content") or ""
                 content = content or ""
                 return content
             except Exception as exc:

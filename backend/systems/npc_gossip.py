@@ -74,7 +74,7 @@ def _get_attitude(npc_id: str, target_id: str) -> tuple[str, float]:
     """查找 npc_id 对 target_id 的态度和概率倍率。"""
     rels = NPC_RELATIONSHIPS.get(npc_id, [])
     for r in rels:
-        if r["target"] == target_id:
+        if r.get("target") == target_id:
             att = r.get("attitude", "互不招惹")
             mult = ATTITUDE_MULT.get(att, 0.5)
             return att, mult
@@ -210,8 +210,8 @@ def maybe_npc_gossip(p, *, ticks: int = 1) -> int:
                 # 必须有至少一方有关系记录
                 rels_a = NPC_RELATIONSHIPS.get(npc_a, [])
                 rels_b = NPC_RELATIONSHIPS.get(npc_b, [])
-                has_rel = any(r["target"] == npc_b for r in rels_a) or \
-                          any(r["target"] == npc_a for r in rels_b)
+                has_rel = any(r.get("target") == npc_b for r in rels_a) or \
+                          any(r.get("target") == npc_a for r in rels_b)
                 if not has_rel:
                     continue
 
@@ -226,7 +226,7 @@ def maybe_npc_gossip(p, *, ticks: int = 1) -> int:
                 _, mult_b = _get_attitude(npc_b, npc_a)
                 best_mult = max(mult_a, mult_b)
 
-                prob = GOSSIP_PROB_BASE * best_mult * ticks
+                prob = min(1.0, GOSSIP_PROB_BASE * best_mult * ticks)
                 if random.random() > prob:
                     continue
 

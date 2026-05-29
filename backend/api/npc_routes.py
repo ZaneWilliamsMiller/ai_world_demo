@@ -66,6 +66,8 @@ def _get_active_player(player_id: str) -> PlayerState:
         raise HTTPException(400, "本局已收束，无法操作悬赏榜")
     if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
         raise HTTPException(409, "你正处于昏迷状态，无法操作悬赏榜")
+    if getattr(p, "enslaved", False):
+        raise HTTPException(403, "你正被奴役，无法操作悬赏榜")
     return p
 
 
@@ -105,6 +107,8 @@ def _validate_talk_request(body: TalkBody):
         raise HTTPException(400, "角色已身亡，无法交谈")
     if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
         raise HTTPException(409, "你正处于昏迷状态，无法开口交谈")
+    if getattr(p, "enslaved", False):
+        raise HTTPException(403, "你正被奴役，无法自由交谈")
     npc = NPCS.get(body.npc_id)
     if not npc:
         raise HTTPException(400, "未知 npc")
@@ -126,6 +130,8 @@ async def use_item(body: UseItemBody) -> dict[str, Any]:
         raise HTTPException(400, "本局已收束")
     if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
         raise HTTPException(409, "你正处于昏迷状态，无法使用物品")
+    if getattr(p, "enslaved", False):
+        raise HTTPException(403, "你正被奴役，无法使用物品")
 
     from backend.systems.economy import use_player_item
     async with p.lock:
@@ -157,6 +163,8 @@ async def player_rest(body: RestBody) -> dict[str, Any]:
         raise HTTPException(400, "本局已收束")
     if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
         raise HTTPException(400, "昏迷之中，身不由己")
+    if getattr(p, "enslaved", False):
+        raise HTTPException(403, "你正被奴役，无法歇息")
     if getattr(p, "move_locked", False):
         raise HTTPException(409, "身陷险局，须先周旋脱身方可歇息")
 
@@ -392,21 +400,27 @@ async def agent_reflect(body: AgentActBody) -> dict[str, Any]:
         raise HTTPException(400, "角色已故，无法进行反思")
     if p.ended:
         raise HTTPException(400, "本局已收束，无法操作")
+    if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
+        raise HTTPException(409, "你正处于昏迷状态，无法进行反思")
+    if getattr(p, "enslaved", False):
+        raise HTTPException(403, "你正被奴役，无法自由反思")
     npc = NPCS.get(body.npc_id)
     if not npc:
         raise HTTPException(404, "未知 npc_id")
-    mind = get_or_init_mind(p, body.npc_id)
-    new_refls = await agent_brain.reflect(
-        npc_id=body.npc_id,
-        npc_name=npc["name"],
-        npc_blurb=str(npc.get("short", "")),
-        mind=mind,
-        world_day=int(p.world_day),
-        world_shichen=shichen_name(p.world_shichen),
-    )
+    async with p.lock:
+        mind = get_or_init_mind(p, body.npc_id)
+        new_refls = await agent_brain.reflect(
+            npc_id=body.npc_id,
+            npc_name=npc["name"],
+            npc_blurb=str(npc.get("short", "")),
+            mind=mind,
+            world_day=int(p.world_day),
+            world_shichen=shichen_name(p.world_shichen),
+        )
     return {
         "added": [m.to_dict() for m in new_refls],
         "count": len(new_refls),
+        "player": _player_public(p),
     }
 
 
@@ -420,22 +434,28 @@ async def agent_plan(body: AgentActBody) -> dict[str, Any]:
         raise HTTPException(400, "角色已故，无法制定计划")
     if p.ended:
         raise HTTPException(400, "本局已收束，无法操作")
+    if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
+        raise HTTPException(409, "你正处于昏迷状态，无法制定计划")
+    if getattr(p, "enslaved", False):
+        raise HTTPException(403, "你正被奴役，无法自由规划")
     npc = NPCS.get(body.npc_id)
     if not npc:
         raise HTTPException(404, "未知 npc_id")
-    mind = get_or_init_mind(p, body.npc_id)
-    ok = await agent_brain.plan_day(
-        npc_id=body.npc_id,
-        npc_name=npc["name"],
-        npc_blurb=str(npc.get("short", "")),
-        mind=mind,
-        world_day=int(p.world_day),
-    )
+    async with p.lock:
+        mind = get_or_init_mind(p, body.npc_id)
+        ok = await agent_brain.plan_day(
+            npc_id=body.npc_id,
+            npc_name=npc["name"],
+            npc_blurb=str(npc.get("short", "")),
+            mind=mind,
+            world_day=int(p.world_day),
+        )
     return {
         "ok": ok,
         "plan_day": mind.plan_day,
         "plan_summary": mind.plan_summary,
         "plan_by_shichen": dict(mind.plan_by_shichen),
+        "player": _player_public(p),
     }
 
 
@@ -448,11 +468,16 @@ async def finale(body: FinaleBody) -> dict[str, Any]:
         raise HTTPException(404, "未知 player_id")
     if p.dead:
         raise HTTPException(400, "已身亡，无法收束成文。请新开周目")
+    if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
+        raise HTTPException(400, "昏迷之中，无法收束成文")
+    if getattr(p, "enslaved", False):
+        raise HTTPException(403, "你正被奴役，无法自主收束")
     if p.ended:
         return {
             "ending_label": p.ending_label,
             "epilogue": None,
             "already": True,
+            "player": _player_public(p),
             "server_ms": 0,
         }
 
@@ -480,8 +505,8 @@ async def finale(body: FinaleBody) -> dict[str, Any]:
         any_talk = True
         name = NPCS[nid]["name"]
         for turn in hist:
-            u = turn["user"][:1400]
-            a = turn["assistant"][:1400]
+            u = turn.get("user", "")[:1400]
+            a = turn.get("assistant", "")[:1400]
             stamp = ""
             if turn.get("day") and turn.get("shichen"):
                 stamp = f"〔第{turn['day']}日·{turn['shichen']}〕"
@@ -497,8 +522,8 @@ async def finale(body: FinaleBody) -> dict[str, Any]:
         lines.append("(尚未产生对话;请据社会总览与开场写收束文)")
     lines.append(
         f"-- 叙事参考数据(勿在正文复述数字)--\n"
-        f"秩序 {p.flags['order']}  求真 {p.flags['truth']}  "
-        f"希望 {p.flags['hope']}  混乱 {p.flags['chaos']}"
+        f"秩序 {p.flags.get('order', 0)}  求真 {p.flags.get('truth', 0)}  "
+        f"希望 {p.flags.get('hope', 0)}  混乱 {p.flags.get('chaos', 0)}"
     )
     digest = "\n".join(lines)
 
@@ -529,12 +554,14 @@ async def finale(body: FinaleBody) -> dict[str, Any]:
     async with p.lock:
         p.ended = True
         p.ending_label = title
+        player_data = _player_public(p)
 
     server_ms = int((time.perf_counter() - t0) * 1000)
     return {
         "ending_label": title,
         "epilogue": epilogue.strip(),
         "flags": p.flags,
+        "player": player_data,
         "server_ms": server_ms,
     }
 
@@ -573,7 +600,7 @@ async def bounty_refresh(body: RefreshBountyBody) -> dict[str, Any]:
         if not p.bounties:
             p.bounties = generate_bounties(p, count=3)
         board_text = format_bounty_board(p)
-        return {"bounties": p.bounties, "board_text": board_text}
+        return {"bounties": p.bounties, "board_text": board_text, "player": _player_public(p)}
 
 
 @router.post("/api/bounty/accept")
@@ -581,7 +608,7 @@ async def bounty_accept(body: AcceptBountyBody) -> dict[str, Any]:
     p = _get_active_player(body.player_id)
     async with p.lock:
         ok, msg = accept_bounty(p, body.bounty_id)
-        return {"ok": ok, "message": msg}
+        return {"ok": ok, "message": msg, "player": _player_public(p)}
 
 
 @router.post("/api/bounty/check")
@@ -590,8 +617,8 @@ async def bounty_check(body: CompleteBountyBody) -> dict[str, Any]:
     async with p.lock:
         progress = check_bounty_progress(p)
         if progress is None:
-            return {"has_active": False}
-        return {"has_active": True, **progress}
+            return {"has_active": False, "player": _player_public(p)}
+        return {"has_active": True, **progress, "player": _player_public(p)}
 
 
 @router.post("/api/bounty/complete")
@@ -599,7 +626,7 @@ async def bounty_complete(body: CompleteBountyBody) -> dict[str, Any]:
     p = _get_active_player(body.player_id)
     async with p.lock:
         ok, msg, reward = complete_bounty(p)
-        return {"ok": ok, "message": msg, "reward": reward}
+        return {"ok": ok, "message": msg, "reward": reward, "player": _player_public(p)}
 
 
 @router.post("/api/bounty/abandon")
@@ -607,4 +634,4 @@ async def bounty_abandon(body: AbandonBountyBody) -> dict[str, Any]:
     p = _get_active_player(body.player_id)
     async with p.lock:
         ok, msg = abandon_bounty(p)
-        return {"ok": ok, "message": msg}
+        return {"ok": ok, "message": msg, "player": _player_public(p)}

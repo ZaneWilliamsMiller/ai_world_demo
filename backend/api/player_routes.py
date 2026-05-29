@@ -116,7 +116,7 @@ def _walk_path(p, path, allow_steep):
         ch_to = tile_at(p.map_id, nx, ny) or "."
         dh = abs(tile_elevation(ch_to) - tile_elevation(ch_from))
         if dh > 2 and not allow_steep and ch_to != "!":
-            pass
+            break
         p.px, p.py = nx, ny
         actual_path.append((nx, ny))
         if allow_steep and dh > 2:
@@ -346,7 +346,7 @@ async def journal(player_id: str = Path(..., min_length=1, max_length=64)) -> di
             continue
         out.append({
             "npc_id": nid,
-            "npc_name": NPCS[nid]["name"],
+            "npc_name": NPCS.get(nid, {}).get("name", nid),
             "turns": list(hist),
         })
     return {
