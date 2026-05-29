@@ -301,7 +301,7 @@ def apply_npc_trade(
         inv = {}
         p.npc_inventories[npc_id] = inv
 
-    # NPC 失去的物（卖/送给玩家的）
+    actually_given = []
     for raw in items_given_by_npc:
         name = (raw or "").strip().strip("「」『」\"'")[:MAX_ITEM_NAME_LEN]
         if not name:
@@ -311,8 +311,12 @@ def apply_npc_trade(
             inv[name] = current - 1
             if inv[name] <= 0:
                 del inv[name]
+            actually_given.append(name)
         else:
             continue
+
+    if actually_given:
+        add_items(p, actually_given)
 
     # NPC 得到的物（从玩家收的）
     for raw in items_given_by_player:
@@ -548,9 +552,12 @@ def use_player_item(p: "PlayerState", item_name: str) -> dict[str, object]:
         if not hasattr(p, "item_use_tracker") or p.item_use_tracker is None:
             p.item_use_tracker = {}
         current_day = int(getattr(p, "world_day", 1) or 1)
-        # 翻日清理旧记录
         if p.item_use_tracker.get("_day") != current_day:
-            p.item_use_tracker = {"_day": current_day}
+            old_day = p.item_use_tracker.get("_day")
+            p.item_use_tracker["_day"] = current_day
+            keys_to_remove = [k for k in p.item_use_tracker if k != "_day" and not k.startswith("fish_") and not k.startswith("fruit_") and not k.startswith("rest_")]
+            for k in keys_to_remove:
+                del p.item_use_tracker[k]
         used_today = int(p.item_use_tracker.get(name, 0))
         if used_today >= max_per_day:
             return {

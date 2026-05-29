@@ -123,7 +123,8 @@ window.App = window.App || {};
   App.loadConfig = function() {
     try {
       const cfg = JSON.parse(localStorage.getItem("lp_config") || "{}");
-      if (cfg.apiMode) App.apiMode = cfg.apiMode;
+      if (cfg.apiMode && typeof App.setApiMode === "function") App.setApiMode(cfg.apiMode);
+      else if (cfg.apiMode) App.apiMode = cfg.apiMode;
       if (cfg.backendUrl) App.BACKEND_URL = cfg.backendUrl;
 
       // ════════════════════════════════════

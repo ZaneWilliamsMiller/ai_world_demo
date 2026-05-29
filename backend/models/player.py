@@ -93,4 +93,13 @@ class PlayerState:
     last_move_py: int = 0
     # 物品每日用量追踪：{"_day": world_day, "干粮": 2, "金创药": 1}
     item_use_tracker: dict[str, int] = field(default_factory=dict)
-    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
+
+    def __getstate__(self) -> dict[str, Any]:
+        state = self.__dict__.copy()
+        state.pop("lock", None)
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        state["lock"] = asyncio.Lock()
+        self.__dict__.update(state)

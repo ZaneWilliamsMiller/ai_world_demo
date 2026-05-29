@@ -312,7 +312,7 @@ def _apply_parsed_effects(
 
     coin_delta_applied = apply_coin_delta(p, parsed.coin_delta)
 
-    items_added = add_items(p, parsed.items_gain)
+    items_added = []
     items_lost = remove_items(p, parsed.items_lose)
 
     apply_npc_trade(p, npc_id, parsed.items_lose, parsed.items_gain)

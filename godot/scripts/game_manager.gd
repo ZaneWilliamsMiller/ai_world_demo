@@ -299,5 +299,17 @@ func apply_stream_result(data: Dictionary) -> void:
 		_apply_player(data.player)
 	if data.has("npcs_here"):
 		npcs_here = data.npcs_here
+	if data.has("flags"):
+		flags = data.flags
+	if data.has("favor"):
+		favor = data.favor
+	if data.has("delta"):
+		var d = data.delta
+		if d.has("coins") and d.coins != 0:
+			coins += int(d.coins)
+		if d.has("vigor") and d.vigor != 0:
+			vigor = clampi(vigor + int(d.vigor), 0, vigor_max)
+		if d.has("spirit") and d.spirit != 0:
+			spirit = clampi(spirit + int(d.spirit), 0, spirit_max)
 	if data.has("player") or data.has("npcs_here"):
 		state_updated.emit()

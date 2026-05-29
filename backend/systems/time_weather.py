@@ -73,10 +73,10 @@ def advance_clock(p: "PlayerState", ticks: int = 1) -> None:
             spirit = max(0, min(spirit_max, spirit - drain))
             p.spirit = spirit
             if spirit <= 0:
-                # 昏迷：自动昏睡恢复一段时间
                 p.unconscious_ticks = max(int(getattr(p, "unconscious_ticks", 0)), 2)
                 p.sleep_debt = max(0, p.sleep_debt - COMA_RECOVER_SLEEP_DEBT)
-                p.spirit = min(spirit_max, int(getattr(p, "spirit", 0)) + COMA_RECOVER_SPIRIT)
+                recover_spirit = min(spirit_max, int(getattr(p, "spirit", 0)) + COMA_RECOVER_SPIRIT)
+                p.spirit = max(recover_spirit, spirit_max // 3)
                 p.vigor = min(int(getattr(p, "vigor_max", 100)), int(getattr(p, "vigor", 0)) + COMA_RECOVER_VIGOR)
         # 生命燃烧读条：体力归零后倒计时，不进食则饿死
         if int(getattr(p, "life_burn_ticks", 0) or 0) > 0 and int(getattr(p, "vigor", 0) or 0) <= 0:
