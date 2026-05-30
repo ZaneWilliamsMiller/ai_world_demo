@@ -1,0 +1,86 @@
+{
+  "$defs": {
+    "InteractiveTestResultResponse": {
+      "properties": {
+        "test_name": {
+          "title": "Test Name",
+          "type": "string"
+        },
+        "success": {
+          "title": "Success",
+          "type": "boolean"
+        },
+        "output": {
+          "title": "Output",
+          "type": "string"
+        },
+        "elapsed": {
+          "default": 0.0,
+          "title": "Elapsed",
+          "type": "number"
+        },
+        "npc_reply": {
+          "default": "",
+          "title": "Npc Reply",
+          "type": "string"
+        },
+        "favor_delta": {
+          "default": 0,
+          "title": "Favor Delta",
+          "type": "integer"
+        },
+        "coin_delta": {
+          "default": 0,
+          "title": "Coin Delta",
+          "type": "integer"
+        },
+        "dialogue_log": {
+          "items": {},
+          "title": "Dialogue Log",
+          "type": "array"
+        }
+      },
+      "required": [
+        "test_name",
+        "success",
+        "output"
+      ],
+      "title": "InteractiveTestResultResponse",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "module_id": {
+      "title": "Module Id",
+      "type": "string"
+    },
+    "total": {
+      "title": "Total",
+      "type": "integer"
+    },
+    "passed": {
+      "title": "Passed",
+      "type": "integer"
+    },
+    "failed": {
+      "title": "Failed",
+      "type": "integer"
+    },
+    "results": {
+      "items": {
+        "$ref": "#/$defs/InteractiveTestResultResponse"
+      },
+      "title": "Results",
+      "type": "array"
+    }
+  },
+  "required": [
+    "module_id",
+    "total",
+    "passed",
+    "failed",
+    "results"
+  ],
+  "title": "InteractiveModuleResultResponse",
+  "type": "object"
+}

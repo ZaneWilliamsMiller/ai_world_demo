@@ -18,10 +18,21 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from backend.api.schema import (
+    InteractiveModuleResultResponse,
+    InteractiveModulesResponse,
+    InteractiveTestResultResponse,
+    ModuleResultResponse,
+    ResetCircuitBreakerResponse,
+    TestListResponse,
+    TestModulesResponse,
+    TestResultResponse,
+)
 from backend.config import settings
 
 TESTS_DIR = Path(__file__).resolve().parents[2] / "tests"
-_run_lock = asyncio.Lock()
+_func_lock = asyncio.Lock()
+_interactive_lock = asyncio.Lock()
 
 
 def _guard_test_routes() -> None:
@@ -113,7 +124,7 @@ _MODULE_LABELS: dict[str, str] = {
 }
 
 
-@router.get("/list")
+@router.get("/list", response_model=TestListResponse)
 async def list_tests():
     tests = []
     for f, rel in _discover_tests():
@@ -125,7 +136,7 @@ async def list_tests():
     return {"count": len(tests), "tests": tests}
 
 
-@router.get("/modules")
+@router.get("/modules", response_model=TestModulesResponse)
 async def list_modules():
     all_tests = _discover_tests()
     module_map: dict[str, list[TestInfo]] = {}
@@ -215,7 +226,7 @@ async def _run_single(test_path: str) -> TestResult:
     )
 
 
-@router.post("/run/{test_path:path}")
+@router.post("/run/{test_path:path}", response_model=TestResultResponse)
 async def run_test(test_path: str):
     test_name = test_path.replace("/", os.sep).replace("\\", os.sep)
     if ".." in test_name or not re.match(r'^[\w/\\]+\.py$', test_name.replace(os.sep, "/")):
@@ -226,10 +237,14 @@ async def run_test(test_path: str):
     if not test_file.exists():
         raise HTTPException(404, f"测试 {test_path} 不存在")
 
-    if _run_lock.locked():
-        raise HTTPException(429, "已有测试正在运行，请稍后再试")
+    if _func_lock.locked():
+        try:
+            await asyncio.wait_for(_func_lock.acquire(), timeout=10.0)
+            _func_lock.release()
+        except asyncio.TimeoutError:
+            raise HTTPException(429, "已有功能测试正在运行，请稍后再试")
 
-    async with _run_lock:
+    async with _func_lock:
         try:
             return await _run_single(test_path)
         except TimeoutError:
@@ -238,7 +253,7 @@ async def run_test(test_path: str):
             raise HTTPException(500, f"Failed to run test: {e!s}") from e
 
 
-@router.post("/run-module/{module_id:path}")
+@router.post("/run-module/{module_id:path}", response_model=ModuleResultResponse)
 async def run_module(module_id: str):
     if ".." in module_id or not re.match(r'^[\w/]*$', module_id):
         raise HTTPException(400, "无效的模块路径")
@@ -249,10 +264,14 @@ async def run_module(module_id: str):
     if not module_tests:
         raise HTTPException(404, f"模块 {module_id} 不存在或没有测试")
 
-    if _run_lock.locked():
-        raise HTTPException(429, "已有测试正在运行，请稍后再试")
+    if _func_lock.locked():
+        try:
+            await asyncio.wait_for(_func_lock.acquire(), timeout=10.0)
+            _func_lock.release()
+        except asyncio.TimeoutError:
+            raise HTTPException(429, "已有功能测试正在运行，请稍后再试")
 
-    async with _run_lock:
+    async with _func_lock:
         results = []
         for f, rel in module_tests:
             try:
@@ -281,14 +300,18 @@ async def run_module(module_id: str):
     )
 
 
-@router.post("/run-all")
+@router.post("/run-all", response_model=ModuleResultResponse)
 async def run_all():
-    if _run_lock.locked():
-        raise HTTPException(429, "已有测试正在运行，请稍后再试")
+    if _func_lock.locked():
+        try:
+            await asyncio.wait_for(_func_lock.acquire(), timeout=10.0)
+            _func_lock.release()
+        except asyncio.TimeoutError:
+            raise HTTPException(429, "已有功能测试正在运行，请稍后再试")
 
     all_tests = _discover_tests()
 
-    async with _run_lock:
+    async with _func_lock:
         results = []
         for f, rel in all_tests:
             try:
@@ -384,7 +407,7 @@ def _interactive_module_id(rel: str) -> str:
     return "interactive"
 
 
-@router.get("/interactive/modules")
+@router.get("/interactive/modules", response_model=InteractiveModulesResponse)
 async def list_interactive_modules():
     all_tests = _discover_interactive_tests()
     module_map: dict[str, list[InteractiveTestInfo]] = {}
@@ -506,25 +529,15 @@ async def _run_interactive_single(test_path: str) -> InteractiveTestResult:
     return await loop.run_in_executor(None, _run_sync)
 
 
-@router.post("/interactive/reset-circuit-breaker")
+@router.post("/interactive/reset-circuit-breaker", response_model=ResetCircuitBreakerResponse)
 async def reset_circuit_breaker():
-    from backend.llm.circuit_breaker import get_circuit_breaker, CircuitState
+    from backend.llm.circuit_breaker import get_circuit_breaker
     cb = get_circuit_breaker()
-    if hasattr(cb, '_lock'):
-        async with cb._lock:
-            if hasattr(cb, '_state'):
-                cb._state = CircuitState.CLOSED
-                cb._failure_times.clear()
-                cb._opened_at = 0.0
-    else:
-        if hasattr(cb, '_state'):
-            cb._state = CircuitState.CLOSED
-            cb._failure_times.clear()
-            cb._opened_at = 0.0
+    await cb.reset()
     return {"status": "ok", "state": cb.stats["state"]}
 
 
-@router.post("/interactive/run/{test_path:path}")
+@router.post("/interactive/run/{test_path:path}", response_model=InteractiveTestResultResponse)
 async def run_interactive_test(test_path: str):
     if ".." in test_path or not test_path.startswith("interactive/"):
         raise HTTPException(400, "无效的交互测试路径")
@@ -534,10 +547,14 @@ async def run_interactive_test(test_path: str):
     if not test_file.exists():
         raise HTTPException(404, f"测试 {test_path} 不存在")
 
-    if _run_lock.locked():
-        raise HTTPException(429, "已有测试正在运行，请稍后再试")
+    if _interactive_lock.locked():
+        try:
+            await asyncio.wait_for(_interactive_lock.acquire(), timeout=10.0)
+            _interactive_lock.release()
+        except asyncio.TimeoutError:
+            raise HTTPException(429, "已有交互测试正在运行，请稍后再试")
 
-    async with _run_lock:
+    async with _interactive_lock:
         return await _run_interactive_single(test_path)
 
 
@@ -551,8 +568,12 @@ async def stream_interactive_test(test_path: str):
     if not test_file.exists():
         raise HTTPException(404, f"测试 {test_path} 不存在")
 
-    if _run_lock.locked():
-        raise HTTPException(429, "已有测试正在运行，请稍后再试")
+    if _interactive_lock.locked():
+        try:
+            await asyncio.wait_for(_interactive_lock.acquire(), timeout=10.0)
+            _interactive_lock.release()
+        except asyncio.TimeoutError:
+            raise HTTPException(429, "已有交互测试正在运行，请稍后再试")
 
     queue: asyncio.Queue = asyncio.Queue()
     loop = asyncio.get_running_loop()
@@ -567,9 +588,9 @@ async def stream_interactive_test(test_path: str):
         from tests.interactive.conftest import InteractiveClient as _IC
         _IC._on_dialogue = _on_entry
         try:
-            async with _run_lock:
+            async with _interactive_lock:
                 result = await _run_interactive_single(test_path)
-            await queue.put({"__done__": True, "result": result.dict()})
+            await queue.put({"__done__": True, "result": result.model_dump()})
         except Exception as e:
             await queue.put({"__done__": True, "result": {
                 "test_name": test_path, "success": False,
@@ -602,7 +623,7 @@ async def stream_interactive_test(test_path: str):
     return StreamingResponse(_event_stream(), media_type="text/event-stream")
 
 
-@router.post("/interactive/run-module/{module_id:path}")
+@router.post("/interactive/run-module/{module_id:path}", response_model=InteractiveModuleResultResponse)
 async def run_interactive_module(module_id: str):
     if ".." in module_id or not module_id.startswith("interactive"):
         raise HTTPException(400, "无效的交互测试模块路径")
@@ -613,10 +634,14 @@ async def run_interactive_module(module_id: str):
     if not module_tests:
         raise HTTPException(404, f"交互测试模块 {module_id} 不存在或没有测试")
 
-    if _run_lock.locked():
-        raise HTTPException(429, "已有测试正在运行，请稍后再试")
+    if _interactive_lock.locked():
+        try:
+            await asyncio.wait_for(_interactive_lock.acquire(), timeout=10.0)
+            _interactive_lock.release()
+        except asyncio.TimeoutError:
+            raise HTTPException(429, "已有交互测试正在运行，请稍后再试")
 
-    async with _run_lock:
+    async with _interactive_lock:
         results = []
         for f, rel in module_tests:
             r = await _run_interactive_single(rel)
@@ -632,14 +657,18 @@ async def run_interactive_module(module_id: str):
     )
 
 
-@router.post("/interactive/run-all")
+@router.post("/interactive/run-all", response_model=InteractiveModuleResultResponse)
 async def run_interactive_all():
-    if _run_lock.locked():
-        raise HTTPException(429, "已有测试正在运行，请稍后再试")
+    if _interactive_lock.locked():
+        try:
+            await asyncio.wait_for(_interactive_lock.acquire(), timeout=10.0)
+            _interactive_lock.release()
+        except asyncio.TimeoutError:
+            raise HTTPException(429, "已有交互测试正在运行，请稍后再试")
 
     all_tests = _discover_interactive_tests()
 
-    async with _run_lock:
+    async with _interactive_lock:
         results = []
         for f, rel in all_tests:
             r = await _run_interactive_single(rel)

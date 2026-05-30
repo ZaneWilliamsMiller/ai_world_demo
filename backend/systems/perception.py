@@ -151,14 +151,19 @@ def tile_forced_encounter(p: PlayerState) -> dict[str, Any] | None:
     for nid, meta in NPCS.items():
         if not meta.get("hidden"):
             continue
-        cell = meta.get("cell")
-        if not cell or not isinstance(cell, (list, tuple)) or len(cell) < 3:
-            continue
-        if cell[0] != p.map_id or cell[1] != p.px or cell[2] != p.py:
-            continue
         need = meta.get("triggers_on_tile")
         if need and ch != need:
             continue
+        dynamic_pos = getattr(p, "npc_positions", {}).get(nid)
+        if dynamic_pos and isinstance(dynamic_pos, (list, tuple)) and len(dynamic_pos) >= 3:
+            if str(dynamic_pos[0]) != p.map_id or int(dynamic_pos[1]) != p.px or int(dynamic_pos[2]) != p.py:
+                continue
+        else:
+            cell = meta.get("cell")
+            if not cell or not isinstance(cell, (list, tuple)) or len(cell) < 3:
+                continue
+            if cell[0] != p.map_id or cell[1] != p.px or cell[2] != p.py:
+                continue
         return {
             "npc_id": nid,
             "user_line": meta.get(

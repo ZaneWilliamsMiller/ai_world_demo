@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from backend.api.schema import HealthResponse
 from backend.data.prompts import WORLD_NAME
 
 router = APIRouter()
@@ -31,8 +32,8 @@ if settings.enable_test_routes:
     router.include_router(test_router)
 
 
-@router.get("/api/health")
-async def health() -> dict[str, str]:
+@router.get("/api/health", response_model=HealthResponse)
+async def health():
     try:
         from backend.config import settings
 

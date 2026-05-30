@@ -1,0 +1,61 @@
+{
+  "$defs": {
+    "AdminPlayerBrief": {
+      "properties": {
+        "player_id": {
+          "title": "Player Id",
+          "type": "string"
+        },
+        "display_name": {
+          "title": "Display Name",
+          "type": "string"
+        },
+        "map_id": {
+          "title": "Map Id",
+          "type": "string"
+        },
+        "px": {
+          "title": "Px",
+          "type": "integer"
+        },
+        "py": {
+          "title": "Py",
+          "type": "integer"
+        },
+        "dead": {
+          "title": "Dead",
+          "type": "boolean"
+        },
+        "ended": {
+          "title": "Ended",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "player_id",
+        "display_name",
+        "map_id",
+        "px",
+        "py",
+        "dead",
+        "ended"
+      ],
+      "title": "AdminPlayerBrief",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "players": {
+      "items": {
+        "$ref": "#/$defs/AdminPlayerBrief"
+      },
+      "title": "Players",
+      "type": "array"
+    }
+  },
+  "required": [
+    "players"
+  ],
+  "title": "AdminPlayersResponse",
+  "type": "object"
+}

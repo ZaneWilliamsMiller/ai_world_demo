@@ -198,7 +198,7 @@ async def reflect(
             _reflect_violations.append("insights_not_list")
     except Exception as e:
         log.warning("reflect LLM failed for %s: %s", npc_id, e)
-        await get_tracker().record(CallRecord(
+        get_tracker().record(CallRecord(
             timestamp=time.time(),
             operation="reflect",
             model="",
@@ -211,7 +211,7 @@ async def reflect(
         return []
 
     # eval 埋点
-    await get_tracker().record(CallRecord(
+    get_tracker().record(CallRecord(
         timestamp=time.time(),
         operation="reflect",
         model="",
@@ -510,7 +510,7 @@ async def plan_day(
             _plan_violations.append("summary_missing")
     except Exception as e:
         log.warning("plan_day LLM failed for %s: %s", npc_id, e)
-        await get_tracker().record(CallRecord(
+        get_tracker().record(CallRecord(
             timestamp=time.time(),
             operation="plan_day",
             model="",
@@ -524,7 +524,7 @@ async def plan_day(
         return False
 
     # eval 埋点
-    await get_tracker().record(CallRecord(
+    get_tracker().record(CallRecord(
         timestamp=time.time(),
         operation="plan_day",
         model="",

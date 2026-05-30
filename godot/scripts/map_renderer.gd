@@ -584,7 +584,6 @@ func setup_minimap(parent: Control) -> void:
 	_mini_player_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_mini_border.add_child(_mini_player_dot)
 
-	_mini_texture = ImageTexture.new()
 	_mini_dirty = true
 
 
@@ -616,7 +615,10 @@ func _render_minimap() -> void:
 				for dx in MINI_TILE:
 					_mini_image.set_pixel(x * MINI_TILE + dx, y * MINI_TILE + dy, col)
 
-	_mini_texture = ImageTexture.create_from_image(_mini_image)
+	if _mini_texture:
+		_mini_texture.update(_mini_image)
+	else:
+		_mini_texture = ImageTexture.create_from_image(_mini_image)
 
 	if _mini_border:
 		_mini_border.custom_minimum_size = Vector2(mini_w + 4, mini_h + 4)

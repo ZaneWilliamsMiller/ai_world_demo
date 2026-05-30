@@ -1,0 +1,69 @@
+{
+  "properties": {
+    "npc_id": {
+      "title": "Npc Id",
+      "type": "string"
+    },
+    "npc_name": {
+      "title": "Npc Name",
+      "type": "string"
+    },
+    "items": {
+      "items": {},
+      "title": "Items",
+      "type": "array"
+    },
+    "importance_since_reflect": {
+      "default": 0.0,
+      "title": "Importance Since Reflect",
+      "type": "number"
+    },
+    "plan_day": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Plan Day"
+    },
+    "plan_summary": {
+      "default": "",
+      "title": "Plan Summary",
+      "type": "string"
+    },
+    "plan_by_shichen": {
+      "title": "Plan By Shichen",
+      "type": "object"
+    },
+    "affect_valence": {
+      "default": 0.0,
+      "title": "Affect Valence",
+      "type": "number"
+    },
+    "affect_arousal": {
+      "default": 5.0,
+      "title": "Affect Arousal",
+      "type": "number"
+    },
+    "affect_mood": {
+      "default": "平静",
+      "title": "Affect Mood",
+      "type": "string"
+    },
+    "affect_cause": {
+      "default": "",
+      "title": "Affect Cause",
+      "type": "string"
+    }
+  },
+  "required": [
+    "npc_id",
+    "npc_name"
+  ],
+  "title": "AgentMindResponse",
+  "type": "object"
+}

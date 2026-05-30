@@ -238,13 +238,18 @@ def survival_action_delta(p: PlayerState, user_message: str) -> dict[str, Any]:
     day_key = str(p.world_day)
 
     if any(k in msg for k in ("吃干粮", "啃干粮")) and int(p.inventory.get("干粮", 0)) > 0:
-        p.inventory["干粮"] = max(0, int(p.inventory.get("干粮", 0)) - 1)
-        if p.inventory["干粮"] <= 0:
-            p.inventory.pop("干粮", None)
-        vigor += apply_vigor_delta(p, DRY_RATION_VIGOR)
-        spirit += apply_spirit_delta(p, DRY_RATION_SPIRIT)
-        items_lose.append("干粮")
-        note = "你嚼了几口干粮,气力略回。"
+        ration_key = f"ration_{day_key}"
+        if tracker.get(ration_key, 0) > 0:
+            note = "干粮已在本轮消耗过，不可重复使用。"
+        else:
+            tracker[ration_key] = tracker.get(ration_key, 0) + 1
+            p.inventory["干粮"] = max(0, int(p.inventory.get("干粮", 0)) - 1)
+            if p.inventory["干粮"] <= 0:
+                p.inventory.pop("干粮", None)
+            vigor += apply_vigor_delta(p, DRY_RATION_VIGOR)
+            spirit += apply_spirit_delta(p, DRY_RATION_SPIRIT)
+            items_lose.append("干粮")
+            note = "你嚼了几口干粮,气力略回。"
     elif any(k in msg for k in ("打鱼", "捕鱼", "下网", "摸鱼")) and ch in ("~", "B"):
         fish_key = f"fish_{day_key}"
         if tracker.get(fish_key, 0) >= FISH_MAX_PER_DAY:

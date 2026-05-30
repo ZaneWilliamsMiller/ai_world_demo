@@ -183,7 +183,7 @@ def execute_plan_step(p: PlayerState, npc_id: str, mind: mem.AgentMind) -> NpcAc
         try:
             from backend.observability.tracker import get_tracker, CallRecord
             import time as _time
-            awaitable = get_tracker().record(CallRecord(
+            get_tracker().record(CallRecord(
                 timestamp=_time.time(),
                 operation="npc_action_rollback",
                 model="",
@@ -194,8 +194,6 @@ def execute_plan_step(p: PlayerState, npc_id: str, mind: mem.AgentMind) -> NpcAc
                 latency_ms=0,
                 status="error",
             ))
-            import asyncio
-            asyncio.get_event_loop().create_task(awaitable)
         except Exception:
             pass
         return NpcActionResult(
@@ -386,7 +384,7 @@ async def execute_plan_step_async(
         try:
             from backend.observability.tracker import get_tracker, CallRecord
             import time as _time
-            awaitable = get_tracker().record(CallRecord(
+            get_tracker().record(CallRecord(
                 timestamp=_time.time(),
                 operation="npc_action_rollback",
                 model="",
@@ -397,7 +395,6 @@ async def execute_plan_step_async(
                 latency_ms=0,
                 status="error",
             ))
-            asyncio.get_event_loop().create_task(awaitable)
         except Exception:
             pass
         return NpcActionResult(

@@ -1,0 +1,50 @@
+{
+  "additionalProperties": true,
+  "properties": {
+    "total_calls": {
+      "default": 0,
+      "title": "Total Calls",
+      "type": "integer"
+    },
+    "success_rate": {
+      "default": 0.0,
+      "title": "Success Rate",
+      "type": "number"
+    },
+    "avg_latency_ms": {
+      "default": 0.0,
+      "title": "Avg Latency Ms",
+      "type": "number"
+    },
+    "p50_latency_ms": {
+      "default": 0.0,
+      "title": "P50 Latency Ms",
+      "type": "number"
+    },
+    "p95_latency_ms": {
+      "default": 0.0,
+      "title": "P95 Latency Ms",
+      "type": "number"
+    },
+    "total_tokens_in": {
+      "default": 0,
+      "title": "Total Tokens In",
+      "type": "integer"
+    },
+    "total_tokens_out": {
+      "default": 0,
+      "title": "Total Tokens Out",
+      "type": "integer"
+    },
+    "by_operation": {
+      "title": "By Operation",
+      "type": "object"
+    },
+    "circuit_breaker": {
+      "title": "Circuit Breaker",
+      "type": "object"
+    }
+  },
+  "title": "AdminMetricsResponse",
+  "type": "object"
+}

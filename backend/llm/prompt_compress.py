@@ -65,6 +65,9 @@ async def compress_conversation_history(
         log.warning("compress_history failed: %s; keeping uncompressed", e)
         return hist
 
+    if not summary.strip():
+        return hist
+
     compressed: list[dict[str, Any]] = []
 
     if old_span:

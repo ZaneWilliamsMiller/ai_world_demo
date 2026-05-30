@@ -1,6 +1,6 @@
 # 活纸江湖 · 项目结构说明
 
-> 最后更新：2026-05-30
+> 最后更新：2026-05-31
 
 ## 顶层
 
@@ -38,17 +38,20 @@ living-paper/
 | 文件 | 作用 |
 |------|------|
 | `api/routes.py` | 核心 HTTP 端点：hello/move/talk/talk_stream/state/agent/plan/reflect/save/load 等 |
+| `api/schema.py` | API 响应模型定义：42 个 Pydantic Response 模型 + 12 个组件模型 |
 | `api/npc_routes.py` | NPC 相关端点 |
 | `api/player_routes.py` | 玩家相关端点 |
 | `api/save_routes.py` | 存档相关端点 |
 | `api/views.py` | 视图/页面端点 |
 | `api/dev.py` | 开发/测试端点：测试中心 API、交互测试 SSE 流式端点、熔断器重置 |
+| `api/admin_routes.py` | 管理/监控 API 路由 |
 
 ### NPC 认知（智能体）
 
 | 文件 | 作用 |
 |------|------|
 | `agents/brain.py` | NPC 认知闭环：观察提取 → 反思生成 → 计划生成 → 记忆检索 |
+| `agents/actor.py` | NPC 行动执行器 |
 | `agents/game_state.py` | 游戏全局状态管理 |
 
 ### 记忆系统
@@ -69,6 +72,12 @@ living-paper/
 | `llm/cache.py` | LLM 响应缓存：TTL 过期 + LRU 淘汰 |
 | `llm/params.py` | LLM 参数配置 |
 | `llm/prompt_compress.py` | 长对话压缩：历史过长时摘要化 |
+
+### 可观测性 `observability/`
+
+| 文件 | 作用 |
+|------|------|
+| `observability/tracker.py` | LLM 调用追踪器 |
 
 ### 数据定义 `data/`
 
@@ -120,6 +129,8 @@ living-paper/
 | `save_system.py` | 存档系统：序列化/反序列化/读档/删档 |
 | `bounty_board.py` | 悬赏榜系统 |
 | `trap.py` | 陷阱系统 |
+| `task_fsm.py` | 任务 FSM 状态机 |
+| `consistency.py` | 一致性检查 |
 
 ---
 
@@ -141,6 +152,7 @@ static/
     ├── dialogue.js     ← 对话系统（SSE 流式）
     ├── main.js         ← 入口逻辑
     ├── html-utils.js   ← HTML 工具函数
+    ├── api-types.d.ts   ← 自动生成的 TypeScript 类型定义
     └── tests.js        ← 测试中心逻辑
 ```
 
@@ -154,6 +166,7 @@ static/
 godot/
 ├── project.godot       ← 项目配置
 ├── .gdextension_ignore
+├── api-schema/         ← JSON Schema 文件供 Godot 参考
 ├── scenes/
 │   └── game.tscn       ← 游戏主场景
 └── scripts/
@@ -193,6 +206,8 @@ godot/
 | `show_maps.py` | 地图数据展示 |
 | `smoke_api.py` | API 烟雾测试 |
 | `verify_all.py` | 全量快速验证 |
+| `gen_ts_schema.py` | 从 Pydantic 模型生成 TypeScript 类型定义 |
+| `gen_json_schema.py` | 从 Pydantic 模型生成 JSON Schema 文件 |
 
 ---
 
@@ -203,11 +218,12 @@ godot/
 | 模块 | 测试文件 |
 |------|----------|
 | agents | `test_brain.py`, `test_game_state.py` |
-| api | `test_api_routes.py`, `test_views.py` |
+| api | `test_api_routes.py`, `test_views.py`, `test_schema_contract.py` |
 | data | `test_data_integrity.py` |
 | llm | `test_circuit_breaker.py`, `test_llm_cache.py`, `test_llm_client.py`, `test_llm_params.py` |
 | memory | `test_entities.py`, `test_format.py`, `test_index.py`, `test_retrieval.py` |
 | models | `test_models.py`, `test_player.py` |
+| observability | `test_tracker.py` |
 | services | `test_agent_service.py`, `test_talk_service.py` |
 | session | `test_session_store.py` |
 | systems | `test_core.py`, `test_economy.py`, `test_economy_extended.py`, `test_npc_state.py`, `test_path.py`, `test_perception.py`, `test_save.py`, `test_systems_extended.py`, `test_time_weather.py`, `test_talk.py`, `test_trap.py`, `test_world.py` |

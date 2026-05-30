@@ -1,0 +1,312 @@
+{
+  "$defs": {
+    "PlayerPublic": {
+      "properties": {
+        "map_id": {
+          "default": "world",
+          "title": "Map Id",
+          "type": "string"
+        },
+        "px": {
+          "default": 0,
+          "title": "Px",
+          "type": "integer"
+        },
+        "py": {
+          "default": 0,
+          "title": "Py",
+          "type": "integer"
+        },
+        "coins": {
+          "default": 0,
+          "title": "Coins",
+          "type": "integer"
+        },
+        "gender": {
+          "default": "未言",
+          "title": "Gender",
+          "type": "string"
+        },
+        "permadeath": {
+          "default": false,
+          "title": "Permadeath",
+          "type": "boolean"
+        },
+        "dead": {
+          "default": false,
+          "title": "Dead",
+          "type": "boolean"
+        },
+        "death_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Death Reason"
+        },
+        "ended": {
+          "default": false,
+          "title": "Ended",
+          "type": "boolean"
+        },
+        "ending_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ending Label"
+        },
+        "move_locked": {
+          "default": false,
+          "title": "Move Locked",
+          "type": "boolean"
+        },
+        "move_lock_npc_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Move Lock Npc Id"
+        },
+        "trap_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trap Reason"
+        },
+        "trap_attempts": {
+          "default": 0,
+          "title": "Trap Attempts",
+          "type": "integer"
+        },
+        "trap_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trap Type"
+        },
+        "enslaved": {
+          "default": false,
+          "title": "Enslaved",
+          "type": "boolean"
+        },
+        "enslaved_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Enslaved Reason"
+        },
+        "vigor": {
+          "default": 0,
+          "title": "Vigor",
+          "type": "integer"
+        },
+        "vigor_max": {
+          "default": 100,
+          "title": "Vigor Max",
+          "type": "integer"
+        },
+        "spirit": {
+          "default": 0,
+          "title": "Spirit",
+          "type": "integer"
+        },
+        "spirit_max": {
+          "default": 100,
+          "title": "Spirit Max",
+          "type": "integer"
+        },
+        "sleep_debt": {
+          "default": 0,
+          "title": "Sleep Debt",
+          "type": "integer"
+        },
+        "unconscious_ticks": {
+          "default": 0,
+          "title": "Unconscious Ticks",
+          "type": "integer"
+        },
+        "rescue_needed": {
+          "default": false,
+          "title": "Rescue Needed",
+          "type": "boolean"
+        },
+        "life_burn_ticks": {
+          "default": 0,
+          "title": "Life Burn Ticks",
+          "type": "integer"
+        },
+        "life_burn_max": {
+          "default": 0,
+          "title": "Life Burn Max",
+          "type": "integer"
+        },
+        "world_day": {
+          "default": 1,
+          "title": "World Day",
+          "type": "integer"
+        },
+        "world_shichen_idx": {
+          "default": 0,
+          "title": "World Shichen Idx",
+          "type": "integer"
+        },
+        "world_shichen": {
+          "default": "子时",
+          "title": "World Shichen",
+          "type": "string"
+        },
+        "world_phase": {
+          "default": "夜",
+          "title": "World Phase",
+          "type": "string"
+        },
+        "world_is_night": {
+          "default": true,
+          "title": "World Is Night",
+          "type": "boolean"
+        },
+        "weather": {
+          "default": "晴",
+          "title": "Weather",
+          "type": "string"
+        },
+        "inventory": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Inventory",
+          "type": "object"
+        },
+        "reputation": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Reputation",
+          "type": "object"
+        },
+        "npc_states": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Npc States",
+          "type": "object"
+        },
+        "bounties": {
+          "items": {},
+          "title": "Bounties",
+          "type": "array"
+        },
+        "active_bounty": {
+          "default": null,
+          "title": "Active Bounty"
+        },
+        "completed_bounties": {
+          "items": {},
+          "title": "Completed Bounties",
+          "type": "array"
+        },
+        "flags": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Flags",
+          "type": "object"
+        },
+        "favor": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Favor",
+          "type": "object"
+        }
+      },
+      "title": "PlayerPublic",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "ending_label": {
+      "title": "Ending Label",
+      "type": "string"
+    },
+    "epilogue": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Epilogue"
+    },
+    "flags": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "Flags",
+      "type": "object"
+    },
+    "player": {
+      "$ref": "#/$defs/PlayerPublic"
+    },
+    "server_ms": {
+      "default": 0,
+      "title": "Server Ms",
+      "type": "integer"
+    },
+    "already": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Already"
+    }
+  },
+  "required": [
+    "ending_label",
+    "player"
+  ],
+  "title": "FinaleResponse",
+  "type": "object"
+}

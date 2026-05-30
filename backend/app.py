@@ -126,7 +126,7 @@ app.add_middleware(
     allow_origins=_origins,
     allow_credentials=_creds,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "X-Shutdown-Secret"],
+    allow_headers=["Content-Type", "X-Shutdown-Secret", "X-Admin-Secret"],
 )
 
 app.include_router(api_router)

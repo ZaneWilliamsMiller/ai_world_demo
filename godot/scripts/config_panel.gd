@@ -146,6 +146,7 @@ func _test_backend() -> void:
 func _save_config() -> void:
 	var cfg := {
 		"backend_url": ApiClient.backend_url,
+		"shutdown_secret": ApiClient.shutdown_secret,
 	}
 	var file := FileAccess.open(CONFIG_PATH, FileAccess.WRITE)
 	if file:
@@ -167,3 +168,5 @@ func _load_config() -> void:
 	var data: Dictionary = json.data as Dictionary if json.data is Dictionary else {}
 	if data.has("backend_url") and data.backend_url != "":
 		ApiClient.backend_url = data.backend_url
+	if data.has("shutdown_secret") and data.shutdown_secret != "":
+		ApiClient.shutdown_secret = data.shutdown_secret

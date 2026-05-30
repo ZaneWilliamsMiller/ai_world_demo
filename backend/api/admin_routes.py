@@ -1,8 +1,18 @@
 """管理/监控 API 路由：LLM 指标、熔断器、玩家、NPC 状态。"""
 from __future__ import annotations
 
+import hmac
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from backend.api.schema import (
+    AdminCircuitBreakerResponse,
+    AdminEvalResponse,
+    AdminMetricsResponse,
+    AdminNpcStatesResponse,
+    AdminPlayersResponse,
+    AdminRecentCallsResponse,
+)
 from backend.config import settings
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -10,12 +20,12 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 async def _verify_admin(request: Request) -> None:
     secret = request.headers.get("X-Admin-Secret", "")
-    if not settings.shutdown_secret or secret != settings.shutdown_secret:
+    if not settings.shutdown_secret or not hmac.compare_digest(secret, settings.shutdown_secret):
         raise HTTPException(status_code=403, detail="无效的 Admin Secret")
 
 
-@router.get("/metrics", dependencies=[Depends(_verify_admin)])
-async def metrics() -> dict:
+@router.get("/metrics", dependencies=[Depends(_verify_admin)], response_model=AdminMetricsResponse)
+async def metrics():
     from backend.observability.tracker import get_tracker
     from backend.llm.circuit_breaker import get_circuit_breaker
     tracker = get_tracker()
@@ -25,15 +35,15 @@ async def metrics() -> dict:
     return result
 
 
-@router.get("/circuit_breaker", dependencies=[Depends(_verify_admin)])
-async def circuit_breaker_status() -> dict:
+@router.get("/circuit_breaker", dependencies=[Depends(_verify_admin)], response_model=AdminCircuitBreakerResponse)
+async def circuit_breaker_status():
     from backend.llm.circuit_breaker import get_circuit_breaker
     cb = get_circuit_breaker()
     return cb.stats
 
 
-@router.get("/players", dependencies=[Depends(_verify_admin)])
-async def players() -> dict:
+@router.get("/players", dependencies=[Depends(_verify_admin)], response_model=AdminPlayersResponse)
+async def players():
     from backend.session.store import room
     result = []
     for pid, p in room.players.items():
@@ -49,8 +59,8 @@ async def players() -> dict:
     return {"players": result}
 
 
-@router.get("/npc_states", dependencies=[Depends(_verify_admin)])
-async def npc_states() -> dict:
+@router.get("/npc_states", dependencies=[Depends(_verify_admin)], response_model=AdminNpcStatesResponse)
+async def npc_states():
     from backend.session.store import room
     result: dict = {}
     for pid, p in room.players.items():
@@ -61,8 +71,8 @@ async def npc_states() -> dict:
         for npc_id, pos in positions.items():
             plan_summary = ""
             mind = minds.get(npc_id)
-            if mind and hasattr(mind, "daily_plan"):
-                plan = mind.daily_plan
+            if mind and hasattr(mind, "plan_summary"):
+                plan = mind.plan_summary
                 if plan:
                     plan_summary = str(plan)[:80]
             npc_info[npc_id] = {
@@ -75,15 +85,15 @@ async def npc_states() -> dict:
     return result
 
 
-@router.get("/eval", dependencies=[Depends(_verify_admin)])
-async def eval_stats() -> dict:
+@router.get("/eval", dependencies=[Depends(_verify_admin)], response_model=AdminEvalResponse)
+async def eval_stats():
     from backend.observability.tracker import get_tracker
     tracker = get_tracker()
     return tracker.eval_summary()
 
 
-@router.get("/recent_calls", dependencies=[Depends(_verify_admin)])
-async def recent_calls(n: int = 20) -> dict:
+@router.get("/recent_calls", dependencies=[Depends(_verify_admin)], response_model=AdminRecentCallsResponse)
+async def recent_calls(n: int = 20):
     from backend.observability.tracker import get_tracker
     tracker = get_tracker()
     return {"calls": tracker.recent_calls(n)}

@@ -100,12 +100,6 @@
   border-color: rgba(96, 165, 250, 0.4);
 }
 
-.api-mode-badge.standalone {
-  background: rgba(168, 85, 247, 0.1);
-  color: var(--accent-purple);
-  border-color: rgba(168, 85, 247, 0.4);
-}
-
 .mode-select {
   background: rgba(26, 26, 46, 0.8);
   color: var(--text-main);

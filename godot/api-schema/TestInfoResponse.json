@@ -1,0 +1,23 @@
+{
+  "properties": {
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "file_path": {
+      "title": "File Path",
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "description",
+    "file_path"
+  ],
+  "title": "TestInfoResponse",
+  "type": "object"
+}

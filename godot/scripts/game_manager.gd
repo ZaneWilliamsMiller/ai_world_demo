@@ -45,6 +45,10 @@ var npc_labels: Dictionary = {}
 var npc_catalog: Array = []
 var npc_states: Dictionary = {}
 var intro_text: String = ""
+var danger_sense: Dictionary = {}
+var atmosphere: String = ""
+var events: Array = []
+var rumors: Array = []
 
 # ── UI Signals ──
 signal state_updated()
@@ -148,10 +152,10 @@ func _apply_player(p: Dictionary) -> void:
 	player_dead = p.get("dead", player_dead)
 	player_ended = p.get("ended", player_ended)
 	player_ending_label = p.get("ending_label", player_ending_label)
-	player_inventory = p.get("inventory", {})
-	player_reputation = p.get("reputation", {})
-	player_flags = p.get("flags", {})
-	player_favor = p.get("favor", {})
+	player_inventory = p.get("inventory", player_inventory)
+	player_reputation = p.get("reputation", player_reputation)
+	player_flags = p.get("flags", player_flags)
+	player_favor = p.get("favor", player_favor)
 	player_world_day = p.get("world_day", player_world_day)
 	player_world_shichen = p.get("world_shichen", player_world_shichen)
 	player_world_is_night = p.get("world_is_night", player_world_is_night)
@@ -199,8 +203,28 @@ func move_player(tx: int, ty: int) -> void:
 		_apply_player(p)
 
 	var encounter = res.get("forced_encounter")
-	if encounter and not encounter.is_empty():
-		system_message.emit(str(encounter))
+	if encounter and encounter is Dictionary and encounter.has("npc_id"):
+		var fe: Dictionary = encounter
+		var trap_type: String = "npc"
+		var trap_state = res.get("trap_state", {})
+		if trap_state is Dictionary and trap_state.has("type"):
+			trap_type = str(trap_state.type)
+		var fe_npc_id: String = str(fe.npc_id)
+		var fe_blurb: String = str(fe.get("blurb", ""))
+		var npc_info = null
+		for n in npcs_here:
+			if n is Dictionary and str(n.get("id", "")) == fe_npc_id:
+				npc_info = n
+				break
+		var npc_name: String = npc_info.get("name", fe_blurb) if npc_info else fe_blurb
+		if trap_type == "environment":
+			system_message.emit("🚫 身陷险境 — " + (fe_blurb if fe_blurb else "环境凶险"))
+		else:
+			system_message.emit("🚫 身陷险局 — " + npc_name + "挡住了去路！")
+		selected_npc_id = fe_npc_id
+		var auto_msg: String = str(fe.get("user_line", "[际遇] 狭路相逢，请开口说话。"))
+		await get_tree().create_timer(0.6).timeout
+		chat_message.emit(npc_name, auto_msg, fe_npc_id)
 
 	var trap = res.get("trap_state", {})
 	if trap.get("active", false):
@@ -380,6 +404,12 @@ func fetch_state() -> void:
 		player_ending_label = res.get("ending_label", player_ending_label)
 		player_flags = res.get("flags", player_flags)
 		player_favor = res.get("favor", player_favor)
+		danger_sense = res.get("danger_sense", danger_sense)
+		atmosphere = res.get("atmosphere", atmosphere)
+		events = res.get("events", events)
+		rumors = res.get("rumors", rumors)
+		npc_catalog = res.get("npc_catalog", npc_catalog)
+		map_locations = res.get("map_locations", map_locations)
 		state_updated.emit()
 
 
@@ -420,6 +450,10 @@ func reset_state() -> void:
 	npc_catalog = []
 	npc_states = {}
 	intro_text = ""
+	danger_sense = {}
+	atmosphere = ""
+	events = []
+	rumors = []
 	_is_moving = false
 	is_streaming = false
 	selected_npc_id = ""
@@ -427,7 +461,8 @@ func reset_state() -> void:
 
 
 func apply_stream_result(data: Dictionary) -> void:
-	if data.has("player"):
+	var has_full_player := data.has("player")
+	if has_full_player:
 		_apply_player(data.player)
 	if data.has("npcs_here"):
 		npcs_here = data.npcs_here
@@ -435,7 +470,7 @@ func apply_stream_result(data: Dictionary) -> void:
 		player_flags = data.flags
 	if data.has("favor"):
 		player_favor = data.favor
-	if data.has("delta"):
+	if data.has("delta") and not has_full_player:
 		var d = data.delta
 		if d.has("coins") and d.coins != 0:
 			player_coins += int(d.coins)
@@ -443,7 +478,7 @@ func apply_stream_result(data: Dictionary) -> void:
 			player_vigor = clampi(player_vigor + int(d.vigor), 0, player_vigor_max)
 		if d.has("spirit") and d.spirit != 0:
 			player_spirit = clampi(player_spirit + int(d.spirit), 0, player_spirit_max)
-	if data.has("player") or data.has("npcs_here"):
+	if has_full_player or data.has("npcs_here"):
 		state_updated.emit()
 
 

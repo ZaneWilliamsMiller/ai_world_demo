@@ -1,0 +1,44 @@
+{
+  "additionalProperties": true,
+  "properties": {
+    "state": {
+      "default": "closed",
+      "title": "State",
+      "type": "string"
+    },
+    "total_requests": {
+      "default": 0,
+      "title": "Total Requests",
+      "type": "integer"
+    },
+    "total_failures": {
+      "default": 0,
+      "title": "Total Failures",
+      "type": "integer"
+    },
+    "rejected": {
+      "default": 0,
+      "title": "Rejected",
+      "type": "integer"
+    },
+    "recent_failures": {
+      "default": 0,
+      "title": "Recent Failures",
+      "type": "integer"
+    },
+    "last_failure_age_s": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Last Failure Age S"
+    }
+  },
+  "title": "AdminCircuitBreakerResponse",
+  "type": "object"
+}

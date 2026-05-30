@@ -271,14 +271,14 @@ def delete_save(player_id: str) -> bool:
 def respawn_at_supply_point(p: PlayerState) -> str:
     """非真实江湖模式下，重伤后返回最近补给点。
 
-    补给点= {T: 客栈, Y: 驿站, I: 黑店, M: 市集, B: 兵站}
+    补给点= {T: 客栈, Y: 驿站, M: 市集, B: 兵站}
 
     在当前地图找最近的补给点格子；找不到则回county 客栈 (4,2)。
     恢复 50% 体力/心气，清除debuff。
     返回一句文本描述。"""
     from backend.data.maps_data import MAPS
 
-    supply_tiles = {"T", "Y", "I", "M", "B"}
+    supply_tiles = {"T", "Y", "M", "B"}
     candidates: list[tuple[int, int, int]] = []  # (manhattan_dist, x, y)
 
     # 先在当前地图找

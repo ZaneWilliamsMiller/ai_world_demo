@@ -159,8 +159,16 @@ tr:nth-child(even) td { background: rgba(26, 26, 46, 0.5); }
 </div>
 <script>
 let adminSecret = '';
+let _promptingSecret = false;
+
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
 
 function promptSecret() {
+  if (_promptingSecret) return;
+  _promptingSecret = true;
   adminSecret = prompt('请输入 Admin Secret:');
   if (!adminSecret) {
     document.getElementById('errorBanner').textContent = '未提供 Admin Secret，无法访问数据';
@@ -169,12 +177,13 @@ function promptSecret() {
     document.getElementById('errorBanner').style.display = 'none';
     fetchAll();
   }
+  _promptingSecret = false;
 }
 
 async function apiFetch(url) {
   const resp = await fetch(url, { headers: { 'X-Admin-Secret': adminSecret } });
   if (resp.status === 403) {
-    promptSecret();
+    if (!_promptingSecret) promptSecret();
     return null;
   }
   if (!resp.ok) return null;
@@ -189,7 +198,7 @@ function fmtTime(ts) {
 
 function statusTag(s) {
   const cls = s === 'success' ? 'tag-success' : s === 'timeout' ? 'tag-timeout' : 'tag-failed';
-  return `<span class="tag ${cls}">${s}</span>`;
+  return `<span class="tag ${cls}">${escapeHtml(s)}</span>`;
 }
 
 async function fetchMetrics() {
@@ -197,13 +206,13 @@ async function fetchMetrics() {
   if (!data) return;
   const rateClass = data.success_rate >= 0.95 ? 'good' : data.success_rate >= 0.8 ? 'warn' : 'bad';
   document.getElementById('metricsContent').innerHTML = `
-    <div class="stat-row"><span class="stat-label">总调用数</span><span class="stat-value">${data.total_calls}</span></div>
+    <div class="stat-row"><span class="stat-label">总调用数</span><span class="stat-value">${escapeHtml(data.total_calls)}</span></div>
     <div class="stat-row"><span class="stat-label">成功率</span><span class="stat-value ${rateClass}">${(data.success_rate * 100).toFixed(1)}%</span></div>
-    <div class="stat-row"><span class="stat-label">P50 延迟</span><span class="stat-value">${data.p50_latency_ms}ms</span></div>
-    <div class="stat-row"><span class="stat-label">P95 延迟</span><span class="stat-value">${data.p95_latency_ms}ms</span></div>
-    <div class="stat-row"><span class="stat-label">平均延迟</span><span class="stat-value">${data.avg_latency_ms}ms</span></div>
-    <div class="stat-row"><span class="stat-label">Token 入</span><span class="stat-value">${data.total_tokens_in}</span></div>
-    <div class="stat-row"><span class="stat-label">Token 出</span><span class="stat-value">${data.total_tokens_out}</span></div>
+    <div class="stat-row"><span class="stat-label">P50 延迟</span><span class="stat-value">${escapeHtml(data.p50_latency_ms)}ms</span></div>
+    <div class="stat-row"><span class="stat-label">P95 延迟</span><span class="stat-value">${escapeHtml(data.p95_latency_ms)}ms</span></div>
+    <div class="stat-row"><span class="stat-label">平均延迟</span><span class="stat-value">${escapeHtml(data.avg_latency_ms)}ms</span></div>
+    <div class="stat-row"><span class="stat-label">Token 入</span><span class="stat-value">${escapeHtml(data.total_tokens_in)}</span></div>
+    <div class="stat-row"><span class="stat-label">Token 出</span><span class="stat-value">${escapeHtml(data.total_tokens_out)}</span></div>
   `;
 }
 
@@ -213,11 +222,11 @@ async function fetchCB() {
   const stateClass = data.state === 'closed' ? 'good' : data.state === 'open' ? 'bad' : 'warn';
   const stateLabel = { closed: '正常', open: '熔断', half_open: '半开', disabled: '禁用' }[data.state] || data.state;
   document.getElementById('cbContent').innerHTML = `
-    <div class="stat-row"><span class="stat-label">当前状态</span><span class="stat-value ${stateClass}">${stateLabel}</span></div>
-    <div class="stat-row"><span class="stat-label">总请求数</span><span class="stat-value">${data.total_requests}</span></div>
-    <div class="stat-row"><span class="stat-label">失败数</span><span class="stat-value">${data.total_failures}</span></div>
-    <div class="stat-row"><span class="stat-label">拒绝数</span><span class="stat-value">${data.rejected}</span></div>
-    <div class="stat-row"><span class="stat-label">近期失败</span><span class="stat-value">${data.recent_failures}</span></div>
+    <div class="stat-row"><span class="stat-label">当前状态</span><span class="stat-value ${stateClass}">${escapeHtml(stateLabel)}</span></div>
+    <div class="stat-row"><span class="stat-label">总请求数</span><span class="stat-value">${escapeHtml(data.total_requests)}</span></div>
+    <div class="stat-row"><span class="stat-label">失败数</span><span class="stat-value">${escapeHtml(data.total_failures)}</span></div>
+    <div class="stat-row"><span class="stat-label">拒绝数</span><span class="stat-value">${escapeHtml(data.rejected)}</span></div>
+    <div class="stat-row"><span class="stat-label">近期失败</span><span class="stat-value">${escapeHtml(data.recent_failures)}</span></div>
   `;
 }
 
@@ -231,9 +240,9 @@ async function fetchPlayers() {
   }
   el.innerHTML = data.players.map(p => `
     <div class="player-item">
-      <span style="color:var(--accent-blue)">${p.player_id.slice(0,8)}</span>
-      <span>${p.display_name}</span>
-      <span style="color:var(--text-muted)">${p.map_id} (${p.px},${p.py})</span>
+      <span style="color:var(--accent-blue)">${escapeHtml(p.player_id.slice(0,8))}</span>
+      <span>${escapeHtml(p.display_name)}</span>
+      <span style="color:var(--text-muted)">${escapeHtml(p.map_id)} (${escapeHtml(p.px)},${escapeHtml(p.py)})</span>
       ${p.dead ? '<span class="tag tag-failed">已故</span>' : ''}
       ${p.ended ? '<span class="tag tag-timeout">已结束</span>' : ''}
     </div>
@@ -252,14 +261,14 @@ async function fetchNPC() {
   let html = '';
   for (const pid of keys) {
     const npcs = data[pid];
-    html += `<div style="color:var(--accent-blue);font-size:12px;margin-top:6px">玩家 ${pid.slice(0,8)}</div>`;
+    html += `<div style="color:var(--accent-blue);font-size:12px;margin-top:6px">玩家 ${escapeHtml(pid.slice(0,8))}</div>`;
     for (const [nid, info] of Object.entries(npcs)) {
       const posStr = Array.isArray(info.pos) ? info.pos.join(',') : info.pos;
       html += `<div class="npc-item">
-        <span style="color:var(--border-gold)">${nid}</span>
-        <span style="color:var(--text-muted)">${posStr}</span>
-        <span class="tag ${info.state === 'idle' ? 'tag-success' : info.state === 'hostile' ? 'tag-failed' : 'tag-timeout'}">${info.state}</span>
-        ${info.plan_summary ? `<span style="color:var(--text-muted);font-size:11px">${info.plan_summary}</span>` : ''}
+        <span style="color:var(--border-gold)">${escapeHtml(nid)}</span>
+        <span style="color:var(--text-muted)">${escapeHtml(posStr)}</span>
+        <span class="tag ${info.state === 'idle' ? 'tag-success' : info.state === 'hostile' ? 'tag-failed' : 'tag-timeout'}">${escapeHtml(info.state)}</span>
+        ${info.plan_summary ? `<span style="color:var(--text-muted);font-size:11px">${escapeHtml(info.plan_summary)}</span>` : ''}
       </div>`;
     }
   }
@@ -276,21 +285,25 @@ async function fetchCalls() {
   }
   tbody.innerHTML = data.calls.reverse().map(c => `
     <tr>
-      <td>${fmtTime(c.timestamp)}</td>
-      <td>${c.operation}</td>
-      <td>${c.model || '-'}</td>
-      <td>${c.latency_ms || '-'}</td>
-      <td>${c.tokens_in || 0}</td>
-      <td>${c.tokens_out || 0}</td>
+      <td>${escapeHtml(fmtTime(c.timestamp))}</td>
+      <td>${escapeHtml(c.operation)}</td>
+      <td>${escapeHtml(c.model || '-')}</td>
+      <td>${escapeHtml(c.latency_ms || '-')}</td>
+      <td>${escapeHtml(c.tokens_in || 0)}</td>
+      <td>${escapeHtml(c.tokens_out || 0)}</td>
       <td>${statusTag(c.status)}</td>
-      <td title="${c.error_msg || ''}">${c.error_msg || '-'}</td>
+      <td title="${escapeHtml(c.error_msg || '')}">${escapeHtml(c.error_msg || '-')}</td>
     </tr>
   `).join('');
 }
 
 async function fetchAll() {
   if (!adminSecret) return;
-  await Promise.all([fetchMetrics(), fetchCB(), fetchPlayers(), fetchNPC(), fetchCalls()]);
+  try {
+    await Promise.all([fetchMetrics(), fetchCB(), fetchPlayers(), fetchNPC(), fetchCalls()]);
+  } catch (e) {
+    console.error('fetchAll error:', e);
+  }
 }
 
 promptSecret();

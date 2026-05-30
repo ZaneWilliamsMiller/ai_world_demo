@@ -846,9 +846,14 @@ window.App = window.App || {};
 
       if (data.forced_encounter && data.forced_encounter.npc_id) {
         var fe = data.forced_encounter;
+        var trapType = (data.trap_state && data.trap_state.type) || "npc";
         var npcInfo = (data.npcs_here || []).find(function(n) { return n.id === fe.npc_id; });
         var npcName = npcInfo ? npcInfo.name : (fe.blurb || "对方");
-        App.addMsg("system", "🚫 身陷险局 — " + npcName + "挡住了去路！", true);
+        if (trapType === "environment") {
+          App.addMsg("system", "🚫 身陷险境 — " + (fe.blurb || "环境凶险"), true);
+        } else {
+          App.addMsg("system", "🚫 身陷险局 — " + npcName + "挡住了去路！", true);
+        }
         App.selectedNpcId = fe.npc_id;
         var selEl = document.getElementById("npcSelect");
         if (selEl) selEl.value = fe.npc_id;

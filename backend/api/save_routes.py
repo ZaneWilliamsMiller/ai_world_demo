@@ -7,13 +7,13 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from backend.api.schema import SavesListResponse, SaveResponse, InitResponse, DeleteSaveResponse
 from backend.api.views import build_init_response
 from backend.systems.core import init_npc_positions
 from backend.systems.economy import init_npc_inventories
 from backend.systems.save_system import delete_save, list_saves, load_game, save_game
 
 router = APIRouter()
-
 
 _PID = Field(..., min_length=1, max_length=64, pattern=r'^[A-Za-z0-9_-]+$')
 
@@ -30,13 +30,13 @@ class DeleteSaveBody(BaseModel):
     player_id: str = _PID
 
 
-@router.get("/api/saves")
-async def saves_list() -> dict[str, Any]:
+@router.get("/api/saves", response_model=SavesListResponse)
+async def saves_list():
     return {"saves": list_saves()}
 
 
-@router.post("/api/save")
-async def save_player(body: SaveBody) -> dict[str, Any]:
+@router.post("/api/save", response_model=SaveResponse)
+async def save_player(body: SaveBody):
     from backend.session.store import room
     p = room.players.get(body.player_id)
     if not p:
@@ -46,8 +46,8 @@ async def save_player(body: SaveBody) -> dict[str, Any]:
     return {"ok": True}
 
 
-@router.post("/api/load")
-async def load_player(body: LoadBody) -> dict[str, Any]:
+@router.post("/api/load", response_model=InitResponse)
+async def load_player(body: LoadBody):
     from backend.session.store import room
     loaded = await asyncio.to_thread(load_game, body.player_id)
     if not loaded:
@@ -71,8 +71,8 @@ async def load_player(body: LoadBody) -> dict[str, Any]:
     return build_init_response(loaded)
 
 
-@router.post("/api/delete-save")
-async def remove_save(body: DeleteSaveBody) -> dict[str, Any]:
+@router.post("/api/delete-save", response_model=DeleteSaveResponse)
+async def remove_save(body: DeleteSaveBody):
     from backend.session.store import room
     ok = await asyncio.to_thread(delete_save, body.player_id)
     await room.remove_player(body.player_id)

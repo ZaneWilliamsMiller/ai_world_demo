@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import random
 import time
 from collections.abc import AsyncIterator
 from typing import Any
@@ -150,11 +151,26 @@ def _close_client_sync() -> None:
                     import concurrent.futures
                     with concurrent.futures.ThreadPoolExecutor() as pool:
                         pool.submit(lambda: asyncio.run(cli.aclose())).result(5)
+                    inst._client = None
+                    for _key, client in list(inst._custom_clients.items()):
+                        if not client.is_closed:
+                            try:
+                                with concurrent.futures.ThreadPoolExecutor() as pool:
+                                    pool.submit(lambda c=client: asyncio.run(c.aclose())).result(5)
+                            except Exception:
+                                log.debug("close custom client failed in sync", exc_info=True)
+                    inst._custom_clients.clear()
                     return
             except RuntimeError:
                 pass
             asyncio.run(cli.aclose())
         inst._client = None
+        for _key, client in list(inst._custom_clients.items()):
+            if not client.is_closed:
+                try:
+                    asyncio.run(client.aclose())
+                except Exception:
+                    log.debug("close custom client failed", exc_info=True)
         inst._custom_clients.clear()
     except Exception:
         log.debug("close_client_sync failed", exc_info=True)
@@ -245,7 +261,7 @@ async def _execute_with_retry(
             is_retryable_status = status in RETRYABLE_HTTP_STATUSES
 
             if is_retryable_status and attempt < max_retries - 1:
-                delay = base_delay * (2 ** attempt) + (time.time() % 1.0) * RETRY_JITTER_MAX
+                delay = base_delay * (2 ** attempt) + random.uniform(0, RETRY_JITTER_MAX)
                 log.warning(
                     f"{operation_name} API {status} error (attempt {attempt + 1}/{max_retries}), "
                     f"retrying in {delay:.1f}s: {e.response.text[:128]}"
@@ -256,7 +272,7 @@ async def _execute_with_retry(
             await circuit_breaker.failure()
             log.error(f"{operation_name} API Error: {e.response.text[:512]}")
             tracker = get_tracker()
-            await tracker.record(CallRecord(
+            tracker.record(CallRecord(
                 timestamp=time.time(), operation=operation_name, model="",
                 status="failed", error_msg=f"HTTP {status}: {e.response.text[:128]}",
             ))
@@ -264,7 +280,7 @@ async def _execute_with_retry(
 
         except Exception as e:
             if _is_retryable_error(e) and attempt < max_retries - 1:
-                delay = base_delay * (2 ** attempt) + (time.time() % 1.0) * RETRY_BACKOFF_JITTER_MAX
+                delay = base_delay * (2 ** attempt) + random.uniform(0, RETRY_BACKOFF_JITTER_MAX)
                 log.warning(
                     f"{operation_name} request failed (attempt {attempt + 1}/{max_retries}), "
                     f"retrying in {delay:.1f}s: {e}"
@@ -275,21 +291,21 @@ async def _execute_with_retry(
             await circuit_breaker.failure()
             log.error(f"{operation_name} Request Failed: {e}")
             tracker = get_tracker()
-            await tracker.record(CallRecord(
+            tracker.record(CallRecord(
                 timestamp=time.time(), operation=operation_name, model="",
                 status="failed", error_msg=str(e)[:128],
             ))
             raise
 
     tracker = get_tracker()
-    await tracker.record(CallRecord(
+    tracker.record(CallRecord(
         timestamp=time.time(), operation=operation_name, model="",
         status="failed", error_msg=f"all {max_retries} retries exhausted",
     ))
     raise RuntimeError(f"{operation_name}: all {max_retries} retries exhausted")
 
 
-async def _handle_llm_response(response_data: dict[str, Any], cache, circuit_breaker, messages, *, temperature: float = 0.0, model: str = "", max_tokens: int = 0, start_time: float = 0.0, operation: str = "chat_completion") -> str:
+async def _handle_llm_response(response_data: dict[str, Any], cache, circuit_breaker, messages, *, temperature: float = 0.0, model: str = "", max_tokens: int = 0, response_format: dict[str, Any] | None = None, start_time: float = 0.0, operation: str = "chat_completion", base_url: str = "") -> str:
     """处理 LLM 响应并写入缓存（修复 Major #7：提取公共响应解析逻辑）。
 
     Returns:
@@ -316,12 +332,12 @@ async def _handle_llm_response(response_data: dict[str, Any], cache, circuit_bre
     content = content or ""
 
     if settings.llm_cache_enabled:
-        await cache.set(messages, content, temperature=temperature, model=model, max_tokens=max_tokens)
+        await cache.set(messages, content, temperature=temperature, model=model, max_tokens=max_tokens, response_format=response_format, base_url=base_url)
     await circuit_breaker.success()
 
     tracker = get_tracker()
     latency_ms = (time.time() - start_time) * 1000 if start_time else 0.0
-    await tracker.record(CallRecord(
+    tracker.record(CallRecord(
         timestamp=time.time(), operation=operation, model=model,
         tokens_in=prompt_tokens, tokens_out=completion_tokens,
         latency_ms=round(latency_ms, 2), status="success",
@@ -405,7 +421,15 @@ async def chat_completion(
     use_custom = llm_base_url or llm_api_key or llm_model
 
     if use_custom:
+        cache = get_llm_cache()
         cb = get_circuit_breaker()
+        sem = await _get_semaphore()
+
+        if settings.llm_cache_enabled:
+            cached = await cache.get(messages, temperature=temperature, model=llm_model or settings.llm_model, max_tokens=max_tokens, response_format=response_format, base_url=llm_base_url or settings.llm_base_url)
+            if cached is not None:
+                return cached
+
         if not await cb.allow():
             raise RuntimeError(
                 f"LLM API circuit breaker OPEN (state={cb.state.value}); "
@@ -427,32 +451,44 @@ async def chat_completion(
             llm_base_url or settings.llm_base_url,
             llm_api_key or settings.llm_api_key,
         )
+        _start = time.time()
         max_retries = 2
+        base_delay = getattr(settings, 'llm_retry_base_delay_s', 1.5)
         last_exc: Exception = RuntimeError("unreachable")
-        for attempt in range(max_retries + 1):
-            r = None
-            try:
-                r = await client.post(url, json=body, headers=headers)
-                r.raise_for_status()
-                data = r.json()
-                choices = data.get("choices") or []
-                content = ""
-                if choices:
-                    msg = choices[0].get("message", {})
-                    content = msg.get("content") or ""
-                content = content or ""
-                await cb.success()
-                return content
-            except Exception as exc:
-                last_exc = exc
-                status = getattr(r, "status_code", 0) if r else 0
-                if status not in RETRYABLE_HTTP_STATUSES or attempt == max_retries:
-                    await cb.failure()
-                    raise
-                import random as _rng
-                backoff = (2 ** attempt) + _rng.uniform(0, RETRY_BACKOFF_JITTER_MAX)
-                log.warning("custom LLM retry %d/%d after %.1fs: %s", attempt + 1, max_retries, backoff, exc)
-                await asyncio.sleep(backoff)
+        async with sem:
+            for attempt in range(max_retries + 1):
+                r = None
+                try:
+                    r = await client.post(url, json=body, headers=headers)
+                    r.raise_for_status()
+                    data = r.json()
+                    choices = data.get("choices") or []
+                    content = ""
+                    if choices:
+                        msg = choices[0].get("message", {})
+                        content = msg.get("content") or ""
+                    content = content or ""
+
+                    if settings.llm_cache_enabled:
+                        await cache.set(messages, content, temperature=temperature, model=llm_model or settings.llm_model, max_tokens=max_tokens, response_format=response_format, base_url=llm_base_url or settings.llm_base_url)
+                    await cb.success()
+
+                    tracker = get_tracker()
+                    latency_ms = (time.time() - _start) * 1000
+                    tracker.record(CallRecord(
+                        timestamp=time.time(), operation="chat_completion_custom", model=llm_model or settings.llm_model,
+                        latency_ms=round(latency_ms, 2), status="success",
+                    ))
+                    return content
+                except Exception as exc:
+                    last_exc = exc
+                    status = getattr(r, "status_code", 0) if r else 0
+                    if status not in RETRYABLE_HTTP_STATUSES or attempt == max_retries:
+                        await cb.failure()
+                        raise
+                    backoff = base_delay * (2 ** attempt) + random.uniform(0, RETRY_BACKOFF_JITTER_MAX)
+                    log.warning("custom LLM retry %d/%d after %.1fs: %s", attempt + 1, max_retries, backoff, exc)
+                    await asyncio.sleep(backoff)
         raise last_exc
 
     cache = get_llm_cache()
@@ -461,7 +497,7 @@ async def chat_completion(
 
     # ── 1. 检查缓存 ──
     if settings.llm_cache_enabled:
-        cached = await cache.get(messages, temperature=temperature, model=settings.llm_model, max_tokens=max_tokens)
+        cached = await cache.get(messages, temperature=temperature, model=settings.llm_model, max_tokens=max_tokens, response_format=response_format, base_url=settings.llm_base_url)
         if cached is not None:
             return cached
 
@@ -490,7 +526,7 @@ async def chat_completion(
             r = await client.post(url, json=body)
             r.raise_for_status()
             data = r.json()
-            return await _handle_llm_response(data, cache, cb, messages, temperature=temperature, model=settings.llm_model, max_tokens=max_tokens, start_time=_start, operation="chat_completion")
+            return await _handle_llm_response(data, cache, cb, messages, temperature=temperature, model=settings.llm_model, max_tokens=max_tokens, response_format=response_format, start_time=_start, operation="chat_completion", base_url=settings.llm_base_url)
 
         result = await _execute_with_retry(_do_request, max_retries, base_delay, cb, "LLM")
         return result
@@ -512,6 +548,9 @@ async def stream_chat_completion(
 
     if use_custom:
         cb = get_circuit_breaker()
+        sem = await _get_semaphore()
+        _start = time.time()
+
         if not await cb.allow():
             raise RuntimeError(
                 f"LLM API circuit breaker OPEN (state={cb.state.value}); "
@@ -533,23 +572,31 @@ async def stream_chat_completion(
             llm_base_url or settings.llm_base_url,
             llm_api_key or settings.llm_api_key,
         )
-        async with client.stream("POST", url, json=body, headers=headers) as r:
-            try:
-                r.raise_for_status()
-                async for line in r.aiter_lines():
-                    piece = _parse_stream_line(line)
-                    if piece:
-                        yield piece
-                await cb.success()
-            except Exception as stream_err:
-                await cb.failure()
-                log.error(f"Custom config stream error: {stream_err}")
-                raise
+        async with sem:
+            async with client.stream("POST", url, json=body, headers=headers) as r:
+                try:
+                    r.raise_for_status()
+                    async for line in r.aiter_lines():
+                        piece = _parse_stream_line(line)
+                        if piece:
+                            yield piece
+                    await cb.success()
+                    tracker = get_tracker()
+                    latency_ms = (time.time() - _start) * 1000
+                    tracker.record(CallRecord(
+                        timestamp=time.time(), operation="stream_custom", model=llm_model or settings.llm_model,
+                        latency_ms=round(latency_ms, 2), status="success",
+                    ))
+                except Exception as stream_err:
+                    await cb.failure()
+                    log.error(f"Custom config stream error: {stream_err}")
+                    raise
         return
 
     else:
         cb = get_circuit_breaker()
         sem = await _get_semaphore()
+        _start = time.time()
 
         if not await cb.allow():
             raise RuntimeError(
@@ -571,7 +618,6 @@ async def stream_chat_completion(
             for attempt in range(max_retries):
                 try:
                     client = await _get_client()
-                    # 修复 Major #6：使用 try/finally 确保流在异常时优雅关闭
                     async with client.stream("POST", url, json=body) as r:
                         try:
                             r.raise_for_status()
@@ -583,8 +629,13 @@ async def stream_chat_completion(
                             log.error(f"Stream processing error (attempt {attempt + 1}): {stream_err}")
                             raise
 
-                    # 流式成功 → 熔断器记录成功
                     await cb.success()
+                    tracker = get_tracker()
+                    latency_ms = (time.time() - _start) * 1000
+                    tracker.record(CallRecord(
+                        timestamp=time.time(), operation="stream_chat_completion", model=settings.llm_model,
+                        latency_ms=round(latency_ms, 2), status="success",
+                    ))
                     return
 
                 except httpx.HTTPStatusError as e:
@@ -592,7 +643,7 @@ async def stream_chat_completion(
                     is_retryable_status = status in RETRYABLE_HTTP_STATUSES
 
                     if is_retryable_status and attempt < max_retries - 1:
-                        delay = base_delay * (2 ** attempt) + (time.time() % 1.0) * RETRY_JITTER_MAX
+                        delay = base_delay * (2 ** attempt) + random.uniform(0, RETRY_JITTER_MAX)
                         log.warning(
                             f"LLM Stream {status} error (attempt {attempt + 1}/{max_retries}), "
                             f"retrying in {delay:.1f}s"
@@ -605,9 +656,8 @@ async def stream_chat_completion(
                     raise
 
                 except Exception as e:
-                    # 修复 Major #5：区分可重试和不可重试异常
                     if _is_retryable_error(e) and attempt < max_retries - 1:
-                        delay = base_delay * (2 ** attempt) + (time.time() % 1.0) * RETRY_BACKOFF_JITTER_MAX
+                        delay = base_delay * (2 ** attempt) + random.uniform(0, RETRY_BACKOFF_JITTER_MAX)
                         log.warning(
                             f"LLM stream failed (attempt {attempt + 1}/{max_retries}), "
                             f"retrying in {delay:.1f}s: {e}"
@@ -620,11 +670,37 @@ async def stream_chat_completion(
                     raise
 
 
+def _extract_json(text: str) -> str | None:
+    start = text.find("{")
+    if start < 0:
+        return None
+    depth = 0
+    in_string = False
+    i = start
+    while i < len(text):
+        ch = text[i]
+        if in_string:
+            if ch == '\\':
+                i += 2
+                continue
+            if ch == '"':
+                in_string = False
+        else:
+            if ch == '"':
+                in_string = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start:i+1]
+        i += 1
+    return None
+
+
 def parse_npc_reply_json(text: str) -> NpcResponseSchema:
     """尝试将 LLM 输出解析为 NpcResponseSchema"""
-    import re
-    json_match = re.search(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", text, re.DOTALL)
-    json_str = json_match.group(0) if json_match else text
+    json_str = _extract_json(text) or text
 
     try:
         data = json.loads(json_str)
@@ -673,7 +749,9 @@ def _cleanup() -> None:
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
-                pass
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    pool.submit(lambda: asyncio.run(mgr._client.aclose())).result(5)
             else:
                 loop.run_until_complete(mgr._client.aclose())
         except Exception:

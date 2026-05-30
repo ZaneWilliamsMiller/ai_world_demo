@@ -124,9 +124,41 @@ window.App = window.App || {};
 
   App.startNewGame = async function() {
     const btn = document.querySelector('#loginForm button[onclick*="startNewGame"]');
+    var nameEl = document.getElementById("inpName");
+    var name = nameEl ? nameEl.value.trim() : "";
+    if (!name) {
+      var loginFormEl = DOM.loginForm || document.getElementById("loginForm");
+      if (loginFormEl) {
+        var oldErr = loginFormEl.querySelector(".login-error");
+        if (oldErr) oldErr.remove();
+        var errDiv = document.createElement("div");
+        errDiv.className = "login-error";
+        errDiv.style.cssText = "color:#ef5350;margin-top:8px;font-size:13px;";
+        errDiv.textContent = "❌ 江湖名号不能为空";
+        loginFormEl.appendChild(errDiv);
+      }
+      return;
+    }
+    try {
+      var saves = await App.fetchSaves();
+      var dup = saves.find(function(s) { return s.display_name === name; });
+      if (dup) {
+        var loginFormEl2 = DOM.loginForm || document.getElementById("loginForm");
+        if (loginFormEl2) {
+          var oldErr2 = loginFormEl2.querySelector(".login-error");
+          if (oldErr2) oldErr2.remove();
+          var errDiv2 = document.createElement("div");
+          errDiv2.className = "login-error";
+          errDiv2.style.cssText = "color:#ef5350;margin-top:8px;font-size:13px;";
+          errDiv2.textContent = "❌ 已有名号「" + name + "」的存档，请换一个名号";
+          loginFormEl2.appendChild(errDiv2);
+        }
+        return;
+      }
+    } catch (_e) {}
+
     if (btn) { btn.disabled = true; btn.textContent = "⏳ 进入江湖..."; }
 
-    const name   = document.getElementById("inpName").value.trim() || "江湖客";
     const gender = document.getElementById("inpGender").value;
     const permadeath = document.getElementById("inpPermadeath").checked;
     console.log("[App] startNewGame:", { name: name, gender: gender, permadeath: permadeath });
@@ -192,6 +224,20 @@ window.App = window.App || {};
     }
 
     App.updateUI(data);
+
+    if (_statePollTimer) { clearInterval(_statePollTimer); _statePollTimer = null; }
+    _statePollTimer = setInterval(function() {
+      if (!_pageVisible) return;
+      if (App.playerId && !App.isStreaming) {
+        App.fetchState().then(function(d) {
+          if (d) { _pollErrorCount = 0; App.updateUI(d); }
+        }).catch(function(err) {
+          _pollErrorCount++;
+          if (err.message && err.message.includes('404')) { App.doLogout(); }
+          else if (_pollErrorCount >= 3) { App.addMsg("system", "⚠️ 与服务器连接中断，正在尝试重连..."); }
+        });
+      }
+    }, 30000);
   };
 
   App.doLogout = function() {
@@ -200,15 +246,31 @@ window.App = window.App || {};
       "确定要退出游戏吗？<br><br>⚠️ <b>未存档的进度将丢失</b>",
       function() {
         if (_statePollTimer) { clearInterval(_statePollTimer); _statePollTimer = null; }
+        App.cancelTalkStream();
+        if (App._actLoopAbortController) { App._actLoopAbortController.abort(); App._actLoopAbortController = null; }
         App.playerId = null;
         App.isStreaming = false;
         App.selectedNpcId = null;
+        App.mapsData = {};
+        App.currentMapId = null;
         const mainUI = DOM.mainUI || document.getElementById("mainUI");
         const topbar = DOM.topbar || document.getElementById("topbar");
         const loginOverlay = DOM.loginOverlay || document.getElementById("loginOverlay");
         if (mainUI) mainUI.style.display = "none";
         if (topbar) topbar.style.display = "none";
         if (loginOverlay) loginOverlay.style.display = "flex";
+        var startBtn = document.querySelector('#loginForm button[onclick*="startNewGame"]');
+        if (startBtn) { startBtn.disabled = false; startBtn.textContent = "踏入江湖"; }
+        var loginForm = DOM.loginForm || document.getElementById("loginForm");
+        var loadForm = DOM.loadForm || document.getElementById("loadForm");
+        if (loginForm) loginForm.style.display = "block";
+        if (loadForm) loadForm.style.display = "none";
+        if (loginForm) {
+          var oldErr = loginForm.querySelector(".login-error");
+          if (oldErr) oldErr.remove();
+        }
+        var dialogueArea = document.getElementById("dialogueArea");
+        if (dialogueArea) dialogueArea.innerHTML = "";
       }
     );
   };
@@ -463,7 +525,7 @@ window.App = window.App || {};
               const controller = new AbortController();
               const timeoutId = setTimeout(function() { controller.abort(); }, 15000);
 
-              const resp = await fetch("/api/shutdown", {
+              const resp = await fetch(App.API + "/shutdown", {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
@@ -534,7 +596,7 @@ window.App = window.App || {};
               await new Promise(function(r) { setTimeout(r, 500); });
 
               try {
-                await fetch("/api/health", { cache: 'no-store' });
+                await fetch(App.API + "/health", { cache: 'no-store' });
               } catch (_err) {
                 serverStopped = true;
                 break;
@@ -645,7 +707,7 @@ window.App = window.App || {};
           if (cfg.shutdownSecret) {
             App.SHUTDOWN_SECRET = cfg.shutdownSecret;
           } else if (data.shutdown_configured === "true" && !App.SHUTDOWN_SECRET) {
-            App.SHUTDOWN_SECRET = "dev";
+            App.SHUTDOWN_SECRET = prompt("请输入关闭密钥：") || "";
           }
         } catch(_e) {}
       })

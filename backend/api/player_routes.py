@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Path, status
 from pydantic import BaseModel, Field
 
+from backend.api.schema import InitResponse, MoveResponse, StateResponse, JournalResponse
 from backend.api.views import build_init_response
 from backend.api.views import factions_public as _factions_public
 from backend.api.views import map_locations_public as _map_locations_public
@@ -69,8 +70,8 @@ class MoveBody(BaseModel):
     to_y: int = Field(..., ge=0, le=99)
 
 
-@router.post("/api/hello")
-async def hello(body: HelloBody) -> dict[str, Any]:
+@router.post("/api/hello", response_model=InitResponse)
+async def hello(body: HelloBody):
     from backend.session.store import room
     p = await room.get_or_create(body.player_id, body.display_name, body.gender, body.permadeath)
     init_npc_positions(p)
@@ -285,8 +286,8 @@ def _build_move_response(p, prev_map, actual_path, forced, vigor_cost, spirit_co
     }
 
 
-@router.post("/api/move")
-async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
+@router.post("/api/move", response_model=MoveResponse)
+async def move(body: MoveBody, bg: BackgroundTasks):
     from backend.session.store import room
 
     p = room.players.get(body.player_id)
@@ -344,8 +345,8 @@ async def _bg_encounter(player_id: str) -> None:
         logging.getLogger("routes").warning("_bg_encounter failed for player=%s: %s", player_id, e)
 
 
-@router.get("/api/state/{player_id}")
-async def get_state(player_id: str = Path(..., min_length=1, max_length=64)) -> dict[str, Any]:
+@router.get("/api/state/{player_id}", response_model=StateResponse)
+async def get_state(player_id: str = Path(..., min_length=1, max_length=64)):
     from backend.session.store import room
     p = room.players.get(player_id)
     if not p:
@@ -375,8 +376,8 @@ async def get_state(player_id: str = Path(..., min_length=1, max_length=64)) -> 
     return result
 
 
-@router.get("/api/journal/{player_id}")
-async def journal(player_id: str = Path(..., min_length=1, max_length=64)) -> dict[str, Any]:
+@router.get("/api/journal/{player_id}", response_model=JournalResponse)
+async def journal(player_id: str = Path(..., min_length=1, max_length=64)):
     from backend.session.store import room
     p = room.players.get(player_id)
     if not p:

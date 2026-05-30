@@ -151,11 +151,41 @@ window.App = window.App || {};
     if (App.isStreaming) return;
     App.isStreaming = true;
 
+    var cancelBtn = document.getElementById("cancelStreamBtn");
+    if (cancelBtn) cancelBtn.classList.add("visible");
+
     var reader = null;
     var decoder = new TextDecoder();
     var buf = "";
     var currentTextEl = null;
     var currentText = "";
+    var _actTimeout = null;
+
+    function _resetActState() {
+      App.isStreaming = false;
+      if (cancelBtn) cancelBtn.classList.remove("visible");
+      if (_actTimeout) clearTimeout(_actTimeout);
+    }
+
+    _actTimeout = setTimeout(function() {
+      if (App._actLoopAbortController) { App._actLoopAbortController.abort(); App._actLoopAbortController = null; }
+      currentText += "\n[行动观察超时（120秒），已自动取消]";
+      if (currentTextEl) currentTextEl.textContent = currentText.trim();
+      _resetActState();
+      reader && reader.cancel && reader.cancel().catch(function(){});
+    }, 120000);
+
+    if (cancelBtn) {
+      var _onCancelClick = function() {
+        if (App._actLoopAbortController) { App._actLoopAbortController.abort(); App._actLoopAbortController = null; }
+        currentText += "\n[行动观察已取消]";
+        if (currentTextEl) currentTextEl.textContent = currentText.trim();
+        _resetActState();
+        reader && reader.cancel && reader.cancel().catch(function(){});
+        cancelBtn.removeEventListener("click", _onCancelClick);
+      };
+      cancelBtn.addEventListener("click", _onCancelClick);
+    }
 
     try {
       reader = await App.actLoopStream(npcId, maxSteps || 3);
@@ -211,10 +241,14 @@ window.App = window.App || {};
         }
       }
     } catch (e) {
-      App.addMsg("system", "NPC\u884c\u52a8\u89c2\u5bdf\u5931\u8d25: " + (e.message || "\u672a\u77e5\u9519\u8bef"));
+      if (e.name === "AbortError") {
+        App.addMsg("system", "NPC\u884c\u52a8\u89c2\u5bdf\u5df2\u53d6\u6d88");
+      } else {
+        App.addMsg("system", "NPC\u884c\u52a8\u89c2\u5bdf\u5931\u8d25: " + (e.message || "\u672a\u77e5\u9519\u8bef"));
+      }
     } finally {
       if (reader) try { reader.releaseLock(); } catch (_e) {}
-      App.isStreaming = false;
+      _resetActState();
     }
   };
 

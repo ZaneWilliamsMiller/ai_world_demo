@@ -62,10 +62,10 @@ def _prune_gossip_cache() -> None:
         del _last_gossip[k]
 
 
-def _gossip_key(npc_a: str, npc_b: str) -> str:
+def _gossip_key(player_id: str, npc_a: str, npc_b: str) -> str:
     """生成两个 NPC 间的唯一闲聊键（字典序，保证 a+b == b+a）。"""
     pair = sorted([npc_a, npc_b])
-    return f"{pair[0]}+{pair[1]}"
+    return f"{player_id}:{pair[0]}+{pair[1]}"
 
 
 def _get_attitude(npc_id: str, target_id: str) -> tuple[str, float]:
@@ -213,7 +213,7 @@ def maybe_npc_gossip(p, *, ticks: int = 1) -> int:
                     continue
 
                 # 冷却检查
-                gk = _gossip_key(npc_a, npc_b)
+                gk = _gossip_key(p.player_id, npc_a, npc_b)
                 last = _last_gossip.get(gk, 0)
                 if (now - last) < GOSSIP_COOLDOWN_S:
                     continue

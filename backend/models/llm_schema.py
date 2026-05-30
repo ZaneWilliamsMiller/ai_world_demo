@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 
 class StateUpdate(BaseModel):
@@ -18,18 +20,21 @@ class RepDelta(BaseModel):
 
 class NpcResponseSchema(BaseModel):
     """NPC 对话回复与状态变更"""
+
+    model_config = ConfigDict(extra="forbid")
+
     visible_text: str = Field(..., description="NPC 对玩家说的话（展示给玩家的正文），包含动作和神态描写。")
     favor_delta: int = Field(0, ge=-3, le=3, description="对眼前这位旅客态度的起伏")
     coin_delta: int = Field(0, ge=-200, le=200, description="玩家随身制钱的真实增减（赚到/付出/被讹/赏赐都用这一行写实数；无变化则 0)")
-    items_gain: list[str] = Field(default_factory=list, description="玩家实际得到的信物/凭证/线索（每项≤8字）")
-    items_lose: list[str] = Field(default_factory=list, description="玩家被夺/消耗/弃置之物（每项≤8字）")
+    items_gain: list[Annotated[str, StringConstraints(max_length=8)]] = Field(default_factory=list, description="玩家实际得到的信物/凭证/线索（每项≤8字）")
+    items_lose: list[Annotated[str, StringConstraints(max_length=8)]] = Field(default_factory=list, description="玩家被夺/消耗/弃置之物（每项≤8字）")
     rep_delta: RepDelta | None = Field(None, description="玩家在各势力的声望涨跌")
-    events: list[str] = Field(default_factory=list, description="一句话江湖事件（≤40字），你叙述里真正发生或别处正在发生的事")
+    events: list[Annotated[str, StringConstraints(max_length=40)]] = Field(default_factory=list, description="一句话江湖事件（≤40字），你叙述里真正发生或别处正在发生的事")
     permadeath: str | None = Field(None, description="死因简述（仅真实江湖且确该死时填写）")
     state_update: StateUpdate | None = Field(None, description="玩家气质四维的变化")
     vigor_delta: int = Field(0, ge=-60, le=60, description="玩家体力变化：奔走、打斗、伤口、酒色淘空都减；歇脚、温食、按摩、安寝都加。")
     spirit_delta: int = Field(0, ge=-60, le=60, description="玩家心气变化：恐惧、屈辱、丧友、被讹都减；得手、舒怀、贵人示好、雅事悟道都加。")
-    escape_outcome: str | None = Field(
+    escape_outcome: Literal["success", "progress", "fail"] | None = Field(
         None,
         description=(
             "若玩家此前身陷险局（move_locked），本轮的脱困结果："

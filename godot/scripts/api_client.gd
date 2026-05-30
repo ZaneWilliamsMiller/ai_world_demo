@@ -71,6 +71,7 @@ func request(path: String, method: String = "GET", body: Dictionary = {}, extra_
 ## Talk to NPC with Server-Sent Events (streaming).
 signal stream_chunk(chunk: String)
 signal stream_done(data: Dictionary)
+signal shutdown_secret_required()
 
 func _base_url() -> String:
 	return backend_url.rstrip("/")
@@ -198,12 +199,10 @@ func talk_stream(npc_id: String, message: String, player_id: String = "") -> voi
 		emit_signal("stream_done", {"error": "HTTP %d: %s" % [response_code, error_text.left(200)], "done": true})
 		return
 
-	var frame_count := 0
-	var max_frames := 60 * 60
+	var _stream_start_msec := Time.get_ticks_msec()
 	while http.get_status() == HTTPClient.STATUS_BODY:
 		http.poll()
-		frame_count += 1
-		if frame_count > max_frames:
+		if (Time.get_ticks_msec() - _stream_start_msec) > 120000:
 			http.close()
 			_end_stream()
 			emit_signal("stream_done", {"error": "流式响应超时", "done": true})
@@ -250,7 +249,14 @@ func test_backend() -> bool:
 	var res: Dictionary = await request("/api/health", "GET", {})
 	if res.get("_status", 0) == 200 and res.get("status", "") == "ok":
 		if res.get("shutdown_configured") == "true" and shutdown_secret == "":
-			shutdown_secret = "dev"
+			shutdown_secret_required.emit()
+		return true
+	return false
+
+
+func test_llm() -> bool:
+	var res: Dictionary = await request("/api/tests/run-module/unit/llm", "POST", {})
+	if res.get("_status", 0) == 200 and res.get("success", false):
 		return true
 	return false
 
@@ -269,7 +275,7 @@ func shutdown_backend() -> Dictionary:
 
 ## Wait (advance time by 1 tick).
 func player_wait() -> Dictionary:
-	var res: Dictionary = await request("/api/wait", "POST", {})
+	var res: Dictionary = await request("/api/wait", "POST", { "player_id": GameManager.player_id })
 	if res.get("_status", 0) == 200:
 		res.erase("_status")
 		return res

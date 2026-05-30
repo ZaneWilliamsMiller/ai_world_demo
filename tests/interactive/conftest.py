@@ -12,10 +12,46 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import httpx
+import pytest
 
 from backend.data.npcs_data import NPCS
 
 _BASE_URL = os.environ.get("BACKEND_URL", "http://127.0.0.1:8765")
+
+_LOCK_FILE = None
+
+
+def _acquire_lock(f):
+    if sys.platform == "win32":
+        import msvcrt
+        msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)
+    else:
+        import fcntl
+        fcntl.flock(f, fcntl.LOCK_EX)
+
+
+def _release_lock(f):
+    if sys.platform == "win32":
+        import msvcrt
+        msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        import fcntl
+        fcntl.flock(f, fcntl.LOCK_UN)
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _serial_lock():
+    global _LOCK_FILE
+    lock_path = Path(__file__).resolve().parent / ".interactive.lock"
+    _LOCK_FILE = open(lock_path, "w")
+    _acquire_lock(_LOCK_FILE)
+    yield
+    _release_lock(_LOCK_FILE)
+    _LOCK_FILE.close()
+    try:
+        lock_path.unlink(missing_ok=True)
+    except Exception:
+        pass
 
 _NPC_CELL_MAP: dict[str, tuple[int, int]] = {}
 for _nid, _meta in NPCS.items():
@@ -82,17 +118,22 @@ class InteractiveClient:
 
     def talk(self, npc_id: str, message: str, timeout: float = 60.0) -> dict[str, Any]:
         t0 = time.time()
-        try:
-            resp = self.client.post("/api/npc/talk", json={
-                "player_id": self.player_id,
-                "npc_id": npc_id,
-                "message": message,
-            }, timeout=timeout)
-        except Exception as e:
-            elapsed = round(time.time() - t0, 1)
-            entry = {"npc": npc_id, "player": message, "reply": "", "error": str(e), "elapsed": elapsed, "favor_delta": 0, "coin_delta": 0}
-            self._dialogue_log.append(entry)
-            return {"success": False, "error": str(e), "elapsed": elapsed}
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                resp = self.client.post("/api/npc/talk", json={
+                    "player_id": self.player_id,
+                    "npc_id": npc_id,
+                    "message": message,
+                }, timeout=timeout)
+                if resp.status_code == 429 and attempt < max_retries - 1:
+                    time.sleep(5 * (attempt + 1))
+                    continue
+            except Exception as e:
+                elapsed = round(time.time() - t0, 1)
+                entry = {"npc": npc_id, "player": message, "reply": "", "error": str(e), "elapsed": elapsed, "favor_delta": 0, "coin_delta": 0}
+                self._dialogue_log.append(entry)
+                return {"success": False, "error": str(e), "elapsed": elapsed}
         elapsed = round(time.time() - t0, 1)
         if resp.status_code != 200:
             entry = {"npc": npc_id, "player": message, "reply": "", "error": f"HTTP {resp.status_code}", "elapsed": elapsed, "favor_delta": 0, "coin_delta": 0}

@@ -74,6 +74,12 @@
 │  │  │• NPC    │ │• Maps   │ │• format │            │       │
 │  │  │• Schema │ │• Prompts│ │• retriev│            │       │
 │  │  └─────────┘ └─────────┘ └─────────┘            │       │
+│  │                                                    │       │
+│  │  ┌─────────────────────────────────────────┐      │       │
+│  │  │          API Schema 契约层                │      │       │
+│  │  │  Pydantic 响应模型 · OpenAPI · TS 类型   │      │       │
+│  │  │  JSON Schema · 前后端类型同步             │      │       │
+│  │  └─────────────────────────────────────────┘      │       │
 │  └──────────────────────────────────────────────────┘       │
 │                         │                                  │
 │           ┌─────────────┼─────────────┐                  │
@@ -101,19 +107,32 @@ living-paper/
 ├── 📁 backend/                 # Python 后端 (FastAPI)
 │   ├── app.py                 # 主应用：路由注册、生命周期管理
 │   ├── config.py              # 全局配置（LLM、端口、系统参数）
-│   ├── llm_client.py          # LLM HTTP 客户端（连接池、熔断器）
-│   ├── circuit_breaker.py     # 熔断器机制（防止级联故障）
-│   ├── llm_cache.py           # Prompt Cache 缓存层
 │   ├── memory_index.py        # 记忆索引管理
-│   ├── game_state.py          # 全局游戏状态
-│   ├── agent_brain.py         # NPC AI 大脑核心逻辑
+│   │
+│   ├── llm/                   # LLM 客户端层
+│   │   ├── client.py          # LLM HTTP 客户端（连接池）
+│   │   ├── cache.py           # Prompt Cache 缓存层
+│   │   ├── circuit_breaker.py # 熔断器机制（防止级联故障）
+│   │   ├── params.py          # LLM 调用参数管理
+│   │   └── prompt_compress.py # Prompt 压缩优化
+│   │
+│   ├── agents/                # NPC 智能体
+│   │   ├── actor.py           # NPC 行动执行器
+│   │   ├── brain.py           # NPC AI 大脑核心逻辑
+│   │   └── game_state.py      # 全局游戏状态
 │   │
 │   ├── api/                   # HTTP 路由层
-│   │   ├── routes.py          # 主路由注册（26个端点）
+│   │   ├── routes.py          # 主路由注册
 │   │   ├── player_routes.py   # 玩家接口（移动、状态、休息）
 │   │   ├── npc_routes.py      # NPC 接口（对话、心迹、反思）
 │   │   ├── save_routes.py     # 存档接口（保存、加载、删除）
-│   │   └── test_routes.py     # 🔧 测试接口（新增）
+│   │   ├── admin_routes.py    # 管理接口（指标、熔断器、调试）
+│   │   ├── dev.py             # 开发调试路由
+│   │   ├── views.py           # 页面视图路由
+│   │   └── schema.py          # API Schema 契约定义（Pydantic 响应模型）
+│   │
+│   ├── observability/         # 可观测性
+│   │   └── tracker.py         # 调用追踪与指标采集
 │   │
 │   ├── models/                # 领域模型
 │   │   ├── player.py         # 玩家数据结构
@@ -134,7 +153,6 @@ living-paper/
 │   │   ├── reputation.py      # 声望系统
 │   │   ├── bounty_board.py    # 悬赏榜系统
 │   │   ├── trap.py           # 移动锁定陷阱系统
-│   │   ├── prompt_compress.py # Prompt 压缩优化
 │   │   ├── npc_state.py       # NPC 状态机
 │   │   ├── npc_gossip.py      # NPC 八卦闲聊系统
 │   │   └── save_system.py     # 存档系统
@@ -169,7 +187,9 @@ living-paper/
 │       ├── dialogue.js        # 对话 UI 管理
 │       ├── ui.js              # UI 组件（确认对话框、提示框）
 │       ├── store.js           # 本地存储
-│       └── llm-test.js        # LLM 连接测试工具
+│       ├── html-utils.js      # HTML 工具函数
+│       ├── tests.js           # 测试中心逻辑
+│       └── api-types.d.ts     # API TypeScript 类型声明
 │
 ├── 📁 godot/                   # Godot 桌面端
 │   ├── project.godot          # Godot 项目文件
@@ -178,29 +198,36 @@ living-paper/
 │   │   └── game.tscn          # 游戏主场景
 │   │
 │   └── scripts/               # GDScript 脚本
+│       ├── api_client.gd      # HTTP 客户端（异步请求）
 │       ├── game_manager.gd    # 全局游戏管理器
 │       ├── main_game.gd       # 主游戏逻辑（测试中心、关闭服务）
-│       ├── login_screen.gd    # 登录界面
-│       ├── api_client.gd      # HTTP 客户端（异步请求）
 │       ├── map_renderer.gd    # 地图渲染器
-│       ├── dialogue_ui.gd     # 对话界面
+│       ├── dialog_manager.gd  # 对话管理器
+│       ├── message_display.gd # 消息显示组件
+│       ├── config_panel.gd    # 配置面板
+│       ├── ui_builder.gd      # 动态 UI 构建器
+│       ├── game_colors.gd     # 游戏色彩常量
+│       ├── shutdown_service.gd # 关闭服务管理
+│       ├── test_center.gd     # 测试中心
 │       └── llm_test.gd        # LLM 连接测试
+│
+│   └── api-schema/            # API JSON Schema 契约文件
 │
 ├── 📁 tests/                   # 自动化测试脚本
 │   ├── conftest.py            # Pytest 配置
-│   ├── test_backend.py        # 后端基础测试
-│   ├── test_e2e.py            # 端到端测试
-│   ├── test_diagnose_talk.py  # NPC 对话诊断
-│   ├── test_500_error.py      # 500 错误排查
-│   ├── test_direct_talk.py    # 直接对话测试
-│   ├── test_llm_json.py       # LLM JSON 格式验证
-│   ├── test_npc_talk.py       # NPC 对话 API 测试
-│   └── ...                    # 更多测试脚本
+│   ├── unit/                  # 单元测试
+│   ├── integration/           # 集成测试
+│   └── interactive/           # 交互式测试
 │
 ├── 📁 tools/                   # 开发辅助工具
-│   ├── auto_test.py           # 自动化连续测试
-│   ├── debug_talk.py          # 对话调试工具
+│   ├── gen_ts_schema.py       # TypeScript 类型生成
+│   ├── gen_json_schema.py     # JSON Schema 生成
+│   ├── check_arch.py          # 架构一致性检查
+│   ├── check_map.py           # 地图数据完整性检查
+│   ├── diagnose_500.py        # 500 错误诊断
+│   ├── diagnose_talk.py       # NPC 对话诊断
 │   ├── gen_map.py             # 地图生成工具
+│   ├── show_maps.py           # 地图可视化展示
 │   ├── smoke_api.py           # API 冒烟测试
 │   └── verify_all.py          # 全面验证脚本
 │
@@ -365,6 +392,31 @@ python -m uvicorn backend.app:app --host 127.0.0.1 --port 8765
 | POST | `/api/load` | 读档恢复 |
 | POST | `/api/delete-save` | 删除存档 |
 
+#### Agent 行动 API
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| POST | `/api/agent/{pid}/{npc}/act` | NPC 单步行动 |
+| POST | `/api/agent/{pid}/{npc}/act_loop` | NPC 行动循环（多步） |
+| POST | `/api/agent/{pid}/{npc}/act_loop_stream` | NPC 行动循环（SSE 流式） |
+
+#### 等待 API
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| POST | `/api/wait` | 等待（推进时辰） |
+
+#### Admin API
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| GET | `/api/admin/metrics` | 系统指标查询 |
+| GET | `/api/admin/circuit_breaker` | 熔断器状态查询 |
+| GET | `/api/admin/players` | 在线玩家列表 |
+| GET | `/api/admin/npc_states` | NPC 状态快照 |
+| POST | `/api/admin/eval` | 执行调试表达式 |
+| GET | `/api/admin/recent_calls` | 最近 LLM 调用记录 |
+
 #### 管理 API
 
 | 方法 | 端点 | 说明 |
@@ -421,14 +473,16 @@ python test_diagnose_talk.py
 
 | 脚本 | 功能 |
 |------|------|
-| `auto_test.py` | 自动化连续 API 测试 |
-| `debug_talk.py` | 交互式对话调试 |
+| `gen_ts_schema.py` | 从 Pydantic 模型生成 TypeScript 类型声明 |
+| `gen_json_schema.py` | 从 Pydantic 模型生成 JSON Schema |
+| `check_arch.py` | 架构一致性检查 |
+| `check_map.py` | 地图数据完整性检查 |
+| `diagnose_500.py` | 500 错误诊断 |
+| `diagnose_talk.py` | NPC 对话诊断 |
 | `gen_map.py` | 地图数据可视化生成 |
+| `show_maps.py` | 地图可视化展示 |
 | `smoke_api.py` | API 冒烟测试（快速验证） |
 | `verify_all.py` | 全面系统验证 |
-| `check_map.py` | 地图数据完整性检查 |
-| `check_url.py` | URL 配置验证 |
-| `check_json.py` | JSON 格式校验 |
 
 ### CI/CD
 
@@ -436,6 +490,7 @@ python test_diagnose_talk.py
 - 后端单元测试
 - API 集成测试
 - LLM 连通性验证
+- Schema 契约检查（Pydantic ↔ TypeScript ↔ JSON Schema 一致性）
 
 ---
 
@@ -540,8 +595,9 @@ LLM Client.chat()
 |------|------|
 | **地图尺寸** | 150×100 = 15,000 格子 |
 | **NPC 数量** | 19 个（各有独立 AI） |
-| **API 端点数** | 25 个 |
-| **测试脚本数** | 18+ 个 |
+| **API 端点数** | 44 个 |
+| **测试用例数** | 1,320+ 个 |
+| **API Schema 契约层** | Pydantic 响应模型 + OpenAPI + TypeScript 类型 + JSON Schema |
 | **代码总量** | ~15,000 行 Python + ~5,000 行 GDScript + ~3,000 行 JS |
 | **Prompt Cache 命中率** | ~80%（降低延迟 50%） |
 | **平均对话延迟** | 2-5 秒（取决于 LLM） |
@@ -554,7 +610,8 @@ LLM Client.chat()
 
 | 日期 | 里程碑 |
 |------|--------|
-| **05-28** | 🎉 **本次更新**：测试中心 + 关闭服务 + 错误优化 + Godot同步 |
+| **05-31** | 🔧 **本次更新**：API Schema 契约层建立 + 全项目交叉检查修复（JSON提取/缓存键/压缩键名/Godot字段同步等） |
+| **05-28** | 测试中心 + 关闭服务 + 错误优化 + Godot同步 |
 | **05-27** | 代词消解动态化 + 记忆摘要情感增强 + 双前端架构合并 |
 | **05-26** | 后端架构优化：连接池/熔断器/缓存/记忆索引/悬赏榜/Prompt压缩 |
 | **05-25** | 心境一致性记忆检索；夜间反思保护；复活清奴役终局 |

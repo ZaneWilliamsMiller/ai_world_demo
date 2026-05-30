@@ -48,18 +48,18 @@ class LlmResponseCache:
         self._misses = 0
 
     @staticmethod
-    def _digest(messages: list[dict[str, Any]], *, temperature: float = 0.0, model: str = "", max_tokens: int = 0) -> str:
+    def _digest(messages: list[dict[str, Any]], *, temperature: float = 0.0, model: str = "", max_tokens: int = 0, response_format: dict[str, Any] | None = None, base_url: str = "") -> str:
         """生成 messages 的固定哈希（包含 content、role 和调用参数）。"""
         h = hashlib.sha256()
         for m in messages:
             h.update(m.get("role", "").encode())
             h.update(_content_str(m.get("content", "")).encode())
-        params = f"{temperature}:{model}:{max_tokens}"
+        params = f"{base_url}:{temperature}:{model}:{max_tokens}:{response_format or ''}"
         h.update(params.encode())
         return h.hexdigest()
 
-    async def get(self, messages: list[dict[str, Any]], *, temperature: float = 0.0, model: str = "", max_tokens: int = 0) -> str | None:
-        key = self._digest(messages, temperature=temperature, model=model, max_tokens=max_tokens)
+    async def get(self, messages: list[dict[str, Any]], *, temperature: float = 0.0, model: str = "", max_tokens: int = 0, response_format: dict[str, Any] | None = None, base_url: str = "") -> str | None:
+        key = self._digest(messages, temperature=temperature, model=model, max_tokens=max_tokens, response_format=response_format, base_url=base_url)
         async with self._lock:
             entry = self._store.get(key)
             if entry is None:
@@ -77,8 +77,8 @@ class LlmResponseCache:
                       self._hits, self.hit_rate * 100)
             return entry.content
 
-    async def set(self, messages: list[dict[str, Any]], content: str, *, temperature: float = 0.0, model: str = "", max_tokens: int = 0) -> None:
-        key = self._digest(messages, temperature=temperature, model=model, max_tokens=max_tokens)
+    async def set(self, messages: list[dict[str, Any]], content: str, *, temperature: float = 0.0, model: str = "", max_tokens: int = 0, response_format: dict[str, Any] | None = None, base_url: str = "") -> None:
+        key = self._digest(messages, temperature=temperature, model=model, max_tokens=max_tokens, response_format=response_format, base_url=base_url)
         async with self._lock:
             if key in self._store:
                 self._store.move_to_end(key)

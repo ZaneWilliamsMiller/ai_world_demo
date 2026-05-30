@@ -14,7 +14,7 @@ from backend.observability.tracker import CallRecord, CallTracker, get_tracker
 
 
 def _record(tracker: CallTracker, call: CallRecord) -> None:
-    asyncio.run(tracker.record(call))
+    tracker.record(call)
 
 
 @pytest.fixture(autouse=True)

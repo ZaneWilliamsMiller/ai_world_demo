@@ -12,6 +12,7 @@ window.App = window.App || {};
   var interactiveModules = [];
   var interactiveResults = {};
   var interactiveStats = { success: 0, failed: 0 };
+  var _interactiveRunning = false;
 
   function apiBase() {
     return "/api";
@@ -515,7 +516,48 @@ window.App = window.App || {};
     btn.textContent = '\u25b6 \u5168\u90e8\u6d4b\u8bd5';
   }
 
+  function _disableOtherInteractiveButtons(btn) {
+    document.querySelectorAll('#interactivePanel .test-center-btn-sm').forEach(function(b) {
+      if (b !== btn) { b.disabled = true; b.dataset.wasRunning = 'true'; b.textContent = '⏳ 等待中'; }
+    });
+    var modBtns = document.querySelectorAll('#interactivePanel .module-run-btn');
+    modBtns.forEach(function(b) {
+      if (b !== btn) { b.disabled = true; b.dataset.wasRunning = 'true'; }
+    });
+    var allBtn = document.getElementById('interactiveRunAllBtn');
+    if (allBtn && allBtn !== btn) { allBtn.disabled = true; allBtn.dataset.wasRunning = 'true'; }
+  }
+
+  function _releaseInteractiveButtons(btn) {
+    btn.disabled = false;
+    btn.textContent = '\u25b6';
+    _interactiveRunning = false;
+    document.querySelectorAll('#interactivePanel .test-center-btn-sm').forEach(function(b) {
+      if (b.dataset.wasRunning === 'true') {
+        b.disabled = false;
+        b.textContent = '\u25b6';
+        delete b.dataset.wasRunning;
+      }
+    });
+    document.querySelectorAll('#interactivePanel .module-run-btn').forEach(function(b) {
+      if (b.dataset.wasRunning === 'true') {
+        b.disabled = false;
+        b.textContent = '\u25b6 \u4e00\u952e\u6d4b\u8bd5';
+        delete b.dataset.wasRunning;
+      }
+    });
+    var allBtn = document.getElementById('interactiveRunAllBtn');
+    if (allBtn && allBtn.dataset.wasRunning === 'true') {
+      allBtn.disabled = false;
+      allBtn.textContent = '\u25b6 \u5168\u90e8\u4ea4\u4e92\u6d4b\u8bd5';
+      delete allBtn.dataset.wasRunning;
+    }
+  }
+
   async function runInteractiveSingleTest(testName, btn) {
+    if (_interactiveRunning) return;
+    _interactiveRunning = true;
+    _disableOtherInteractiveButtons(btn);
     btn.disabled = true;
     btn.textContent = '\u23f3';
 
@@ -532,25 +574,33 @@ window.App = window.App || {};
     var dialogueLines = [];
 
     try {
-      var resp = await fetch(apiBase() + '/tests/interactive/stream/' + testName);
+      var resp = null;
+      var maxRetries = 3;
+      for (var retry = 0; retry <= maxRetries; retry++) {
+        resp = await fetch(apiBase() + '/tests/interactive/stream/' + testName);
+        if (resp.status !== 429) break;
+        if (retry < maxRetries) {
+          var delay = (retry + 1) * 3;
+          statusEl.textContent = '\u23f3 \u7b49\u5f85\u4e2d (' + delay + 's)...';
+          await new Promise(function(r) { setTimeout(r, delay * 1000); });
+        }
+      }
       if (!resp.ok) {
         statusEl.className = 'test-row-status status-error';
         statusEl.textContent = '\u274c \u670d\u52a1\u7aef\u9519\u8bef ' + resp.status;
         resultEl.textContent = '\u8bf7\u6c42\u5931\u8d25: HTTP ' + resp.status;
-        interactiveStats.failed++;
+        interactiveResults[testName] = { success: false };
         updateInteractiveStats();
-        btn.disabled = false;
-        btn.textContent = '\u25b6';
+        _releaseInteractiveButtons(btn);
         return;
       }
       if (!resp.body) {
         statusEl.className = 'test-row-status status-error';
         statusEl.textContent = '\u274c \u65e0\u54cd\u5e94\u4f53';
         resultEl.textContent = '\u8bf7\u6c42\u5931\u8d25: \u65e0\u54cd\u5e94\u4f53';
-        interactiveStats.failed++;
+        interactiveResults[testName] = { success: false };
         updateInteractiveStats();
-        btn.disabled = false;
-        btn.textContent = '\u25b6';
+        _releaseInteractiveButtons(btn);
         return;
       }
       var reader = resp.body.getReader();
@@ -585,11 +635,9 @@ window.App = window.App || {};
             if (data.success) {
               statusEl.className = 'test-row-status status-success';
               statusEl.textContent = '\u2705 ' + elapsed + 's';
-              interactiveStats.success++;
             } else {
               statusEl.className = 'test-row-status status-error';
               statusEl.textContent = '\u274c ' + elapsed + 's';
-              interactiveStats.failed++;
             }
 
             var fullText = '';
@@ -640,12 +688,11 @@ window.App = window.App || {};
       statusEl.className = 'test-row-status status-error';
       statusEl.textContent = '\u274c \u9519\u8bef';
       resultEl.textContent += '\n\u8bf7\u6c42\u5931\u8d25: ' + err.message;
-      interactiveStats.failed++;
+      interactiveResults[testName] = { success: false };
       updateInteractiveStats();
     }
 
-    btn.disabled = false;
-    btn.textContent = '\u25b6';
+    _releaseInteractiveButtons(btn);
   }
 
   async function runInteractiveModule(moduleId, btn, fromRunAll) {
@@ -905,14 +952,8 @@ window.App = window.App || {};
       var testName = el.getAttribute('data-test-name');
       var resultEl = el.querySelector('.output-box');
 
-      if (!verbose) {
-        if (testResults[testName] && testResults[testName].success) {
-          el.classList.remove('show');
-        }
-      } else {
-        if (testResults[testName]) {
-          el.classList.add('show');
-        }
+      if (testResults[testName]) {
+        el.classList.add('show');
       }
 
       if (resultEl && testResults[testName]) {
@@ -930,14 +971,8 @@ window.App = window.App || {};
       var testName = el.getAttribute('data-test-name');
       var resultEl = el.querySelector('.output-box');
 
-      if (!interactiveVerbose) {
-        if (interactiveResults[testName] && interactiveResults[testName].success) {
-          el.classList.remove('show');
-        }
-      } else {
-        if (interactiveResults[testName]) {
-          el.classList.add('show');
-        }
+      if (interactiveResults[testName]) {
+        el.classList.add('show');
       }
 
       if (resultEl && interactiveResults[testName]) {
@@ -958,10 +993,16 @@ window.App = window.App || {};
   }
 
   function updateInteractiveStats() {
+    var s = 0, f = 0;
+    for (var k in interactiveResults) {
+      if (interactiveResults[k].success) s++; else f++;
+    }
+    interactiveStats.success = s;
+    interactiveStats.failed = f;
     var successEl = document.getElementById('interactiveSuccess');
-    if (successEl) successEl.textContent = interactiveStats.success;
+    if (successEl) successEl.textContent = s;
     var failedEl = document.getElementById('interactiveFailed');
-    if (failedEl) failedEl.textContent = interactiveStats.failed;
+    if (failedEl) failedEl.textContent = f;
   }
 
   window.TestCenter = {

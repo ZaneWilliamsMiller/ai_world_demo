@@ -1,0 +1,11 @@
+{
+  "properties": {
+    "ok": {
+      "default": true,
+      "title": "Ok",
+      "type": "boolean"
+    }
+  },
+  "title": "SaveResponse",
+  "type": "object"
+}

@@ -1,0 +1,11 @@
+{
+  "properties": {
+    "ok": {
+      "default": false,
+      "title": "Ok",
+      "type": "boolean"
+    }
+  },
+  "title": "DeleteSaveResponse",
+  "type": "object"
+}

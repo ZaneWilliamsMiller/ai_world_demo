@@ -1,0 +1,23 @@
+{
+  "properties": {
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "module_id": {
+      "title": "Module Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "description",
+    "module_id"
+  ],
+  "title": "InteractiveTestInfoResponse",
+  "type": "object"
+}

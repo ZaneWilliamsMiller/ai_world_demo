@@ -949,17 +949,20 @@ class TestFormatEncounterPerceptionBlock:
 
 class TestGossipKey:
     def test_sorted_order(self):
-        assert _gossip_key("b", "a") == "a+b"
+        assert _gossip_key("p1", "b", "a") == "p1:a+b"
 
     def test_same_order(self):
-        assert _gossip_key("a", "b") == "a+b"
+        assert _gossip_key("p1", "a", "b") == "p1:a+b"
 
     def test_identical(self):
-        result = _gossip_key("x", "x")
-        assert result == "x+x"
+        result = _gossip_key("p1", "x", "x")
+        assert result == "p1:x+x"
 
     def test_communicative(self):
-        assert _gossip_key("npc_a", "npc_b") == _gossip_key("npc_b", "npc_a")
+        assert _gossip_key("p1", "npc_a", "npc_b") == _gossip_key("p1", "npc_b", "npc_a")
+
+    def test_different_players_isolated(self):
+        assert _gossip_key("p1", "a", "b") != _gossip_key("p2", "a", "b")
 
 
 class TestGetAttitude:

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import logging
 import random
@@ -17,6 +18,24 @@ from pydantic import BaseModel, Field
 from backend.agents import brain as agent_brain
 from backend.agents.actor import act_loop, execute_plan_step_async
 from backend.agents.game_state import get_or_init_mind
+from backend.api.schema import (
+    AgentActLoopResponse,
+    AgentActResponse,
+    AgentMindResponse,
+    AgentPlanResponse,
+    AgentReflectResponse,
+    BountyAbandonResponse,
+    BountyAcceptResponse,
+    BountyCheckResponse,
+    BountyCompleteResponse,
+    BountyRefreshResponse,
+    BountyStateResponse,
+    FinaleResponse,
+    ItemUseResponse,
+    RestResponse,
+    TalkResponse,
+    WaitResponse,
+)
 from backend.api.views import npcs_here as _npcs_here, player_public as _player_public
 from backend.data.factions import FACTIONS
 from backend.data.npcs_data import NPCS
@@ -137,8 +156,8 @@ def _validate_talk_request(body: TalkBody):
     return p, npc
 
 
-@router.post("/api/item/use")
-async def use_item(body: UseItemBody) -> dict[str, Any]:
+@router.post("/api/item/use", response_model=ItemUseResponse)
+async def use_item(body: UseItemBody):
     from backend.session.store import room
     p = room.players.get(body.player_id)
     if not p:
@@ -148,7 +167,7 @@ async def use_item(body: UseItemBody) -> dict[str, Any]:
     if p.ended:
         raise HTTPException(400, "本局已收束")
     if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
-        pass
+        raise HTTPException(409, "角色处于昏迷状态")
     if getattr(p, "enslaved", False):
         raise HTTPException(403, "你正被奴役，无法使用物品")
 
@@ -168,8 +187,8 @@ async def use_item(body: UseItemBody) -> dict[str, Any]:
     }
 
 
-@router.post("/api/rest")
-async def player_rest(body: RestBody) -> dict[str, Any]:
+@router.post("/api/rest", response_model=RestResponse)
+async def player_rest(body: RestBody):
     from backend.data.atmosphere import scene_context
     from backend.session.store import room
     p = room.players.get(body.player_id)
@@ -180,7 +199,7 @@ async def player_rest(body: RestBody) -> dict[str, Any]:
     if p.ended:
         raise HTTPException(400, "本局已收束")
     if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
-        pass
+        raise HTTPException(409, "角色处于昏迷状态")
     if getattr(p, "enslaved", False):
         raise HTTPException(403, "你正被奴役，无法歇息")
     if getattr(p, "move_locked", False):
@@ -213,8 +232,8 @@ async def player_rest(body: RestBody) -> dict[str, Any]:
 class WaitBody(BaseModel):
     player_id: str = _PID
 
-@router.post("/api/wait")
-async def player_wait(body: WaitBody) -> dict[str, Any]:
+@router.post("/api/wait", response_model=WaitResponse)
+async def player_wait(body: WaitBody):
     from backend.session.store import room
     from backend.systems.time_weather import advance_clock
     from backend.data.atmosphere import scene_context
@@ -261,8 +280,8 @@ async def player_wait(body: WaitBody) -> dict[str, Any]:
     }
 
 
-@router.post("/api/npc/talk")
-async def npc_talk(body: TalkBody, bg: BackgroundTasks) -> dict[str, Any]:
+@router.post("/api/npc/talk", response_model=TalkResponse)
+async def npc_talk(body: TalkBody, bg: BackgroundTasks):
     if _talk_limiter.is_limited(body.player_id):
         raise HTTPException(429, "对话过于频繁，请稍后再试")
     try:
@@ -303,7 +322,7 @@ async def npc_talk(body: TalkBody, bg: BackgroundTasks) -> dict[str, Any]:
             )
 
         # eval 埋点
-        await get_tracker().record(CallRecord(
+        get_tracker().record(CallRecord(
             timestamp=time.time(),
             operation="npc_talk",
             model="",
@@ -396,7 +415,7 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
             return
 
         # eval 埋点
-        await get_tracker().record(CallRecord(
+        get_tracker().record(CallRecord(
             timestamp=time.time(),
             operation="npc_talk",
             model="",
@@ -451,8 +470,8 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
     )
 
 
-@router.get("/api/agent/{player_id}/{npc_id}/mind")
-async def agent_mind(player_id: str = Path(..., min_length=1, max_length=64), npc_id: str = Path(..., min_length=1, max_length=64)) -> dict[str, Any]:
+@router.get("/api/agent/{player_id}/{npc_id}/mind", response_model=AgentMindResponse)
+async def agent_mind(player_id: str = Path(..., min_length=1, max_length=64), npc_id: str = Path(..., min_length=1, max_length=64)):
     from backend.session.store import room
     p = room.players.get(player_id)
     if not p:
@@ -465,36 +484,44 @@ async def agent_mind(player_id: str = Path(..., min_length=1, max_length=64), np
         raise HTTPException(404, "未知 npc_id")
     async with p.lock:
         mind = p.minds.get(npc_id)
-    if mind is None:
-        return {
-            "npc_id": npc_id,
-            "npc_name": NPCS.get(npc_id, {}).get("name", npc_id),
-            "items": [],
-            "plan_day": None,
-            "plan_summary": "",
-            "plan_by_shichen": {},
-            "affect_valence": 0.0,
-            "affect_arousal": 5.0,
-            "affect_mood": "平静",
-            "affect_cause": "",
-        }
+        if mind is None:
+            return {
+                "npc_id": npc_id,
+                "npc_name": NPCS.get(npc_id, {}).get("name", npc_id),
+                "items": [],
+                "plan_day": None,
+                "plan_summary": "",
+                "plan_by_shichen": {},
+                "affect_valence": 0.0,
+                "affect_arousal": 5.0,
+                "affect_mood": "平静",
+                "affect_cause": "",
+            }
+        items_snapshot = [m.to_dict() for m in mind.items]
+        plan_day = mind.plan_day
+        plan_summary = mind.plan_summary
+        plan_by_shichen = dict(mind.plan_by_shichen)
+        affect_valence = float(mind.affect_valence)
+        affect_arousal = float(mind.affect_arousal)
+        affect_mood = mind.affect_mood
+        affect_cause = mind.affect_cause
     return {
         "npc_id": npc_id,
         "npc_name": NPCS.get(npc_id, {}).get("name", npc_id),
-        "items": [m.to_dict() for m in mind.items],
+        "items": items_snapshot,
         "importance_since_reflect": float(mind.importance_since_reflect),
-        "plan_day": mind.plan_day,
-        "plan_summary": mind.plan_summary,
-        "plan_by_shichen": dict(mind.plan_by_shichen),
-        "affect_valence": float(mind.affect_valence),
-        "affect_arousal": float(mind.affect_arousal),
-        "affect_mood": mind.affect_mood,
-        "affect_cause": mind.affect_cause,
+        "plan_day": plan_day,
+        "plan_summary": plan_summary,
+        "plan_by_shichen": plan_by_shichen,
+        "affect_valence": affect_valence,
+        "affect_arousal": affect_arousal,
+        "affect_mood": affect_mood,
+        "affect_cause": affect_cause,
     }
 
 
-@router.post("/api/agent/reflect")
-async def agent_reflect(body: AgentActBody) -> dict[str, Any]:
+@router.post("/api/agent/reflect", response_model=AgentReflectResponse)
+async def agent_reflect(body: AgentActBody):
     from backend.session.store import room
     p = room.players.get(body.player_id)
     if not p:
@@ -527,8 +554,8 @@ async def agent_reflect(body: AgentActBody) -> dict[str, Any]:
     }
 
 
-@router.post("/api/agent/plan")
-async def agent_plan(body: AgentActBody) -> dict[str, Any]:
+@router.post("/api/agent/plan", response_model=AgentPlanResponse)
+async def agent_plan(body: AgentActBody):
     from backend.session.store import room
     p = room.players.get(body.player_id)
     if not p:
@@ -562,8 +589,8 @@ async def agent_plan(body: AgentActBody) -> dict[str, Any]:
     }
 
 
-@router.post("/api/agent/act")
-async def agent_act(body: AgentActBody) -> dict[str, Any]:
+@router.post("/api/agent/act", response_model=AgentActResponse)
+async def agent_act(body: AgentActBody):
     from backend.session.store import room
     p = room.players.get(body.player_id)
     if not p:
@@ -588,8 +615,8 @@ async def agent_act(body: AgentActBody) -> dict[str, Any]:
     }
 
 
-@router.post("/api/agent/act_loop")
-async def agent_act_loop(body: AgentActLoopBody) -> dict[str, Any]:
+@router.post("/api/agent/act_loop", response_model=AgentActLoopResponse)
+async def agent_act_loop(body: AgentActLoopBody):
     from backend.session.store import room
     p = room.players.get(body.player_id)
     if not p:
@@ -691,7 +718,7 @@ async def agent_act_loop_stream(body: AgentActLoopStreamBody) -> StreamingRespon
             reflected = mind.last_reflect_at != before_reflect_at
 
         elapsed_ms = int((time.perf_counter() - t0) * 1000)
-        await _get_tracker().record(CallRecord(
+        _get_tracker().record(CallRecord(
             timestamp=time.time(),
             operation="act_loop_stream",
             model="",
@@ -717,8 +744,8 @@ async def agent_act_loop_stream(body: AgentActLoopStreamBody) -> StreamingRespon
     )
 
 
-@router.post("/api/finale")
-async def finale(body: FinaleBody) -> dict[str, Any]:
+@router.post("/api/finale", response_model=FinaleResponse)
+async def finale(body: FinaleBody):
     from backend.data.prompts import FIXED_INTRO
     from backend.session.store import room
     p = room.players.get(body.player_id)
@@ -726,8 +753,6 @@ async def finale(body: FinaleBody) -> dict[str, Any]:
         raise HTTPException(404, "未知 player_id")
     if p.dead:
         raise HTTPException(400, "已身亡，无法收束成文。请新开周目")
-    if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
-        raise HTTPException(400, "昏迷之中，无法收束成文")
     if getattr(p, "enslaved", False):
         raise HTTPException(403, "你正被奴役，无法自主收束")
     if p.ended:
@@ -783,6 +808,16 @@ async def finale(body: FinaleBody) -> dict[str, Any]:
         f"秩序 {p.flags.get('order', 0)}  求真 {p.flags.get('truth', 0)}  "
         f"希望 {p.flags.get('hope', 0)}  混乱 {p.flags.get('chaos', 0)}"
     )
+    unconscious_ticks = int(getattr(p, "unconscious_ticks", 0) or 0)
+    if unconscious_ticks > 0:
+        lines.append(f"\n-- 此刻玩家正处于昏迷状态(剩余约{unconscious_ticks}时辰) --")
+        lines.append("请据此写出一个与昏迷相关的结局：可能是在昏迷中离世、被路人救起后醒转、或在梦境中走完最后一程。")
+    if getattr(p, "move_locked", False):
+        trap_reason = getattr(p, "trap_reason", None)
+        trap_type = getattr(p, "trap_type", "npc") or "npc"
+        if trap_type == "environment" and trap_reason:
+            lines.append(f"\n-- 此刻玩家身陷环境险境：{trap_reason} --")
+            lines.append("请据此写出结局：可能是在险境中丧生、侥幸脱困、或被他人搭救。")
     digest = "\n".join(lines)
 
     extra = (body.closing_note or "").strip()
@@ -858,8 +893,8 @@ class AbandonBountyBody(BaseModel):
     player_id: str = _PID
 
 
-@router.post("/api/bounty/refresh")
-async def bounty_refresh(body: RefreshBountyBody) -> dict[str, Any]:
+@router.post("/api/bounty/refresh", response_model=BountyRefreshResponse)
+async def bounty_refresh(body: RefreshBountyBody):
     p = _get_active_player(body.player_id)
     async with p.lock:
         refresh_bounties(p)
@@ -869,16 +904,16 @@ async def bounty_refresh(body: RefreshBountyBody) -> dict[str, Any]:
         return {"bounties": p.bounties, "board_text": board_text, "player": _player_public(p)}
 
 
-@router.post("/api/bounty/accept")
-async def bounty_accept(body: AcceptBountyBody) -> dict[str, Any]:
+@router.post("/api/bounty/accept", response_model=BountyAcceptResponse)
+async def bounty_accept(body: AcceptBountyBody):
     p = _get_active_player(body.player_id)
     async with p.lock:
         ok, msg = accept_bounty(p, body.bounty_id)
         return {"ok": ok, "message": msg, "player": _player_public(p)}
 
 
-@router.post("/api/bounty/check")
-async def bounty_check(body: CompleteBountyBody) -> dict[str, Any]:
+@router.post("/api/bounty/check", response_model=BountyCheckResponse)
+async def bounty_check(body: CompleteBountyBody):
     p = _get_active_player(body.player_id)
     async with p.lock:
         progress = check_bounty_progress(p)
@@ -887,27 +922,27 @@ async def bounty_check(body: CompleteBountyBody) -> dict[str, Any]:
         return {"has_active": True, **progress, "player": _player_public(p)}
 
 
-@router.post("/api/bounty/complete")
-async def bounty_complete(body: CompleteBountyBody) -> dict[str, Any]:
+@router.post("/api/bounty/complete", response_model=BountyCompleteResponse)
+async def bounty_complete(body: CompleteBountyBody):
     p = _get_active_player(body.player_id)
     async with p.lock:
         ok, msg, reward = complete_bounty(p)
         return {"ok": ok, "message": msg, "reward": reward, "player": _player_public(p)}
 
 
-@router.post("/api/bounty/abandon")
-async def bounty_abandon(body: AbandonBountyBody) -> dict[str, Any]:
+@router.post("/api/bounty/abandon", response_model=BountyAbandonResponse)
+async def bounty_abandon(body: AbandonBountyBody):
     p = _get_active_player(body.player_id)
     async with p.lock:
         ok, msg = abandon_bounty(p)
         return {"ok": ok, "message": msg, "player": _player_public(p)}
 
 
-@router.get("/api/bounty/{player_id}/{bounty_id}/state")
+@router.get("/api/bounty/{player_id}/{bounty_id}/state", response_model=BountyStateResponse)
 async def bounty_state(
     player_id: str = Path(..., min_length=1, max_length=64),
     bounty_id: str = Path(..., min_length=1, max_length=64),
-) -> dict[str, Any]:
+):
     p = _get_active_player(player_id)
     bounty = None
     if p.active_bounty and p.active_bounty.get("id") == bounty_id:

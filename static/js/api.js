@@ -189,12 +189,29 @@ window.App = window.App || {};
       npc_id: npcId,
       max_steps: maxSteps || 3
     };
-    var res = await fetch(App.API + "/agent/act_loop_stream", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody)
-    });
+
+    var controller = new AbortController();
+    App._actLoopAbortController = controller;
+    var timeoutId = setTimeout(function() { controller.abort(); }, 120000);
+
+    var res;
+    try {
+      res = await fetch(App.API + "/agent/act_loop_stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+    } catch (e) {
+      clearTimeout(timeoutId);
+      App._actLoopAbortController = null;
+      if (e.name === 'AbortError') throw new Error('行动循环超时（120秒）');
+      throw e;
+    }
+
     if (!res.ok) {
+      App._actLoopAbortController = null;
       var errorMsg = "act_loop_stream " + res.status;
       try {
         var errorJson = await res.json();

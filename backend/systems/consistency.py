@@ -10,8 +10,12 @@ def validate_player_state(p: PlayerState) -> list[str]:
     violations: list[str] = []
     if p.vigor > p.vigor_max:
         violations.append("体力超过上限")
+    if p.vigor < 0:
+        violations.append("体力为负")
     if p.spirit > p.spirit_max:
         violations.append("心气超过上限")
+    if p.spirit < 0:
+        violations.append("心气为负")
     if p.coins < 0:
         violations.append("制钱为负")
     map_data = MAPS.get(p.map_id)
@@ -35,9 +39,15 @@ def clamp_player_state(p: PlayerState) -> list[str]:
     if p.vigor > p.vigor_max:
         p.vigor = p.vigor_max
         fixes.append("体力超过上限")
+    if p.vigor < 0:
+        p.vigor = 0
+        fixes.append("体力为负")
     if p.spirit > p.spirit_max:
         p.spirit = p.spirit_max
         fixes.append("心气超过上限")
+    if p.spirit < 0:
+        p.spirit = 0
+        fixes.append("心气为负")
     if p.coins < 0:
         p.coins = 0
         fixes.append("制钱为负")

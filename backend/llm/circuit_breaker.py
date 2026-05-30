@@ -36,6 +36,8 @@ class CircuitBreaker:
         "_failure_threshold",
         "_failure_times",
         "_failure_window_s",
+        "_half_open_allowed",
+        "_half_open_max",
         "_last_failure_at",
         "_lock",
         "_opened_at",
@@ -59,6 +61,8 @@ class CircuitBreaker:
         self._last_failure_at = 0.0
         self._opened_at = 0.0
         self._lock = asyncio.Lock()
+        self._half_open_max = 3
+        self._half_open_allowed = self._half_open_max
         # 统计
         self._total_requests = 0
         self._total_failures = 0
@@ -75,19 +79,24 @@ class CircuitBreaker:
             if self._state == CircuitState.OPEN:
                 if time.time() - self._opened_at > self._cooldown_s:
                     self._state = CircuitState.HALF_OPEN
+                    self._half_open_allowed = self._half_open_max
                     log.info("Circuit breaker: OPEN → HALF_OPEN (cooldown elapsed)")
                     return True
                 self._rejected_requests += 1
                 return False
 
-            # HALF_OPEN: 允许通过（试探）
-            return True
+            if self._half_open_allowed > 0:
+                self._half_open_allowed -= 1
+                return True
+            self._rejected_requests += 1
+            return False
 
     async def success(self) -> None:
         """记录成功。"""
         async with self._lock:
             if self._state == CircuitState.HALF_OPEN:
                 self._state = CircuitState.CLOSED
+                self._half_open_allowed = self._half_open_max
                 self._failure_times.clear()
                 log.info("Circuit breaker: HALF_OPEN → CLOSED (probe success)")
 
@@ -139,6 +148,14 @@ class CircuitBreaker:
             ),
         }
 
+    async def reset(self) -> None:
+        """手动重置熔断器为 CLOSED 状态。"""
+        async with self._lock:
+            self._state = CircuitState.CLOSED
+            self._failure_times.clear()
+            self._half_open_allowed = self._half_open_max
+            log.info("Circuit breaker: manually reset to CLOSED")
+
 
 class NoOpCircuitBreaker:
     """禁用熔断时的空操作熔断器，始终允许所有请求。"""
@@ -147,6 +164,7 @@ class NoOpCircuitBreaker:
     async def allow(self) -> bool: return True
     async def success(self) -> None: pass
     async def failure(self) -> None: pass
+    async def reset(self) -> None: pass
     @property
     def stats(self) -> dict[str, object]:
         return {"state": "disabled", "total_requests": 0, "total_failures": 0, "rejected": 0, "recent_failures": 0, "last_failure_age_s": None}

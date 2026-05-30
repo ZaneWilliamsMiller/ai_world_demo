@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from backend.models.player import PlayerState
 from backend.systems.constants import (
     COMA_RECOVER_SLEEP_DEBT,
@@ -72,8 +74,9 @@ def advance_clock(p: PlayerState, ticks: int = 1) -> None:
             spirit = int(getattr(p, "spirit", 80))
             spirit_max = int(getattr(p, "spirit_max", 100))
             drain = 1 + p.sleep_debt // SLEEP_DEBT_DIVISOR
-            spirit = max(0, min(spirit_max, spirit - drain))
-            p.spirit = spirit
+            from backend.systems.trap import apply_spirit_delta
+            apply_spirit_delta(p, -drain)
+            spirit = int(getattr(p, "spirit", 0))
             if spirit <= 0:
                 p.unconscious_ticks = max(int(getattr(p, "unconscious_ticks", 0)), 2)
                 p.sleep_debt = max(0, p.sleep_debt - COMA_RECOVER_SLEEP_DEBT)
@@ -111,8 +114,8 @@ def advance_clock(p: PlayerState, ticks: int = 1) -> None:
                     continue
                 _mind = get_or_init_mind(p, _nid)
                 execute_plan_step(p, _nid, _mind)
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.warning("NPC %s plan step failed: %s", _nid, exc)
     # ── NPC 货柜自然补货：世界日翻篇时检测 ──
     if int(p.world_day) > old_day:
         import logging

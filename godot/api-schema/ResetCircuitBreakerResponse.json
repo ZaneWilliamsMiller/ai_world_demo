@@ -1,0 +1,16 @@
+{
+  "properties": {
+    "status": {
+      "default": "ok",
+      "title": "Status",
+      "type": "string"
+    },
+    "state": {
+      "default": "closed",
+      "title": "State",
+      "type": "string"
+    }
+  },
+  "title": "ResetCircuitBreakerResponse",
+  "type": "object"
+}
