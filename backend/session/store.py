@@ -64,6 +64,7 @@ class SessionStore:
                 "move_lock_npc_id": None,
                 "trap_reason": None,
                 "trap_attempts": 0,
+                "trap_type": None,
                 "enslaved": False,
                 "enslaved_reason": None,
                 "vigor": INITIAL_VIGOR,

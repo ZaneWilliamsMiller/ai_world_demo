@@ -113,9 +113,11 @@ def npc_ids_for_player(p: PlayerState) -> list[str]:
     merged.extend(hidden_here)
     merged.extend(normal_here)
     if getattr(p, "move_locked", False):
-        lid = getattr(p, "move_lock_npc_id", None)
-        if lid and str(lid) in NPCS:
-            return [str(lid)]
+        trap_type = getattr(p, "trap_type", "npc") or "npc"
+        if trap_type == "npc":
+            lid = getattr(p, "move_lock_npc_id", None)
+            if lid and str(lid) in NPCS:
+                return [str(lid)]
     return merged
 
 def move_should_fire_encounter(path: list[tuple[int, int]]) -> bool:

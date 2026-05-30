@@ -203,17 +203,31 @@ def _build_dynamic_prompt_parts(
     if getattr(p, "move_locked", False):
         reason = getattr(p, "trap_reason", None) or "身陷险局"
         attempts = int(getattr(p, "trap_attempts", 0) or 0)
-        dyn_parts.append(
-            "【险局未解】此时玩家身陷险局："
-            f"{reason}（已周旋 {attempts} 次）。\n"
-            "请根据玩家这一句的具体做法（贿赂、求饶、硬冲、谈判、跳水、引援、斡旋……）"
-            "**真实**判断脱困走向，并把结果写入 escape_outcome：\n"
-            "· 若一句话足以脱身（如有路引、有银钱、有靠山、对方让步），写 'success'；\n"
-            "· 若占上风但未脱（如对方动摇、有了缝隙），写 'progress'；\n"
-            "· 若周旋失败、对方更横、玩家伤损，写 'fail'。\n"
-            "若你判断玩家从此被擒/被押作苦役（不致死，但失自由），用 enslaved 写一句缘由。\n"
-            "脱困总是要付出代价：vigor_delta/spirit_delta、coin_delta、items_lose 该写就写。"
-        )
+        trap_type = getattr(p, "trap_type", "npc") or "npc"
+        if trap_type == "environment":
+            dyn_parts.append(
+                "【险境未解】此时玩家身陷环境险境："
+                f"{reason}（已尝试 {attempts} 次）。\n"
+                "这是地形/天气/体力导致的风险，没有具体对手。\n"
+                "请根据玩家这一句的具体做法（后退、等待、攀爬、呼救、使用物品……）"
+                "**真实**判断脱困走向，并把结果写入 escape_outcome：\n"
+                "· 若一句话足以脱身（如找到出路、水势消退、体力恢复），写 'success'；\n"
+                "· 若占上风但未脱（如找到线索、看到出路但还没走出去），写 'progress'；\n"
+                "· 若尝试失败、情况更糟，写 'fail'。\n"
+                "脱困总是要付出代价：vigor_delta/spirit_delta 该写就写。"
+            )
+        else:
+            dyn_parts.append(
+                "【险局未解】此时玩家身陷险局："
+                f"{reason}（已周旋 {attempts} 次）。\n"
+                "请根据玩家这一句的具体做法（贿赂、求饶、硬冲、谈判、跳水、引援、斡旋……）"
+                "**真实**判断脱困走向，并把结果写入 escape_outcome：\n"
+                "· 若一句话足以脱身（如有路引、有银钱、有靠山、对方让步），写 'success'；\n"
+                "· 若占上风但未脱（如对方动摇、有了缝隙），写 'progress'；\n"
+                "· 若周旋失败、对方更横、玩家伤损，写 'fail'。\n"
+                "若你判断玩家从此被擒/被押作苦役（不致死，但失自由），用 enslaved 写一句缘由。\n"
+                "脱困总是要付出代价：vigor_delta/spirit_delta、coin_delta、items_lose 该写就写。"
+            )
     else:
         dyn_parts.append(
             "【说明】玩家当前并未身陷险局。escape_outcome、enslaved 务必为 null；"
@@ -316,6 +330,7 @@ def _apply_parsed_effects(
         p.death_reason = parsed.permadeath
         p.move_locked = False
         p.move_lock_npc_id = None
+        p.trap_type = None
 
     apply_favor(p, npc_id, parsed.favor_delta)
 

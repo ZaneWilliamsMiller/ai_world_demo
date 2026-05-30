@@ -97,12 +97,14 @@ def _reset_trap_state(p: PlayerState) -> None:
     p.move_lock_npc_id = None
     p.trap_reason = None
     p.trap_attempts = 0
+    p.trap_type = None
 
 
-def enter_trap_state(p: PlayerState, reason: str, lock_npc_id: str | None = None) -> None:
+def enter_trap_state(p: PlayerState, reason: str, lock_npc_id: str | None = None, trap_type: str = "npc") -> None:
     """开启「身陷险局」。"""
     p.move_locked = True
     p.move_lock_npc_id = lock_npc_id or "jiang"
+    p.trap_type = trap_type
     p.trap_reason = (reason or "骤入险局").strip()[:80]
     p.trap_attempts = 0
 
@@ -134,6 +136,7 @@ def maybe_collapse_from_attrs(p: PlayerState) -> dict[str, Any] | None:
             p.life_burn_ticks = LIFE_BURN_TICKS
             p.move_locked = True
             p.move_lock_npc_id = "jiang"
+            p.trap_type = "environment"
             p.trap_reason = "体力枯竭,生命在燃烧;尽快进食。"
             return {"outcome": "burning", "reason": p.trap_reason}
         return {"outcome": "burning", "reason": "生命燃烧中,若不进食将饿死。"}
@@ -293,6 +296,7 @@ def survival_action_delta(p: PlayerState, user_message: str) -> dict[str, Any]:
         p.trap_reason = None
         p.move_locked = False
         p.move_lock_npc_id = None
+        p.trap_type = None
 
     return {
         "vigor": vigor,

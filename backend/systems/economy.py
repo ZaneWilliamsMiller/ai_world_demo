@@ -591,6 +591,7 @@ def use_player_item(p: PlayerState, item_name: str) -> dict[str, object]:
         p.trap_reason = None
         p.move_locked = False
         p.move_lock_npc_id = None
+        p.trap_type = None
 
     return {
         "success": True,

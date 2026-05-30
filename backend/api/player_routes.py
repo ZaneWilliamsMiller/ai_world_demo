@@ -98,25 +98,44 @@ def _validate_move_preconditions(p, body) -> None:
     if getattr(p, "move_locked", False):
         lock_reason = getattr(p, "trap_reason", "未知险情")
         lock_npc_id = getattr(p, "move_lock_npc_id", None)
-        lock_npc_name = NPCS.get(lock_npc_id, {}).get("name", "眼前之人") if lock_npc_id else "对手"
         attempts = int(getattr(p, "trap_attempts", 0) or 0)
-        hint = ""
-        if attempts == 0:
-            hint = "💡 先试着和对方交谈，了解对方意图"
-        elif attempts < 3:
-            hint = f"💡 已尝试{attempts}次，继续对话或考虑其他方式（贿赂/求援/硬闯）"
+        trap_type = getattr(p, "trap_type", "npc") or "npc"
+        if trap_type == "environment":
+            hint = ""
+            if attempts == 0:
+                hint = "💡 试试后退、等待、或向附近的人求援"
+            elif attempts < 3:
+                hint = f"💡 已尝试{attempts}次，考虑换个策略（等待水势消退/寻找出路/呼救）"
+            else:
+                hint = "💡 多次尝试未果？试试完全不同的方式，或等待时机变化"
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                f"🚫 【身陷险境】\n"
+                f"   原因: {lock_reason}\n"
+                f"   已尝试: {attempts}次\n"
+                f"\n"
+                f"   {hint}\n"
+                f"   🏔️ 解除方法: 尝试脱困（后退/等待/求援/使用物品）",
+            )
         else:
-            hint = "💡 多次尝试未果？试试完全不同的策略，或者等待时机变化"
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            f"🚫 【移动被锁定】\n"
-            f"   原因: {lock_reason}\n"
-            f"   对手: {lock_npc_name}\n"
-            f"   已尝试: {attempts}次\n"
-            f"\n"
-            f"   {hint}\n"
-            f"   ⚔️ 解除方法: 与该NPC对话，选择合适的应对策略",
-        )
+            lock_npc_name = NPCS.get(lock_npc_id, {}).get("name", "眼前之人") if lock_npc_id else "对手"
+            hint = ""
+            if attempts == 0:
+                hint = "💡 先试着和对方交谈，了解对方意图"
+            elif attempts < 3:
+                hint = f"💡 已尝试{attempts}次，继续对话或考虑其他方式（贿赂/求援/硬闯）"
+            else:
+                hint = "💡 多次尝试未果？试试完全不同的策略，或者等待时机变化"
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                f"🚫 【移动被锁定】\n"
+                f"   原因: {lock_reason}\n"
+                f"   对手: {lock_npc_name}\n"
+                f"   已尝试: {attempts}次\n"
+                f"\n"
+                f"   {hint}\n"
+                f"   ⚔️ 解除方法: 与该NPC对话，选择合适的应对策略",
+            )
 
 
 def _walk_path(p, path, allow_steep):
@@ -173,7 +192,7 @@ def _walk_path(p, path, allow_steep):
                 break
             hazard_reason = tile_hazard_reason(p)
             if hazard_reason:
-                enter_trap_state(p, reason=hazard_reason, lock_npc_id="jiang")
+                enter_trap_state(p, reason=hazard_reason, lock_npc_id="jiang", trap_type="environment")
                 forced = {
                     "npc_id": "jiang",
                     "user_line": (
@@ -251,6 +270,7 @@ def _build_move_response(p, prev_map, actual_path, forced, vigor_cost, spirit_co
             "active": bool(getattr(p, "move_locked", False)),
             "reason": getattr(p, "trap_reason", None),
             "attempts": int(getattr(p, "trap_attempts", 0) or 0),
+            "type": getattr(p, "trap_type", None),
         },
         "delta": {
             "vigor": vigor_cost,

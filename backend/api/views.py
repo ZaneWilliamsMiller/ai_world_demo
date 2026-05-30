@@ -46,6 +46,7 @@ def player_public(p: PlayerState) -> dict[str, Any]:
         "move_lock_npc_id": getattr(p, "move_lock_npc_id", None),
         "trap_reason": getattr(p, "trap_reason", None),
         "trap_attempts": int(getattr(p, "trap_attempts", 0) or 0),
+        "trap_type": getattr(p, "trap_type", None),
         "enslaved": bool(getattr(p, "enslaved", False)),
         "enslaved_reason": getattr(p, "enslaved_reason", None),
         "vigor": max(0, int(getattr(p, "vigor", 0) or 0)),

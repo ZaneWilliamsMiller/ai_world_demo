@@ -45,6 +45,7 @@ class PlayerState:
     move_lock_npc_id: str | None = None
     trap_reason: str | None = None
     trap_attempts: int = 0
+    trap_type: str | None = None
     enslaved: bool = False
     enslaved_reason: str | None = None
     vigor: int = INITIAL_VIGOR
