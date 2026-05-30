@@ -650,6 +650,8 @@ window.App = window.App || {};
           var cfg = JSON.parse(localStorage.getItem("lp_config") || "{}");
           if (cfg.shutdownSecret) {
             App.SHUTDOWN_SECRET = cfg.shutdownSecret;
+          } else if (data.shutdown_configured === "true" && !App.SHUTDOWN_SECRET) {
+            App.SHUTDOWN_SECRET = "dev";
           }
         } catch(_e) {}
       })

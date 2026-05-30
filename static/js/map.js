@@ -89,6 +89,8 @@ window.App = window.App || {};
 
   // ─── 悬停瓦片 ───
   var _hoverX = -1, _hoverY = -1;
+  var _mouseScreenX = -1, _mouseScreenY = -1;
+  var _pendingMove = null;
 
   var _dirty = true;
   var _rafId = null;
@@ -171,7 +173,7 @@ window.App = window.App || {};
     // 鼠标事件
     mainCanvas.addEventListener("click", onMapClick);
     mainCanvas.addEventListener("mousemove", onMapHover);
-    mainCanvas.addEventListener("mouseleave", function() { _hoverX = _hoverY = -1; });
+    mainCanvas.addEventListener("mouseleave", function() { _hoverX = _hoverY = -1; _mouseScreenX = _mouseScreenY = -1; });
     miniCanvas.addEventListener("click", onMiniClick);
   }
 
@@ -227,6 +229,7 @@ window.App = window.App || {};
   // ═══════════════════════════════════════════
   function renderLoop() {
     lerpCamera();
+    updateHoverFromScreen();
     renderMain();
     renderMini();
 
@@ -506,7 +509,6 @@ window.App = window.App || {};
   //  鼠标交互
   // ═══════════════════════════════════════════
   function onMapClick(e) {
-    if (App._isMoving) return;
     var rect = mainCanvas.getBoundingClientRect();
     var mx = e.clientX - rect.left;
     var my = e.clientY - rect.top;
@@ -514,16 +516,24 @@ window.App = window.App || {};
     var tileY = Math.floor((my / TILE) + cam.y);
     if (tileX < 0 || tileX >= mapState.cols || tileY < 0 || tileY >= mapState.rows.length) return;
 
+    if (App._isMoving) {
+      _pendingMove = { x: tileX, y: tileY };
+      return;
+    }
     App.moveTo(tileX, tileY);
   }
 
   function onMapHover(e) {
-    if (App._isMoving) return;
     var rect = mainCanvas.getBoundingClientRect();
-    var mx = e.clientX - rect.left;
-    var my = e.clientY - rect.top;
-    var newX = Math.floor((mx / TILE) + cam.x);
-    var newY = Math.floor((my / TILE) + cam.y);
+    _mouseScreenX = e.clientX - rect.left;
+    _mouseScreenY = e.clientY - rect.top;
+    updateHoverFromScreen();
+  }
+
+  function updateHoverFromScreen() {
+    if (_mouseScreenX < 0 || _mouseScreenY < 0) return;
+    var newX = Math.floor((_mouseScreenX / TILE) + cam.x);
+    var newY = Math.floor((_mouseScreenY / TILE) + cam.y);
     if (newX !== _hoverX || newY !== _hoverY) {
       _hoverX = newX;
       _hoverY = newY;
@@ -706,6 +716,11 @@ window.App = window.App || {};
       }
     } finally {
       App._isMoving = false;
+      if (_pendingMove) {
+        var next = _pendingMove;
+        _pendingMove = null;
+        App.moveTo(next.x, next.y);
+      }
     }
   };
 
