@@ -671,6 +671,19 @@ window.App = window.App || {};
         App.cancelTalkStream();
       });
     }
+
+    var watchNpcBtn = document.createElement("button");
+    watchNpcBtn.id = "watchNpcBtn";
+    watchNpcBtn.textContent = "\u89c2\u5bdf\u884c\u52a8";
+    watchNpcBtn.addEventListener("click", function() {
+      if (App.selectedNpcId) {
+        App.watchNpcAct(App.selectedNpcId);
+      } else {
+        App.addMsg("system", "\u8bf7\u5148\u9009\u62e9\u4e00\u4e2aNPC");
+      }
+    });
+    var inputBar = document.querySelector(".input-bar");
+    if (inputBar) inputBar.appendChild(watchNpcBtn);
   });
 
 })(window.App);

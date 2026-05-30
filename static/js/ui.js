@@ -239,7 +239,7 @@ window.App = window.App || {};
       div.classList.add("important");
     }
 
-    if (type === "npc" && text) {
+    if ((type === "npc" || type === "npc_interact") && text) {
       var speakerDiv = document.createElement("div");
       speakerDiv.className = "speaker";
       speakerDiv.textContent = text.speaker || "";

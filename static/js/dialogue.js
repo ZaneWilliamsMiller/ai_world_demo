@@ -147,4 +147,73 @@ window.App = window.App || {};
     _resetStreamState();
   };
 
+  App.watchNpcAct = async function(npcId, maxSteps) {
+    if (App.isStreaming) return;
+    App.isStreaming = true;
+
+    var reader = null;
+    var decoder = new TextDecoder();
+    var buf = "";
+    var currentTextEl = null;
+    var currentText = "";
+
+    try {
+      reader = await App.actLoopStream(npcId, maxSteps || 3);
+
+      while (true) {
+        var chunk = await reader.read();
+        if (chunk.done) break;
+        buf += decoder.decode(chunk.value, { stream: true });
+        var lines = buf.split("\n");
+        buf = lines.pop();
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i];
+          if (line.indexOf("data: ") !== 0) continue;
+          try {
+            var d = JSON.parse(line.slice(6).trim());
+            if (d.action === "talk_chunk" && d.chunk) {
+              if (!currentTextEl) {
+                var npcName = npcId;
+                var npcInfo = App.npcsHere.find(function(n) { return n.id === npcId; });
+                if (npcInfo) npcName = npcInfo.name;
+                var msgDiv = App.addMsg("npc_interact", {speaker: npcName, text: ""}, false);
+                currentTextEl = msgDiv.querySelector(".msg-text");
+                currentText = "";
+              }
+              currentText += d.chunk + "\n";
+              if (currentTextEl) {
+                currentTextEl.textContent = currentText.trim();
+                App.scrollToBottom();
+              }
+            }
+            if (d.action === "move" || d.action === "rest" || d.action === "idle") {
+              currentTextEl = null;
+              currentText = "";
+              if (d.description) {
+                App.addMsg("system", "\ud83d\udd04 " + d.description);
+              }
+            }
+            if (d.action === "reflect") {
+              App.addMsg("system", "\ud83d\udcad " + (npcId === "jiang" ? "\u98ce\u95fb\u5b50" : npcId) + "\u9677\u5165\u4e86\u6c89\u601d...");
+            }
+            if (d.done) {
+              currentTextEl = null;
+              currentText = "";
+              if (d.player) {
+                App.updateUI({ player: d.player });
+              } else {
+                App.fetchState().then(function(data) { if (data) App.updateUI(data); }).catch(function() {});
+              }
+            }
+          } catch (_e) {}
+        }
+      }
+    } catch (e) {
+      App.addMsg("system", "NPC\u884c\u52a8\u89c2\u5bdf\u5931\u8d25: " + (e.message || "\u672a\u77e5\u9519\u8bef"));
+    } finally {
+      if (reader) try { reader.releaseLock(); } catch (_e) {}
+      App.isStreaming = false;
+    }
+  };
+
 })(window.App);

@@ -33,6 +33,7 @@ class NpcActionResult:
     description: str
     success: bool
     target_pos: tuple[str, int, int] | None = None
+    raw_dialogue: list[dict] | None = None
 
 
 _MOVE_KW = ("去", "往", "赴", "行", "走", "到", "回", "返")
@@ -58,6 +59,65 @@ _REST_TEMPLATES = (
     "在檐下小坐片刻",
     "回房歇了一歇",
 )
+
+_NPC_TALK_SYSTEM = (
+    "你是江湖世界中的NPC对话生成器。根据两个NPC的性格、关系和当前场景，"
+    "生成一段简短自然的对话（2-4轮交流）。要求：\n"
+    "1. 对话内容符合各自性格和说话风格\n"
+    "2. 对话自然简短，像熟人碰面闲聊\n"
+    "3. 可以涉及天气、市况、传闻、日常琐事\n"
+    "4. 输出JSON格式：{\"dialogue\": [{\"speaker\": \"NPC简称\", \"line\": \"说的话\"}, ...]}\n"
+    "5. 每人最多说2-3句，总共不超过6轮"
+)
+
+
+def _build_npc_talk_messages(
+    npc_id: str,
+    other_id: str,
+    mind: mem.AgentMind,
+    sh_name: str,
+    world_day: int,
+) -> list[dict[str, str]]:
+    from backend.data.relationships import NPC_RELATIONSHIPS
+    meta_a = NPCS.get(npc_id, {})
+    meta_b = NPCS.get(other_id, {})
+    name_a = meta_a.get("short", npc_id)
+    name_b = meta_b.get("short", other_id)
+    char_a = meta_a.get("character", {})
+    char_b = meta_b.get("character", {})
+
+    rel_note = ""
+    rels = NPC_RELATIONSHIPS.get(npc_id, [])
+    for r in rels:
+        if r.get("target") == other_id:
+            rel_note = f"关系：{r.get('attitude', '陌生')}——{r.get('note', '')}"
+            break
+
+    plan_text = mind.plan_by_shichen.get(sh_name, "")
+    mood_text = ""
+    if mind.affect_mood:
+        mood_text = f"当前心境：{mind.affect_mood}"
+        if mind.affect_cause:
+            mood_text += f"（{mind.affect_cause}）"
+
+    user_parts = [
+        f"场景：{sh_name}，第{world_day}日",
+        f"NPC甲【{name_a}】：{char_a.get('说话风格', meta_a.get('system', '')[:60])}",
+        f"NPC乙【{name_b}】：{char_b.get('说话风格', meta_b.get('system', '')[:60])}",
+    ]
+    if rel_note:
+        user_parts.append(rel_note)
+    if plan_text:
+        user_parts.append(f"{name_a}今日计划涉及：{plan_text[:40]}")
+    if mood_text:
+        user_parts.append(f"{name_a}{mood_text}")
+
+    user_parts.append(f"请生成{name_a}与{name_b}的简短对话。")
+
+    return [
+        {"role": "system", "content": _NPC_TALK_SYSTEM},
+        {"role": "user", "content": "\n".join(user_parts)},
+    ]
 
 
 def decide_next_action(mind: mem.AgentMind, p: PlayerState, npc_id: str) -> NpcAction:
@@ -187,7 +247,25 @@ def _execute_talk(
     world_day: int,
     npc_short: str,
 ) -> NpcActionResult:
-    """执行交谈行动：与同格 NPC 生成模板对话记忆。"""
+    try:
+        return asyncio.run(_execute_talk_async(p, npc_id, mind, sh_name, world_day, npc_short))
+    except RuntimeError:
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            return pool.submit(
+                asyncio.run,
+                _execute_talk_async(p, npc_id, mind, sh_name, world_day, npc_short)
+            ).result()
+
+
+async def _execute_talk_async(
+    p: PlayerState,
+    npc_id: str,
+    mind: mem.AgentMind,
+    sh_name: str,
+    world_day: int,
+    npc_short: str,
+) -> NpcActionResult:
     cur_pos = p.npc_positions.get(npc_id)
     if not cur_pos or not isinstance(cur_pos, (list, tuple)) or len(cur_pos) < 3:
         return NpcActionResult(
@@ -219,12 +297,44 @@ def _execute_talk(
     other_name = NPCS.get(other_id, {}).get("short", other_id)
     topic = random.choice(_TALK_TOPICS)
     template = random.choice(_TALK_TEMPLATES)
-    desc = template.format(other=other_name, topic=topic)
+    fallback_desc = template.format(other=other_name, topic=topic)
+
+    dialogue_lines: list[str] = []
+    raw_dialogue: list[dict] = []
+    try:
+        from backend.llm.client import chat_completion
+        import json as _json
+        messages = _build_npc_talk_messages(npc_id, other_id, mind, sh_name, world_day)
+        raw = await chat_completion(
+            messages,
+            temperature=0.7,
+            max_tokens=256,
+            response_format={"type": "json_object"},
+        )
+        parsed = _json.loads(raw)
+        for entry in parsed.get("dialogue", []):
+            speaker = entry.get("speaker", "")
+            line = entry.get("line", "")
+            if speaker and line:
+                dialogue_lines.append(f"{speaker}：「{line}」")
+                raw_dialogue.append({"speaker": speaker, "line": line})
+    except Exception as e:
+        log.warning("NPC talk LLM failed for %s->%s: %s, using template", npc_id, other_id, e)
+        dialogue_lines = []
+        raw_dialogue = []
+
+    if dialogue_lines:
+        desc = "\n".join(dialogue_lines)
+    else:
+        desc = fallback_desc
+
     record_observation(mind, desc, world_day=world_day, world_shichen=sh_name, importance=3.0)
     return NpcActionResult(
         action_type=NpcAction.TALK,
         description=desc,
         success=True,
+        target_pos=None,
+        raw_dialogue=raw_dialogue if raw_dialogue else None,
     )
 
 
@@ -247,8 +357,56 @@ def _execute_rest(
 async def execute_plan_step_async(
     p: PlayerState, npc_id: str, mind: mem.AgentMind,
 ) -> NpcActionResult:
-    """异步版本（用于 API 端点）。"""
-    return execute_plan_step(p, npc_id, mind)
+    action = decide_next_action(mind, p, npc_id)
+    sh_name = shichen_name(p.world_shichen)
+    world_day = int(p.world_day)
+    meta = NPCS.get(npc_id, {})
+    npc_short = meta.get("short", npc_id)
+
+    if action == NpcAction.IDLE:
+        return NpcActionResult(
+            action_type=NpcAction.IDLE,
+            description=f"{npc_short}无事可做",
+            success=True,
+        )
+
+    pos_snapshot = p.npc_positions.get(npc_id)
+    old_pos = pos_snapshot
+    try:
+        if action == NpcAction.MOVE:
+            return _execute_move(p, npc_id, mind, sh_name, world_day, npc_short)
+        if action == NpcAction.TALK:
+            return await _execute_talk_async(p, npc_id, mind, sh_name, world_day, npc_short)
+        if action == NpcAction.REST:
+            return _execute_rest(mind, sh_name, world_day, npc_short)
+    except Exception as e:
+        if old_pos is not None:
+            p.npc_positions[npc_id] = old_pos
+        log.warning("action rollback for npc=%s: %s", npc_id, e)
+        try:
+            from backend.observability.tracker import get_tracker, CallRecord
+            import time as _time
+            awaitable = get_tracker().record(CallRecord(
+                timestamp=_time.time(),
+                operation="npc_action_rollback",
+                model="",
+                player_id=p.player_id,
+                npc_id=npc_id,
+                parse_success=False,
+                schema_violations=["action_rollback"],
+                latency_ms=0,
+                status="error",
+            ))
+            asyncio.get_event_loop().create_task(awaitable)
+        except Exception:
+            pass
+        return NpcActionResult(
+            action_type=action,
+            description=f"{npc_short}行动异常",
+            success=False,
+        )
+
+    return NpcActionResult(action_type=NpcAction.IDLE, description="未知行动", success=False)
 
 
 async def act_loop(

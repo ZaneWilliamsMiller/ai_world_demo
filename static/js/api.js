@@ -183,6 +183,28 @@ window.App = window.App || {};
     }
   };
 
+  App.actLoopStream = async function(npcId, maxSteps) {
+    var requestBody = {
+      player_id: App.playerId,
+      npc_id: npcId,
+      max_steps: maxSteps || 3
+    };
+    var res = await fetch(App.API + "/agent/act_loop_stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody)
+    });
+    if (!res.ok) {
+      var errorMsg = "act_loop_stream " + res.status;
+      try {
+        var errorJson = await res.json();
+        errorMsg = errorJson.detail || errorJson.message || errorMsg;
+      } catch (_e) {}
+      throw new Error(errorMsg);
+    }
+    return res.body.getReader();
+  };
+
   App.testBackend = async function() {
     try {
       const data = await backendGet("/api/health");

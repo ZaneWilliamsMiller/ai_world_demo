@@ -88,7 +88,8 @@ class TestExecutePlanStep:
         assert p.npc_positions["zhanggui"] == ("world", 26, 28)
 
     @patch("backend.agents.actor.NPCS", {"zhanggui": {"name": "掌柜", "short": "掌柜"}, "xiaosi": {"name": "小厮", "short": "小厮"}})
-    def test_talk_with_other_npc(self):
+    @patch("backend.llm.client.chat_completion", new_callable=AsyncMock, return_value='{"dialogue": [{"speaker": "掌柜", "line": "近来可好？"}, {"speaker": "小厮", "line": "还好还好"}]}')
+    def test_talk_with_other_npc(self, _mock_llm):
         p = make_player(world_shichen=4)
         p.npc_positions["zhanggui"] = ["world", 25, 28]
         p.npc_positions["xiaosi"] = ["world", 25, 28]
