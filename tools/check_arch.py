@@ -52,7 +52,7 @@ def err(msg: str) -> None:
 
 
 def _strip_version(ref: str) -> str:
-    return ref.split("?")[0]
+    return ref.split("?", 1)[0]
 
 
 def check_script_order(html_path: Path) -> None:
