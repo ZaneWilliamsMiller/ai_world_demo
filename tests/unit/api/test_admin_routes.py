@@ -200,5 +200,106 @@ class TestEvalEndpoint(unittest.TestCase):
             self.assertIn("by_npc", data)
 
 
+
+@patch("backend.api.admin_routes.settings", _mock_settings())
+@patch("backend.api.routes.settings", _mock_settings())
+@patch("backend.app.settings", _mock_settings())
+@patch("backend.config.settings", _mock_settings())
+class TestMetricsTokenCounts(unittest.TestCase):
+    def test_metrics_includes_token_counts(self, *_):
+        from backend.app import app
+        client = TestClient(app)
+        tracker = _mock_tracker()
+        cb = _mock_cb()
+        with patch("backend.observability.tracker.get_tracker", return_value=tracker), \
+             patch("backend.llm.circuit_breaker.get_circuit_breaker", return_value=cb):
+            resp = client.get("/api/admin/metrics", headers={"X-Admin-Secret": _SECRET})
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertIn("total_tokens_in", data)
+            self.assertIn("total_tokens_out", data)
+
+
+@patch("backend.api.admin_routes.settings", _mock_settings())
+@patch("backend.api.routes.settings", _mock_settings())
+@patch("backend.app.settings", _mock_settings())
+@patch("backend.config.settings", _mock_settings())
+class TestPlayersEmptyList(unittest.TestCase):
+    @patch("backend.session.store.room")
+    def test_empty_returns_empty_list(self, mock_room, *_):
+        from backend.app import app
+        mock_room.players = {}
+        client = TestClient(app)
+        resp = client.get("/api/admin/players", headers={"X-Admin-Secret": _SECRET})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("players", data)
+        self.assertEqual(len(data["players"]), 0)
+
+
+@patch("backend.api.admin_routes.settings", _mock_settings())
+@patch("backend.api.routes.settings", _mock_settings())
+@patch("backend.app.settings", _mock_settings())
+@patch("backend.config.settings", _mock_settings())
+class TestNpcStatesEmpty(unittest.TestCase):
+    @patch("backend.session.store.room")
+    def test_empty_returns_empty_dict(self, mock_room, *_):
+        from backend.app import app
+        mock_room.players = {}
+        client = TestClient(app)
+        resp = client.get("/api/admin/npc_states", headers={"X-Admin-Secret": _SECRET})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data, {})
+
+
+@patch("backend.api.admin_routes.settings", _mock_settings())
+@patch("backend.api.routes.settings", _mock_settings())
+@patch("backend.app.settings", _mock_settings())
+@patch("backend.config.settings", _mock_settings())
+class TestEvalEmpty(unittest.TestCase):
+    def test_empty_returns_zeros(self, *_):
+        from backend.app import app
+        tracker = MagicMock()
+        tracker.eval_summary.return_value = {
+            "parse_success_rate": 0.0,
+            "common_violations": [],
+            "by_npc": {},
+        }
+        client = TestClient(app)
+        with patch("backend.observability.tracker.get_tracker", return_value=tracker):
+            resp = client.get("/api/admin/eval", headers={"X-Admin-Secret": _SECRET})
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertEqual(data["parse_success_rate"], 0.0)
+            self.assertEqual(data["common_violations"], [])
+            self.assertEqual(data["by_npc"], {})
+
+
+@patch("backend.api.admin_routes.settings", _mock_settings())
+@patch("backend.api.routes.settings", _mock_settings())
+@patch("backend.app.settings", _mock_settings())
+@patch("backend.config.settings", _mock_settings())
+class TestCircuitBreakerOpenState(unittest.TestCase):
+    def test_open_state(self, *_):
+        from backend.app import app
+        cb = MagicMock()
+        cb.stats = {
+            "state": "open",
+            "total_requests": 100,
+            "total_failures": 15,
+            "rejected": 8,
+            "recent_failures": 5,
+            "last_failure_age_s": 5.0,
+        }
+        client = TestClient(app)
+        with patch("backend.llm.circuit_breaker.get_circuit_breaker", return_value=cb):
+            resp = client.get("/api/admin/circuit_breaker", headers={"X-Admin-Secret": _SECRET})
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertEqual(data["state"], "open")
+            self.assertEqual(data["rejected"], 8)
+
+
 if __name__ == "__main__":
     unittest.main()

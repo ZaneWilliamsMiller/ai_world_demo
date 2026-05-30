@@ -2,9 +2,9 @@
 
 Token 消耗标注：
 - TestNpcPlan: ✅ 消耗 Token（plan_day 调用 chat_completion）
-- TestNpcAct: ❌ 不消耗 Token（纯规则执行）
-- TestNpcActLoop: ⚠️ 可能消耗 Token（act_loop 可能触发 reflect）
-- TestNpcCrossTalk: ❌ 不消耗 Token（模板对话）
+- TestNpcReflect: ✅ 消耗 Token（reflect 调用 chat_completion）
+- TestNpcActLoopWithReflect: ✅ 消耗 Token（act_loop 触发 reflect）
+- TestNpcCrossTalk: ❌ 不消耗 Token（模板对话），但需运行中的服务器验证效果
 """
 from __future__ import annotations
 
@@ -54,7 +54,6 @@ class TestNpcPlan(unittest.TestCase):
             "npc_id": "jiang",
         }, timeout=60.0)
         self.assertEqual(resp1.status_code, 200)
-        data1 = resp1.json()
 
         resp2 = self.client.client.post("/api/agent/plan", json={
             "player_id": self.client.player_id,
@@ -76,8 +75,8 @@ class TestNpcPlan(unittest.TestCase):
         self.assertGreater(len(mind.get("plan_by_shichen", {})), 0, "plan_by_shichen 应有内容")
 
 
-class TestNpcAct(unittest.TestCase):
-    """测试 /api/agent/act 端点 — ❌ 不消耗 Token"""
+class TestNpcReflect(unittest.TestCase):
+    """测试 /api/agent/reflect 端点 — ✅ 消耗 Token"""
 
     client: InteractiveClient
 
@@ -95,34 +94,47 @@ class TestNpcAct(unittest.TestCase):
     def tearDown(self):
         self.client.teardown()
 
-    def test_act_without_plan_returns_idle(self):
-        resp = self.client.client.post("/api/agent/act", json={
+    def test_reflect_returns_insights(self):
+        self.client.client.post("/api/agent/plan", json={
             "player_id": self.client.player_id,
             "npc_id": "jiang",
-        }, timeout=30.0)
-        self.assertEqual(resp.status_code, 200, f"act failed: {resp.status_code} {resp.text[:200]}")
+        }, timeout=60.0)
+
+        self.client.talk("jiang", "最近有什么消息？")
+
+        resp = self.client.client.post("/api/agent/reflect", json={
+            "player_id": self.client.player_id,
+            "npc_id": "jiang",
+        }, timeout=60.0)
+        self.assertEqual(resp.status_code, 200, f"reflect failed: {resp.status_code} {resp.text[:200]}")
         data = resp.json()
-        self.assertEqual(data.get("action"), "idle", "无计划时 act 应返回 idle")
+        self.assertIn("added", data)
+        self.assertIn("count", data)
+        self.assertIn("player", data)
 
-    def test_act_with_plan_returns_action(self):
-        plan_resp = self.client.client.post("/api/agent/plan", json={
+    def test_reflect_updates_mind(self):
+        self.client.client.post("/api/agent/plan", json={
             "player_id": self.client.player_id,
             "npc_id": "jiang",
         }, timeout=60.0)
-        self.assertEqual(plan_resp.status_code, 200)
 
-        act_resp = self.client.client.post("/api/agent/act", json={
+        self.client.talk("jiang", "你觉得最近怎么样？")
+
+        mind_before = self.client.get_mind("jiang")
+        importance_before = mind_before.get("importance_since_reflect", 0)
+
+        resp = self.client.client.post("/api/agent/reflect", json={
             "player_id": self.client.player_id,
             "npc_id": "jiang",
-        }, timeout=30.0)
-        self.assertEqual(act_resp.status_code, 200)
-        data = act_resp.json()
-        self.assertIn(data.get("action"), ["move", "talk", "rest", "idle"],
-                      f"act 应返回有效 action 类型，实际: {data.get('action')}")
+        }, timeout=60.0)
+        self.assertEqual(resp.status_code, 200)
+
+        mind_after = self.client.get_mind("jiang")
+        self.assertIsInstance(mind_after.get("affect_mood", ""), str)
 
 
-class TestNpcActLoop(unittest.TestCase):
-    """测试 /api/agent/act_loop 端点 — ⚠️ 可能消耗 Token（触发 reflect）"""
+class TestNpcActLoopWithReflect(unittest.TestCase):
+    """测试 act_loop 触发 reflect 的场景 — ✅ 消耗 Token"""
 
     client: InteractiveClient
 
@@ -140,38 +152,30 @@ class TestNpcActLoop(unittest.TestCase):
     def tearDown(self):
         self.client.teardown()
 
-    def test_act_loop_returns_steps(self):
-        plan_resp = self.client.client.post("/api/agent/plan", json={
+    def test_act_loop_with_high_importance_triggers_reflect(self):
+        self.client.client.post("/api/agent/plan", json={
             "player_id": self.client.player_id,
             "npc_id": "jiang",
         }, timeout=60.0)
-        self.assertEqual(plan_resp.status_code, 200)
 
-        loop_resp = self.client.client.post("/api/agent/act_loop", json={
+        self.client.talk("jiang", "我听说了一件大事")
+
+        resp = self.client.client.post("/api/agent/act_loop", json={
             "player_id": self.client.player_id,
             "npc_id": "jiang",
-            "max_steps": 2,
-        }, timeout=60.0)
-        self.assertEqual(loop_resp.status_code, 200, f"act_loop failed: {loop_resp.status_code} {loop_resp.text[:200]}")
-        data = loop_resp.json()
+            "max_steps": 3,
+        }, timeout=90.0)
+        self.assertEqual(resp.status_code, 200, f"act_loop failed: {resp.status_code} {resp.text[:200]}")
+        data = resp.json()
         self.assertIn("steps", data)
         self.assertIn("total_steps", data)
+        self.assertIn("reflected", data)
         self.assertIsInstance(data["steps"], list)
-        self.assertLessEqual(data["total_steps"], 2, "max_steps=2 应最多 2 步")
-
-    def test_act_loop_respects_max_steps(self):
-        loop_resp = self.client.client.post("/api/agent/act_loop", json={
-            "player_id": self.client.player_id,
-            "npc_id": "jiang",
-            "max_steps": 1,
-        }, timeout=60.0)
-        self.assertEqual(loop_resp.status_code, 200)
-        data = loop_resp.json()
-        self.assertLessEqual(data.get("total_steps", 0), 1, "max_steps=1 应最多 1 步")
+        self.assertLessEqual(data["total_steps"], 3)
 
 
 class TestNpcCrossTalk(unittest.TestCase):
-    """测试 NPC 间模板对话 — ❌ 不消耗 Token"""
+    """测试 NPC 间模板对话 — ❌ 不消耗 Token，但需运行中的服务器"""
 
     client: InteractiveClient
 

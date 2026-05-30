@@ -323,10 +323,16 @@ class TestNpcRoutes:
     def test_rest_endpoint_unconscious_player(self, mock_rest):
         p = make_player(player_id="unconscious_rest", unconscious_ticks=3)
         _register_player(p)
+        mock_rest.return_value = {
+            "ok": True,
+            "reason": "你在昏迷中歇了一歇",
+            "delta": {"vigor": 5, "spirit": 0, "sleep_debt": 0},
+            "ticks_passed": 1,
+            "note": "昏迷中休息",
+        }
         try:
             response = client.post("/api/rest", json={"player_id": "unconscious_rest"})
-            assert response.status_code == 400
-            mock_rest.assert_not_called()
+            assert response.status_code == 200
         finally:
             _remove_player("unconscious_rest")
 
@@ -701,3 +707,204 @@ class TestNpcRoutes:
             mock_use.assert_not_called()
         finally:
             _remove_player("item_dead")
+
+
+class TestAgentActRoutes:
+
+    def test_agent_act_no_plan(self):
+        p = make_player(player_id="act_no_plan")
+        _register_player(p)
+        try:
+            response = client.post("/api/agent/act", json={
+                "player_id": "act_no_plan",
+                "npc_id": "jiang",
+            })
+            assert response.status_code == 200
+            data = response.json()
+            assert data["action"] == "idle"
+            assert "description" in data
+            assert "success" in data
+            assert "player" in data
+        finally:
+            _remove_player("act_no_plan")
+
+    @patch("backend.agents.brain.chat_completion", new_callable=AsyncMock)
+    def test_agent_act_with_plan(self, mock_llm):
+        import json as _json
+        mock_llm.return_value = _json.dumps({
+            "summary": "今日总览",
+            "schedule": {"辰时": "去集市采购", "巳时": "见掌柜"},
+        })
+        p = make_player(player_id="act_with_plan")
+        _register_player(p)
+        try:
+            client.post("/api/agent/plan", json={
+                "player_id": "act_with_plan",
+                "npc_id": "jiang",
+            })
+            response = client.post("/api/agent/act", json={
+                "player_id": "act_with_plan",
+                "npc_id": "jiang",
+            })
+            assert response.status_code == 200
+            data = response.json()
+            assert data["action"] in ("move", "talk", "rest", "idle")
+        finally:
+            _remove_player("act_with_plan")
+
+    def test_agent_act_unknown_player(self):
+        response = client.post("/api/agent/act", json={
+            "player_id": "nonexistent",
+            "npc_id": "jiang",
+        })
+        assert response.status_code == 404
+
+    def test_agent_act_unknown_npc(self):
+        p = make_player(player_id="act_bad_npc")
+        _register_player(p)
+        try:
+            response = client.post("/api/agent/act", json={
+                "player_id": "act_bad_npc",
+                "npc_id": "nonexistent_npc",
+            })
+            assert response.status_code == 404
+        finally:
+            _remove_player("act_bad_npc")
+
+    def test_agent_act_dead_player(self):
+        p = make_player(player_id="act_dead", dead=True)
+        _register_player(p)
+        try:
+            response = client.post("/api/agent/act", json={
+                "player_id": "act_dead",
+                "npc_id": "jiang",
+            })
+            assert response.status_code == 400
+        finally:
+            _remove_player("act_dead")
+
+    def test_agent_act_ended_player(self):
+        p = make_player(player_id="act_ended", ended=True)
+        _register_player(p)
+        try:
+            response = client.post("/api/agent/act", json={
+                "player_id": "act_ended",
+                "npc_id": "jiang",
+            })
+            assert response.status_code == 400
+        finally:
+            _remove_player("act_ended")
+
+    @patch("backend.agents.actor.decide_next_action", return_value=None)
+    def test_agent_act_loop(self, _mock_decide):
+        p = make_player(player_id="actloop_test")
+        _register_player(p)
+        try:
+            response = client.post("/api/agent/act_loop", json={
+                "player_id": "actloop_test",
+                "npc_id": "jiang",
+                "max_steps": 2,
+            })
+            assert response.status_code == 200
+            data = response.json()
+            assert "steps" in data
+            assert "total_steps" in data
+            assert "reflected" in data
+            assert "player" in data
+            assert isinstance(data["steps"], list)
+        finally:
+            _remove_player("actloop_test")
+
+    @patch("backend.agents.actor.decide_next_action", return_value=None)
+    def test_agent_act_loop_max_steps(self, _mock_decide):
+        p = make_player(player_id="actloop_max")
+        _register_player(p)
+        try:
+            response = client.post("/api/agent/act_loop", json={
+                "player_id": "actloop_max",
+                "npc_id": "jiang",
+                "max_steps": 1,
+            })
+            assert response.status_code == 200
+            data = response.json()
+            assert data["total_steps"] <= 1
+        finally:
+            _remove_player("actloop_max")
+
+    def test_agent_act_loop_unknown_player(self):
+        response = client.post("/api/agent/act_loop", json={
+            "player_id": "nonexistent",
+            "npc_id": "jiang",
+            "max_steps": 1,
+        })
+        assert response.status_code == 404
+
+
+class TestWaitRoutes:
+
+    @patch("backend.systems.time_weather.advance_clock")
+    def test_wait_endpoint(self, mock_advance):
+        p = make_player(player_id="wait_test")
+        _register_player(p)
+        try:
+            response = client.post("/api/wait", json={"player_id": "wait_test"})
+            assert response.status_code == 200
+            data = response.json()
+            assert data["ok"] is True
+            assert "note" in data
+            assert "ticks_passed" in data
+            assert "player" in data
+            assert "atmosphere" in data
+        finally:
+            _remove_player("wait_test")
+
+    def test_wait_unknown_player(self):
+        response = client.post("/api/wait", json={"player_id": "nonexistent"})
+        assert response.status_code == 404
+
+    def test_wait_dead_player(self):
+        p = make_player(player_id="wait_dead", dead=True)
+        _register_player(p)
+        try:
+            response = client.post("/api/wait", json={"player_id": "wait_dead"})
+            assert response.status_code == 400
+        finally:
+            _remove_player("wait_dead")
+
+
+class TestBountyStateRoutes:
+
+    def test_bounty_state_endpoint(self):
+        from backend.systems.task_fsm import TaskFSM
+        p = make_player(player_id="bstate_test")
+        fsm = TaskFSM()
+        fsm.sub_steps = [{"key": "s1", "completed": False}]
+        bounty = {
+            "id": "b1",
+            "type": "讨伐",
+            "title": "山贼头目",
+            "active_bounty": True,
+            "task_fsm": fsm.to_dict(),
+        }
+        p.bounties = [bounty]
+        _register_player(p)
+        try:
+            response = client.get("/api/bounty/bstate_test/b1/state")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["bounty_id"] == "b1"
+            assert "state" in data
+            assert "sub_steps" in data
+            assert "completed_steps" in data
+            assert "transition_log" in data
+        finally:
+            _remove_player("bstate_test")
+
+    def test_bounty_state_not_found(self):
+        p = make_player(player_id="bstate_nf")
+        _register_player(p)
+        try:
+            response = client.get("/api/bounty/bstate_nf/nonexistent/state")
+            assert response.status_code == 404
+        finally:
+            _remove_player("bstate_nf")
