@@ -31,6 +31,23 @@ _log = logging.getLogger("app")
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "static"
 
+_NO_STORE_HEADERS = {
+    "cache-control": "no-store, no-cache, must-revalidate",
+    "pragma": "no-cache",
+    "expires": "0",
+}
+
+class _NoCacheStaticFiles(StaticFiles):
+    async def __call__(self, scope, receive, send):
+        async def _send(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                for k, v in _NO_STORE_HEADERS.items():
+                    headers.append((k.encode(), v.encode()))
+                message["headers"] = headers
+            await send(message)
+        await super().__call__(scope, receive, _send)
+
 def _cors_allow_origins() -> tuple[list[str], bool]:
     """返回 (origins, allow_credentials)。origins 为 * 时凭证必须为 False（浏览器规范）。"""
     raw = (settings.cors_allow_origins or "").strip()
@@ -218,13 +235,21 @@ if STATIC.is_dir():
         index_path = STATIC / "index.html"
         if not index_path.is_file():
             raise HTTPException(500, "缺少 static/index.html")
-        return FileResponse(index_path)
+        resp = FileResponse(index_path)
+        resp.headers.update(_NO_STORE_HEADERS)
+        for hdr in ("etag", "last-modified"):
+            resp.headers.pop(hdr, None)
+        return resp
 
     @app.get("/tests.html")
     async def _tests():
         tests_path = STATIC / "tests.html"
         if not tests_path.is_file():
             raise HTTPException(404)
-        return FileResponse(tests_path)
+        resp = FileResponse(tests_path)
+        resp.headers.update(_NO_STORE_HEADERS)
+        for hdr in ("etag", "last-modified"):
+            resp.headers.pop(hdr, None)
+        return resp
 
-    app.mount("/", StaticFiles(directory=str(STATIC)), name="static")
+    app.mount("/", _NoCacheStaticFiles(directory=str(STATIC)), name="static")

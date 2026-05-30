@@ -741,8 +741,16 @@ window.App = window.App || {};
 
     window.addEventListener("pageshow", function(event) {
       if (event.persisted) {
+        var co = document.getElementById("connectingOverlay");
+        if (co) co.style.display = "flex";
         fetch("/api/health", { cache: "no-store" })
-          .catch(function() { App._showOfflineScreen(); });
+          .then(function() {
+            if (co) co.style.display = "none";
+          })
+          .catch(function() {
+            if (co) co.style.display = "none";
+            App._showOfflineScreen();
+          });
       }
     });
 
@@ -756,6 +764,8 @@ window.App = window.App || {};
         return r.json();
       })
       .then(function(data) {
+        var co = document.getElementById("connectingOverlay");
+        if (co) co.style.display = "none";
         try {
           var cfg = JSON.parse(localStorage.getItem("lp_config") || "{}");
           if (cfg.shutdownSecret) {
@@ -766,6 +776,8 @@ window.App = window.App || {};
         } catch(_e) {}
       })
       .catch(function() {
+        var co = document.getElementById("connectingOverlay");
+        if (co) co.style.display = "none";
         App._showOfflineScreen();
       });
 
