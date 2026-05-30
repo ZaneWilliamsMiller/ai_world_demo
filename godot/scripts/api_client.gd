@@ -267,6 +267,14 @@ func shutdown_backend() -> Dictionary:
 	return {"success": res.get("_status", 0) == 200}
 
 
+## Wait (advance time by 1 tick).
+func player_wait() -> Dictionary:
+	var res: Dictionary = await request("/api/wait", "POST", {})
+	if res.get("_status", 0) == 200:
+		res.erase("_status")
+		return res
+	return {"ok": false, "note": "等待失败"}
+
 ## List available tests.
 func list_tests() -> Dictionary:
 	var res: Dictionary = await request("/api/tests/list", "GET", {})

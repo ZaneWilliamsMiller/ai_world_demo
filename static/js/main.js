@@ -250,6 +250,19 @@ window.App = window.App || {};
     }
   };
 
+  App.doWait = async function() {
+    if (!App.playerId) return;
+    try {
+      const data = await App.wait();
+      if (data) {
+        App.addMsg("system", data.note || "时光流逝……");
+        if (data.player) App.updateUI(data);
+      }
+    } catch (e) {
+      App.addMsg("system", "等待失败: " + e.message);
+    }
+  };
+
   App.doFinale = async function() {
     if (!App.playerId) return;
     App.showConfirm(

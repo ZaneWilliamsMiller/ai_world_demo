@@ -68,6 +68,7 @@ var _atmosphere_label: Label
 var _danger_label: Label
 var _bounty_container: VBoxContainer
 var _rest_btn: Button
+var _wait_btn: Button
 var _finale_btn: Button
 
 
@@ -227,6 +228,7 @@ func _build_game_ui() -> void:
 	_danger_label = refs["danger_label"]
 	_bounty_container = refs["bounty_container"]
 	_rest_btn = refs["rest_btn"]
+	_wait_btn = refs["wait_btn"]
 	_finale_btn = refs["finale_btn"]
 
 	# Initialize message display with dialogue nodes
@@ -234,6 +236,9 @@ func _build_game_ui() -> void:
 
 	_rest_btn.pressed.connect(func():
 		GameManager.rest()
+	)
+	_wait_btn.pressed.connect(func():
+		GameManager.wait()
 	)
 	_finale_btn.pressed.connect(func():
 		_dialog_manager.show_confirm(self,

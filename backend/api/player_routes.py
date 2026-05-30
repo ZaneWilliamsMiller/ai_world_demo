@@ -91,7 +91,7 @@ def _validate_move_preconditions(p, body) -> None:
             409,
             f"⚠️ 你正处于昏迷状态，无法移动。\n"
             f"   剩余恢复时间: 约{unconscious_remaining}个时辰\n"
-            f"   💡 建议: 在原地等待，或寻找医馆救治",
+            f"   💡 可点击「等待」或「休息」让时间流逝以加速苏醒",
         )
     if getattr(p, "enslaved", False):
         raise HTTPException(400, "你已沦为囚役,难以再自行迁徙")

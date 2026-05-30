@@ -158,7 +158,7 @@ const GAME_UI_KEYS := [
 	"vigor_bar", "vigor_label", "spirit_bar", "spirit_label",
 	"coins_label", "time_label", "weather_label", "map_name_label", "map_title_label",
 	"inventory_flow", "favor_vbox", "npc_list_container", "portal_list_container",
-	"atmosphere_label", "danger_label", "bounty_container", "rest_btn", "finale_btn",
+	"atmosphere_label", "danger_label", "bounty_container", "rest_btn", "wait_btn", "finale_btn",
 ]
 
 ## 构建游戏主界面（两栏布局）
@@ -206,6 +206,9 @@ func build_game_ui(parent: Control, on_tile_click: Callable, on_npc_map_click: C
 
 	refs["rest_btn"] = btn("🛏 休息", GameColors.BORDER_SILVER)
 	top_hb.add_child(refs["rest_btn"])
+
+	refs["wait_btn"] = btn("⏳ 等待", GameColors.BORDER_SILVER)
+	top_hb.add_child(refs["wait_btn"])
 
 	refs["finale_btn"] = btn("📜 终局", GameColors.ACCENT_PURPLE)
 	top_hb.add_child(refs["finale_btn"])

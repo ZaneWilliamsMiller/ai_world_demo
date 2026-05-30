@@ -268,6 +268,17 @@ func rest() -> void:
 	state_updated.emit()
 
 
+func wait() -> void:
+	var res: Dictionary = await ApiClient.player_wait()
+	if res.has("error"):
+		system_message.emit("等待失败: %s" % res.get("error", "?"))
+		return
+	system_message.emit(res.get("note", "时光流逝……"))
+	if res.has("player"):
+		_apply_player(res.player)
+	state_updated.emit()
+
+
 func use_item(item_name: String) -> void:
 	var body := {"player_id": player_id, "item": item_name}
 	var res: Dictionary = await ApiClient.request("/api/item/use", "POST", body)

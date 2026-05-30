@@ -106,6 +106,10 @@ window.App = window.App || {};
     return await backendPost("/api/rest", { player_id: App.playerId });
   };
 
+  App.wait = async function() {
+    return await backendPost("/api/wait", { player_id: App.playerId });
+  };
+
   App.useItem = async function(itemName) {
     return await backendPost("/api/item/use", { player_id: App.playerId, item: itemName });
   };

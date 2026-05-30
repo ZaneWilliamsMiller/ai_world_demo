@@ -136,7 +136,7 @@ async def use_item(body: UseItemBody) -> dict[str, Any]:
     if p.ended:
         raise HTTPException(400, "本局已收束")
     if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
-        raise HTTPException(409, "你正处于昏迷状态，无法使用物品")
+        pass
     if getattr(p, "enslaved", False):
         raise HTTPException(403, "你正被奴役，无法使用物品")
 
@@ -168,7 +168,7 @@ async def player_rest(body: RestBody) -> dict[str, Any]:
     if p.ended:
         raise HTTPException(400, "本局已收束")
     if int(getattr(p, "unconscious_ticks", 0) or 0) > 0:
-        raise HTTPException(400, "昏迷之中，身不由己")
+        pass
     if getattr(p, "enslaved", False):
         raise HTTPException(403, "你正被奴役，无法歇息")
     if getattr(p, "move_locked", False):
@@ -187,6 +187,56 @@ async def player_rest(body: RestBody) -> dict[str, Any]:
     danger_sense = danger_sense_narrative(p, scan) if scan else None
     return {
         **result,
+        "player": _player_public(p),
+        "danger_sense": {
+            "alert": danger_sense or None,
+            "scan": scan,
+        },
+        "atmosphere": scene_context(p),
+        "events": list(p.events[-5:]),
+    }
+
+
+class WaitBody(BaseModel):
+    player_id: str = _PID
+
+@router.post("/api/wait")
+async def player_wait(body: WaitBody) -> dict[str, Any]:
+    from backend.session.store import room
+    from backend.systems.time_weather import advance_clock
+    from backend.data.atmosphere import scene_context
+    p = room.players.get(body.player_id)
+    if not p:
+        raise HTTPException(404, f"未知 player_id: {body.player_id}")
+    if getattr(p, "dead", False):
+        raise HTTPException(400, "魂已归西，再无等待")
+    if p.ended:
+        raise HTTPException(400, "本局已收束")
+    if getattr(p, "enslaved", False):
+        raise HTTPException(403, "你正被奴役，无法自主等待")
+
+    was_unconscious = int(getattr(p, "unconscious_ticks", 0) or 0) > 0
+
+    async with p.lock:
+        advance_clock(p, 1)
+
+    scan = perception_scan(p)
+    danger_sense = danger_sense_narrative(p, scan) if scan else None
+
+    still_unconscious = int(getattr(p, "unconscious_ticks", 0) or 0) > 0
+    if was_unconscious and not still_unconscious:
+        note = "你缓缓睁开双眼，意识逐渐清明……"
+    elif was_unconscious:
+        remaining = int(getattr(p, "unconscious_ticks", 0) or 0)
+        note = f"昏迷之中，时光流逝……约{remaining}个时辰后可苏醒"
+    else:
+        note = "你驻足片刻，静静等待。"
+
+    return {
+        "ok": True,
+        "note": note,
+        "ticks_passed": 1,
+        "unconscious": still_unconscious,
         "player": _player_public(p),
         "danger_sense": {
             "alert": danger_sense or None,
