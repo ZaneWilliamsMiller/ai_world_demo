@@ -127,6 +127,15 @@ app.add_middleware(
     allow_headers=["Content-Type", "X-Shutdown-Secret", "X-Admin-Secret"],
 )
 
+@app.middleware("http")
+async def no_cache_static(request: Request, call_next):
+    response = await call_next(request)
+    if not request.url.path.startswith("/api/") and not request.url.path.startswith("/docs") and not request.url.path.startswith("/openapi"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
 app.include_router(api_router)
 
 @app.middleware("http")

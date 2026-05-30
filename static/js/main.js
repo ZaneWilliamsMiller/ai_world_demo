@@ -233,8 +233,13 @@ window.App = window.App || {};
           if (d) { _pollErrorCount = 0; App.updateUI(d); }
         }).catch(function(err) {
           _pollErrorCount++;
-          if (err.message && err.message.includes('404')) { App.doLogout(); }
-          else if (_pollErrorCount >= 3) { App.addMsg("system", "⚠️ 与服务器连接中断，正在尝试重连..."); }
+          if (err.message && err.message.includes('404')) {
+            App.doLogout();
+          } else if (_pollErrorCount >= 3) {
+            fetch("/api/health", { cache: "no-store" })
+              .then(function() { _pollErrorCount = 0; })
+              .catch(function() { App.addMsg("system", "\u26a0\ufe0f \u4e0e\u670d\u52a1\u5668\u8fde\u63a5\u4e2d\u65ad\uff0c\u8bf7\u68c0\u67e5\u540e\u7aef\u670d\u52a1\u662f\u5426\u8fd0\u884c"); });
+          }
         });
       }
     }, 30000);
@@ -667,6 +672,34 @@ window.App = window.App || {};
     }
   };
 
+  App._showOfflineScreen = function() {
+    var overlay = document.getElementById("loginOverlay");
+    if (!overlay) return;
+    overlay.textContent = "";
+    var box = document.createElement("div");
+    box.className = "login-box";
+    var icon = document.createElement("div");
+    icon.style.cssText = "text-align:center;font-size:48px;margin-bottom:16px;";
+    icon.textContent = "\u26a0\ufe0f";
+    box.appendChild(icon);
+    var title = document.createElement("h3");
+    title.style.cssText = "text-align:center;color:#ef5350;";
+    title.textContent = "\u670d\u52a1\u672a\u8fd0\u884c";
+    box.appendChild(title);
+    var desc = document.createElement("p");
+    desc.style.cssText = "text-align:center;color:#a0a0b0;margin-top:12px;";
+    desc.textContent = "\u540e\u7aef\u670d\u52a1\u5f53\u524d\u4e0d\u53ef\u7528\uff0c\u8bf7\u8fd0\u884c python start.py \u542f\u52a8\u670d\u52a1\u540e\u5237\u65b0\u9875\u9762";
+    box.appendChild(desc);
+    var btn = document.createElement("button");
+    btn.style.cssText = "margin-top:16px;width:100%;";
+    btn.textContent = "\ud83d\udd04 \u5237\u65b0\u91cd\u8bd5";
+    btn.onclick = function() { window.location.reload(); };
+    box.appendChild(btn);
+    overlay.textContent = "";
+    overlay.appendChild(box);
+    overlay.style.display = "flex";
+  };
+
   let _pollErrorCount = 0;
   var _pageVisible = true;
 
@@ -690,7 +723,9 @@ window.App = window.App || {};
         if (err.message && err.message.includes('404')) {
           App.doLogout();
         } else if (_pollErrorCount >= 3) {
-          App.addMsg("system", "⚠️ 与服务器连接中断，正在尝试重连...");
+          fetch("/api/health", { cache: "no-store" })
+            .then(function() { _pollErrorCount = 0; })
+            .catch(function() { App.addMsg("system", "\u26a0\ufe0f \u4e0e\u670d\u52a1\u5668\u8fde\u63a5\u4e2d\u65ad\uff0c\u8bf7\u68c0\u67e5\u540e\u7aef\u670d\u52a1\u662f\u5426\u8fd0\u884c"); });
         }
       });
     }
@@ -699,8 +734,18 @@ window.App = window.App || {};
   document.addEventListener("DOMContentLoaded", function() {
     DOM.init();
 
+    window.addEventListener("pageshow", function(event) {
+      if (event.persisted) {
+        fetch("/api/health", { cache: "no-store" })
+          .catch(function() { App._showOfflineScreen(); });
+      }
+    });
+
     fetch("/api/health", { cache: "no-store" })
-      .then(function(r) { return r.json(); })
+      .then(function(r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
       .then(function(data) {
         try {
           var cfg = JSON.parse(localStorage.getItem("lp_config") || "{}");
@@ -711,7 +756,9 @@ window.App = window.App || {};
           }
         } catch(_e) {}
       })
-      .catch(function() {});
+      .catch(function() {
+        App._showOfflineScreen();
+      });
 
     const sel = DOM.npcSelect;
     if (sel) {
