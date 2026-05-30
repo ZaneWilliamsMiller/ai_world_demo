@@ -7,6 +7,7 @@ window.App = window.App || {};
   "use strict";
 
   let _statePollTimer = null;
+  let _shuttingDown = false;
 
   const HtmlUtils = App.HtmlUtils;
 
@@ -67,7 +68,7 @@ window.App = window.App || {};
 
     if (_statePollTimer) { clearInterval(_statePollTimer); _statePollTimer = null; }
     _statePollTimer = setInterval(function() {
-      if (!_pageVisible) return;
+      if (_shuttingDown || !_pageVisible) return;
       if (App.playerId && !App.isStreaming) {
         App.fetchState().then(function(d) {
           if (d) { _pollErrorCount = 0; App.updateUI(d); }
@@ -382,6 +383,9 @@ window.App = window.App || {};
 
           await new Promise(function(r) { setTimeout(r, 600); });
 
+          _shuttingDown = true;
+          if (_statePollTimer) { clearInterval(_statePollTimer); _statePollTimer = null; }
+
           if (overlay) {
             const resultIcon = backendSuccess ? "\u2705" : "\ud83d\udf36";
             const resultTitle = backendSuccess ? "服务已关闭" : "服务关闭未完全成功";
@@ -467,7 +471,7 @@ window.App = window.App || {};
 
   document.addEventListener("visibilitychange", function() {
     _pageVisible = !document.hidden;
-    if (_pageVisible && App.playerId) {
+    if (_pageVisible && App.playerId && !_shuttingDown) {
       App.fetchState().then(function(data) { if (data) App.updateUI(data); }).catch(function() {});
     }
   });
