@@ -414,6 +414,12 @@ export interface SavesListResponse {
   saves?: any[];
 }
 
+export interface ShutdownResponse {
+  status?: string;
+  message?: string;
+  hint?: string;
+}
+
 export interface StateResponse {
   display_name?: string;
   player: PlayerPublic;
