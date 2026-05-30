@@ -49,6 +49,10 @@ def err(msg: str) -> None:
     print(f"  ✗ {msg}")
 
 
+def _strip_version(ref: str) -> str:
+    return ref.split("?")[0]
+
+
 def check_script_order(html_path: Path) -> None:
     print(f"\n📋 Script load order: {html_path.name}")
     text = html_path.read_text(encoding="utf-8")
@@ -58,7 +62,8 @@ def check_script_order(html_path: Path) -> None:
         return
 
     loaded = []
-    for name, defer_attr in scripts:
+    for raw_name, defer_attr in scripts:
+        name = _strip_version(raw_name)
         if not defer_attr and name != "tests.js":
             err(f"{html_path.name}: <script src='js/{name}'> missing defer attribute")
 
@@ -79,7 +84,7 @@ def check_script_order(html_path: Path) -> None:
 def check_css_order(html_path: Path) -> None:
     print(f"\n🎨 CSS load order: {html_path.name}")
     text = html_path.read_text(encoding="utf-8")
-    stylesheets = re.findall(r'<link\s+rel="stylesheet"\s+href="css/([^"]+)"', text)
+    stylesheets = [_strip_version(s) for s in re.findall(r'<link\s+rel="stylesheet"\s+href="css/([^"]+)"', text)]
     if not stylesheets:
         err(f"No stylesheets found in {html_path.name}")
         return
@@ -103,7 +108,7 @@ def check_file_references(html_path: Path) -> None:
     css_refs = re.findall(r'<link\s+[^>]*href="([^"]+)"', text)
 
     for ref in js_refs + css_refs:
-        file_path = STATIC / ref
+        file_path = STATIC / _strip_version(ref)
         if not file_path.exists():
             err(f"{html_path.name}: Referenced file does not exist: {ref}")
 

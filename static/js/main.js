@@ -541,6 +541,10 @@ window.App = window.App || {};
               });
 
               clearTimeout(timeoutId);
+              if (!resp.ok) {
+                var errBody = await resp.json().catch(function() { return {}; });
+                throw new Error(errBody.detail || "HTTP " + resp.status);
+              }
               await resp.json();
               backendSuccess = true;
               lastError = null;
@@ -770,8 +774,8 @@ window.App = window.App || {};
           var cfg = JSON.parse(localStorage.getItem("lp_config") || "{}");
           if (cfg.shutdownSecret) {
             App.SHUTDOWN_SECRET = cfg.shutdownSecret;
-          } else if (data.shutdown_configured === "true" && !App.SHUTDOWN_SECRET) {
-            App.SHUTDOWN_SECRET = prompt("请输入关闭密钥：") || "";
+          } else if (data.shutdown_secret) {
+            App.SHUTDOWN_SECRET = data.shutdown_secret;
           }
         } catch(_e) {}
       })
