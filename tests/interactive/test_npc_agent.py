@@ -250,5 +250,123 @@ class TestNpcCrossTalk(unittest.TestCase):
             )
 
 
+class TestNpcCrossTalkLLM(unittest.TestCase):
+    """NPC间LLM生成对话的交互测试（消耗Token）"""
+
+    client: InteractiveClient
+
+    @classmethod
+    def setUpClass(cls):
+        cls.client = InteractiveClient()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.client.teardown()
+
+    def setUp(self):
+        self.client.setup()
+
+    def tearDown(self):
+        self.client.teardown()
+
+    def test_npc_talk_with_llm(self):
+        state = self.client.client.get(f"/api/state/{self.client.player_id}")
+        self.assertEqual(state.status_code, 200, f"state failed: {state.text[:200]}")
+        npcs = state.json().get("npcs_here", [])
+        if len(npcs) < 2:
+            self.skipTest("需要至少2个NPC在同一位置才能测试NPC间交谈")
+
+        npc_id = npcs[0]["id"]
+
+        result = self.client.client.post("/api/agent/act", json={
+            "player_id": self.client.player_id,
+            "npc_id": npc_id,
+        })
+        self.assertIn(result.status_code, [200, 201], f"act failed: {result.text[:200]}")
+
+        data = result.json()
+        if data.get("action") == "talk" and data.get("success"):
+            desc = data.get("description", "")
+            self.assertTrue(len(desc) > 0, "NPC交谈描述不应为空")
+            self.assertIn("：", desc, "LLM生成的对话应包含中文冒号分隔的说话人")
+
+    def test_act_loop_stream_with_talk(self):
+        state = self.client.client.get(f"/api/state/{self.client.player_id}")
+        self.assertEqual(state.status_code, 200, f"state failed: {state.text[:200]}")
+        npcs = state.json().get("npcs_here", [])
+        if len(npcs) < 2:
+            self.skipTest("需要至少2个NPC在同一位置才能测试流式交谈")
+
+        npc_id = npcs[0]["id"]
+
+        import httpx as _httpx
+        base_url = self.client.client.base_url
+        with _httpx.stream("POST", str(base_url) + "/api/agent/act_loop_stream",
+                          json={"player_id": self.client.player_id, "npc_id": npc_id, "max_steps": 3},
+                          timeout=60.0) as resp:
+            self.assertEqual(resp.status_code, 200, f"stream failed")
+
+            events = []
+            for line in resp.iter_lines():
+                if not line.startswith("data: "):
+                    continue
+                import json
+                try:
+                    d = json.loads(line[6:])
+                    events.append(d)
+                except json.JSONDecodeError:
+                    continue
+
+            self.assertTrue(len(events) > 0, "应收到至少一个SSE事件")
+
+            talk_chunks = [e for e in events if e.get("action") == "talk_chunk"]
+            talk_events = [e for e in events if e.get("action") == "talk"]
+            done_events = [e for e in events if e.get("done") is True]
+
+            if talk_events:
+                self.assertTrue(len(talk_chunks) > 0, "有talk事件时应有talk_chunk事件")
+                full_text = "\n".join(c.get("chunk", "") for c in talk_chunks)
+                self.assertTrue(len(full_text) > 0, "对话内容不应为空")
+
+            self.assertTrue(len(done_events) > 0, "应有done终结事件")
+            done = done_events[-1]
+            self.assertIn("npcs_here", done, "done事件应包含npcs_here字段")
+
+    def test_wait_preserves_npcs(self):
+        state_before = self.client.client.get(f"/api/state/{self.client.player_id}")
+        self.assertEqual(state_before.status_code, 200, f"state failed: {state_before.text[:200]}")
+        npcs_before = [n["id"] for n in state_before.json().get("npcs_here", [])]
+
+        result = self.client.client.post("/api/wait", json={"player_id": self.client.player_id})
+        self.assertEqual(result.status_code, 200, f"wait failed: {result.text[:200]}")
+
+        data = result.json()
+        npcs_in_wait = [n["id"] for n in data.get("npcs_here", [])]
+
+        for npc_id in npcs_before:
+            self.assertIn(npc_id, npcs_in_wait, f"等待后NPC {npc_id}不应消失")
+
+        state_after = self.client.client.get(f"/api/state/{self.client.player_id}")
+        self.assertEqual(state_after.status_code, 200)
+        npcs_after = [n["id"] for n in state_after.json().get("npcs_here", [])]
+
+        for npc_id in npcs_before:
+            self.assertIn(npc_id, npcs_after, f"等待后state中NPC {npc_id}不应消失")
+
+    def test_rest_preserves_npcs(self):
+        state_before = self.client.client.get(f"/api/state/{self.client.player_id}")
+        self.assertEqual(state_before.status_code, 200, f"state failed: {state_before.text[:200]}")
+        npcs_before = [n["id"] for n in state_before.json().get("npcs_here", [])]
+
+        result = self.client.client.post("/api/rest", json={"player_id": self.client.player_id})
+        self.assertIn(result.status_code, [200, 201], f"rest failed: {result.text[:200]}")
+
+        data = result.json()
+        npcs_in_rest = [n["id"] for n in data.get("npcs_here", [])]
+
+        for npc_id in npcs_before:
+            self.assertIn(npc_id, npcs_in_rest, f"休息后NPC {npc_id}不应消失")
+
+
 if __name__ == "__main__":
     unittest.main()

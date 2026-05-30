@@ -26,13 +26,13 @@ class TestPathfinding:
 
     def test_is_passable(self):
         from backend.systems.pathfinding import is_passable
-        assert is_passable("#") is True
+        assert is_passable("#") is False
         assert is_passable(".") is True
         assert is_passable("~") is True
 
     def test_walkable(self):
         from backend.systems.pathfinding import walkable
-        assert walkable("#") is True
+        assert walkable("#") is False
         assert walkable(".") is True
 
     def test_tile_cost_known(self):

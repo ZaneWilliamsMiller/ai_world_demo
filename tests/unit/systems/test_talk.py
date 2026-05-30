@@ -398,7 +398,7 @@ class TestBountyBoard:
         p.active_bounty = None
         p.completed_bounties = []
         p.reputation = {"yamen": 5}
-        bounty = {"id": "b1", "min_rep": {}, "requires": {}, "title": "Test Bounty"}
+        bounty = {"id": "b1", "min_rep": {}, "requires": {}, "title": "Test Bounty", "task_fsm": {"current_state": "available", "sub_steps": [], "completed_steps": [], "transition_log": []}}
         p.bounties = [bounty]
         ok, _msg = accept_bounty(p, "b1")
         assert ok is True
@@ -413,7 +413,7 @@ class TestBountyBoard:
 
     def test_abandon_bounty_success(self):
         p = make_player()
-        p.active_bounty = {"id": "b1", "title": "Test Bounty"}
+        p.active_bounty = {"id": "b1", "title": "Test Bounty", "task_fsm": {"current_state": "in_progress", "sub_steps": [], "completed_steps": [], "transition_log": []}}
         ok, _msg = abandon_bounty(p)
         assert ok is True
         assert p.active_bounty is None

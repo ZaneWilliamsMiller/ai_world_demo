@@ -200,7 +200,9 @@ window.App = window.App || {};
               currentTextEl = null;
               currentText = "";
               if (d.player) {
-                App.updateUI({ player: d.player });
+                var stateData = { player: d.player };
+                if (d.npcs_here) stateData.npcs_here = d.npcs_here;
+                App.updateUI(stateData);
               } else {
                 App.fetchState().then(function(data) { if (data) App.updateUI(data); }).catch(function() {});
               }

@@ -152,7 +152,7 @@ class TestBountyBoard:
     def test_complete_bounty_idempotent(self):
         from backend.systems.bounty_board import complete_bounty
         p = make_player()
-        p.active_bounty = {"id": "b1", "title": "test", "type": "errand", "target_id": "zhanggui", "requires": {"talk_npc": "zhanggui"}}
+        p.active_bounty = {"id": "b1", "title": "test", "type": "errand", "target_id": "zhanggui", "requires": {"talk_npc": "zhanggui"}, "task_fsm": {"current_state": "in_progress", "sub_steps": [], "completed_steps": [], "transition_log": []}}
         p.last_talk_npc_id = "zhanggui"
         p.last_talk_message = "test"
         p.completed_bounties = []

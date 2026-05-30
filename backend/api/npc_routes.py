@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from backend.agents import brain as agent_brain
 from backend.agents.actor import act_loop, execute_plan_step_async
 from backend.agents.game_state import get_or_init_mind
-from backend.api.views import player_public as _player_public
+from backend.api.views import npcs_here as _npcs_here, player_public as _player_public
 from backend.data.factions import FACTIONS
 from backend.data.npcs_data import NPCS
 from backend.data.prompts import SOCIETY_BIBLE, WORLD_NAME
@@ -200,6 +200,7 @@ async def player_rest(body: RestBody) -> dict[str, Any]:
     return {
         **result,
         "player": _player_public(p),
+        "npcs_here": _npcs_here(p),
         "danger_sense": {
             "alert": danger_sense or None,
             "scan": scan,
@@ -250,6 +251,7 @@ async def player_wait(body: WaitBody) -> dict[str, Any]:
         "ticks_passed": 1,
         "unconscious": still_unconscious,
         "player": _player_public(p),
+        "npcs_here": _npcs_here(p),
         "danger_sense": {
             "alert": danger_sense or None,
             "scan": scan,
@@ -582,6 +584,7 @@ async def agent_act(body: AgentActBody) -> dict[str, Any]:
         "success": result.success,
         "mind_summary": mind.plan_summary,
         "player": _player_public(p),
+        "npcs_here": _npcs_here(p),
     }
 
 
@@ -704,6 +707,7 @@ async def agent_act_loop_stream(body: AgentActLoopStreamBody) -> StreamingRespon
             "total_steps": total_steps,
             "reflected": reflected,
             "player": _player_public(p),
+            "npcs_here": _npcs_here(p),
         })
 
     return StreamingResponse(

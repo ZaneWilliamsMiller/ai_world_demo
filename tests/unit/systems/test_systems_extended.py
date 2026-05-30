@@ -58,6 +58,7 @@ class TestCheckBountyProgress:
             "id": "b1",
             "type": "缉拿",
             "requires": {"talk_to_npc": "npc_a", "ask_about": "逃犯下落"},
+            "task_fsm": {"current_state": "in_progress", "sub_steps": [{"key": "talk_to_npc_npc_a", "label": "与npc_a交谈", "completed": False}, {"key": "ask_about_逃犯下落", "label": "打听逃犯下落的消息", "completed": False}], "completed_steps": [], "transition_log": []},
         }
         p.last_talk_npc_id = "npc_a"
         p.last_talk_message = "我问你逃犯下落如何"
@@ -73,6 +74,7 @@ class TestCheckBountyProgress:
             "id": "b2",
             "type": "缉拿",
             "requires": {"talk_to_npc": "npc_a", "ask_about": "逃犯下落"},
+            "task_fsm": {"current_state": "in_progress", "sub_steps": [{"key": "talk_to_npc_npc_a", "label": "与npc_a交谈", "completed": False}, {"key": "ask_about_逃犯下落", "label": "打听逃犯下落的消息", "completed": False}], "completed_steps": [], "transition_log": []},
         }
         p.last_talk_npc_id = "npc_a"
         p.last_talk_message = "今天天气不错"
@@ -88,6 +90,7 @@ class TestCheckBountyProgress:
             "id": "b3",
             "type": "缉拿",
             "requires": {"talk_to_npc": "npc_a"},
+            "task_fsm": {"current_state": "in_progress", "sub_steps": [{"key": "talk_to_npc_npc_a", "label": "与npc_a交谈", "completed": False}], "completed_steps": [], "transition_log": []},
         }
         p.last_talk_npc_id = "npc_a"
         p.last_talk_message = ""
@@ -102,6 +105,7 @@ class TestCheckBountyProgress:
             "id": "b4",
             "type": "缉拿",
             "requires": {"talk_to_npc": "npc_a", "ask_about": "逃犯下落"},
+            "task_fsm": {"current_state": "in_progress", "sub_steps": [{"key": "talk_to_npc_npc_a", "label": "与npc_a交谈", "completed": False}, {"key": "ask_about_逃犯下落", "label": "打听逃犯下落的消息", "completed": False}], "completed_steps": [], "transition_log": []},
         }
         p.last_talk_npc_id = "npc_b"
         p.last_talk_message = "逃犯下落"
@@ -121,6 +125,7 @@ class TestCheckBountyProgress:
             "type": "押送",
             "requires": {"move_to": "市口"},
             "_target_pos": ("world", 10, 20),
+            "task_fsm": {"current_state": "in_progress", "sub_steps": [{"key": "move_to_市口", "label": "前往市口", "completed": False}], "completed_steps": [], "transition_log": []},
         }
         result = check_bounty_progress(p)
         assert result is not None
@@ -136,6 +141,7 @@ class TestCheckBountyProgress:
             "type": "押送",
             "requires": {"move_to": "市口"},
             "_target_pos": ("world", 10, 20),
+            "task_fsm": {"current_state": "in_progress", "sub_steps": [{"key": "move_to_市口", "label": "前往市口", "completed": False}], "completed_steps": [], "transition_log": []},
         }
         result = check_bounty_progress(p)
         assert result is not None
@@ -150,6 +156,7 @@ class TestCheckBountyProgress:
             "id": "b7",
             "type": "押送",
             "requires": {"move_to": "world"},
+            "task_fsm": {"current_state": "in_progress", "sub_steps": [{"key": "move_to_world", "label": "前往world", "completed": False}], "completed_steps": [], "transition_log": []},
         }
         result = check_bounty_progress(p)
         assert result is not None
@@ -163,6 +170,7 @@ class TestCheckBountyProgress:
             "id": "b8",
             "type": "押送",
             "requires": {"move_to": "other_map"},
+            "task_fsm": {"current_state": "in_progress", "sub_steps": [{"key": "move_to_other_map", "label": "前往other_map", "completed": False}], "completed_steps": [], "transition_log": []},
         }
         result = check_bounty_progress(p)
         assert result is not None
@@ -175,6 +183,7 @@ class TestCheckBountyProgress:
             "id": "b9",
             "type": "寻回",
             "requires": {"have_item": "旧信物"},
+            "task_fsm": {"current_state": "in_progress", "sub_steps": [{"key": "have_item_旧信物", "label": "获得旧信物", "completed": False}], "completed_steps": [], "transition_log": []},
         }
         result = check_bounty_progress(p)
         assert result is not None
@@ -188,6 +197,7 @@ class TestCheckBountyProgress:
             "id": "b10",
             "type": "寻回",
             "requires": {"have_item": "旧信物"},
+            "task_fsm": {"current_state": "in_progress", "sub_steps": [{"key": "have_item_旧信物", "label": "获得旧信物", "completed": False}], "completed_steps": [], "transition_log": []},
         }
         result = check_bounty_progress(p)
         assert result is not None
@@ -200,6 +210,7 @@ class TestCheckBountyProgress:
             "id": "b11",
             "type": "缉拿",
             "requires": {"talk_to_npc": "npc_a", "ask_about": "逃犯下落"},
+            "task_fsm": {"current_state": "in_progress", "sub_steps": [{"key": "talk_to_npc_npc_a", "label": "与npc_a交谈", "completed": False}, {"key": "ask_about_逃犯下落", "label": "打听逃犯下落的消息", "completed": False}], "completed_steps": [], "transition_log": []},
         }
         p.last_talk_npc_id = "npc_a"
         p.last_talk_message = "我问你逃犯下落如何"
