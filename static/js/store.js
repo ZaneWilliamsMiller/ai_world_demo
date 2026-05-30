@@ -99,11 +99,17 @@ window.App = window.App || {};
 
   App.saveConfig = function() {
     try {
-      localStorage.setItem("lp_config", JSON.stringify({
+      var cfg = {
         apiMode: App.apiMode,
         backendUrl: App.BACKEND_URL,
         llmModel: App.LLM_MODEL
-      }));
+      };
+      var secretEl = document.getElementById("cfgShutdownSecret");
+      if (secretEl && secretEl.value) {
+        cfg.shutdownSecret = secretEl.value;
+        App.SHUTDOWN_SECRET = secretEl.value;
+      }
+      localStorage.setItem("lp_config", JSON.stringify(cfg));
     } catch(e) {
       console.warn("[App] 保存配置失败:", e);
     }
@@ -135,6 +141,12 @@ window.App = window.App || {};
       }
 
       if (cfg.llmModel) App.LLM_MODEL = cfg.llmModel;
+
+      if (cfg.shutdownSecret) {
+        App.SHUTDOWN_SECRET = cfg.shutdownSecret;
+        var secretEl = document.getElementById("cfgShutdownSecret");
+        if (secretEl) secretEl.value = cfg.shutdownSecret;
+      }
 
     } catch(e) {
       console.warn("[App] 加载配置失败:", e);

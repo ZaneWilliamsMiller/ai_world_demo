@@ -3,11 +3,11 @@ window.App = window.App || {};
 (function(App) {
   "use strict";
 
-  App.doTalk = async function() {
+  App.doTalk = async function(autoMsg) {
     if (App.isStreaming) return;
 
     var input = document.getElementById("msgInput");
-    var msg   = input.value.trim();
+    var msg = autoMsg || (input ? input.value.trim() : "");
     if (!msg || !App.selectedNpcId || !App.playerId) return;
 
     if (msg.length > 2000) {
@@ -15,7 +15,7 @@ window.App = window.App || {};
       return;
     }
 
-    input.value = "";
+    if (input && !autoMsg) input.value = "";
     App.addMsg("player", msg);
 
     App.isStreaming = true;
@@ -101,7 +101,7 @@ window.App = window.App || {};
                 App.updateUI(stateData);
               }
               if (!d.player) {
-                App.fetchState().then(function(data) { if (data) App.updateUI(data); });
+                App.fetchState().then(function(data) { if (data) App.updateUI(data); }).catch(function() {});
               }
               break;
             }
@@ -126,7 +126,7 @@ window.App = window.App || {};
       if (!receivedDone) {
         visibleText += "\n[连接中断，回复可能不完整]";
         textEl.textContent = visibleText;
-        App.fetchState().then(function(data) { if (data) App.updateUI(data); });
+        App.fetchState().then(function(data) { if (data) App.updateUI(data); }).catch(function() {});
       }
     } catch (e) {
       var errorMsg = e.message || "对话中断，请重试";

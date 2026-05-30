@@ -126,5 +126,9 @@ class SessionStore:
         async with self._lock:
             return self.players.pop(player_id, None)
 
+    async def snapshot(self) -> list[tuple[str, PlayerState]]:
+        async with self._lock:
+            return list(self.players.items())
+
 
 room = SessionStore()

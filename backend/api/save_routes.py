@@ -54,7 +54,6 @@ async def load_player(body: LoadBody) -> dict[str, Any]:
         raise HTTPException(400, "此角色已在真实江湖中身故，存档已封")
     if loaded.ended:
         raise HTTPException(400, "此角色的故事已收束，不可再入")
-    await room.set_player(body.player_id, loaded)
     async with loaded.lock:
         for attr in ("bounties", "completed_bounties", "rumors", "events"):
             val = getattr(loaded, attr, None)
@@ -66,6 +65,7 @@ async def load_player(body: LoadBody) -> dict[str, Any]:
                 setattr(loaded, attr, {})
         init_npc_positions(loaded)
         init_npc_inventories(loaded)
+    await room.set_player(body.player_id, loaded)
     return build_init_response(loaded)
 
 

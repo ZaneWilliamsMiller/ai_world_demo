@@ -298,7 +298,8 @@ async def _handle_llm_response(response_data: dict[str, Any], cache, circuit_bre
         content = msg.get("content") or ""
     content = content or ""
 
-    await cache.set(messages, content, temperature=temperature, model=model, max_tokens=max_tokens)
+    if settings.llm_cache_enabled:
+        await cache.set(messages, content, temperature=temperature, model=model, max_tokens=max_tokens)
     await circuit_breaker.success()
 
     return content
@@ -379,6 +380,12 @@ async def chat_completion(
     use_custom = llm_base_url or llm_api_key or llm_model
 
     if use_custom:
+        cb = get_circuit_breaker()
+        if not await cb.allow():
+            raise RuntimeError(
+                f"LLM API circuit breaker OPEN (state={cb.state.value}); "
+                "requests blocked to prevent cascading failures"
+            )
         url = f"{(llm_base_url or settings.llm_base_url).rstrip('/')}/chat/completions"
         body = _build_request_body(
             messages, temperature, max_tokens,
@@ -409,11 +416,13 @@ async def chat_completion(
                     msg = choices[0].get("message", {})
                     content = msg.get("content") or ""
                 content = content or ""
+                await cb.success()
                 return content
             except Exception as exc:
                 last_exc = exc
                 status = getattr(r, "status_code", 0) if r else 0
                 if status not in RETRYABLE_HTTP_STATUSES or attempt == max_retries:
+                    await cb.failure()
                     raise
                 import random as _rng
                 backoff = (2 ** attempt) + _rng.uniform(0, RETRY_BACKOFF_JITTER_MAX)
@@ -426,9 +435,10 @@ async def chat_completion(
     sem = await _get_semaphore()
 
     # ── 1. 检查缓存 ──
-    cached = await cache.get(messages, temperature=temperature, model=settings.llm_model, max_tokens=max_tokens)
-    if cached is not None:
-        return cached
+    if settings.llm_cache_enabled:
+        cached = await cache.get(messages, temperature=temperature, model=settings.llm_model, max_tokens=max_tokens)
+        if cached is not None:
+            return cached
 
     # ── 2. 熔断器检查 ──
     if not await cb.allow():
@@ -475,6 +485,12 @@ async def stream_chat_completion(
     use_custom = llm_base_url or llm_api_key or llm_model
 
     if use_custom:
+        cb = get_circuit_breaker()
+        if not await cb.allow():
+            raise RuntimeError(
+                f"LLM API circuit breaker OPEN (state={cb.state.value}); "
+                "requests blocked to prevent cascading failures"
+            )
         url = f"{(llm_base_url or settings.llm_base_url).rstrip('/')}/chat/completions"
         body = _build_request_body(
             messages, temperature, max_tokens,
@@ -498,7 +514,9 @@ async def stream_chat_completion(
                     piece = _parse_stream_line(line)
                     if piece:
                         yield piece
+                await cb.success()
             except Exception as stream_err:
+                await cb.failure()
                 log.error(f"Custom config stream error: {stream_err}")
                 yield "[STREAM_ERROR] 流式响应异常"
         return

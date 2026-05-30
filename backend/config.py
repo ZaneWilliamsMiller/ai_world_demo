@@ -9,7 +9,7 @@ _ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=str(_ENV_PATH) if _ENV_PATH.is_file() else ".env",
+        env_file=str(_ENV_PATH) if _ENV_PATH.is_file() else None,
         env_file_encoding="utf-8",
         extra="ignore",
     )

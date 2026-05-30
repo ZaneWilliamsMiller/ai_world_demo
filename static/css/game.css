@@ -523,7 +523,6 @@
   box-shadow: 0 4px 16px rgba(239, 68, 68, 0.2);
   animation: errorPulse 2s ease-in-out 3, msgIn 0.3s ease-out;
   position: relative;
-  overflow: hidden;
 }
 
 .msg.system-error::before {
@@ -534,6 +533,7 @@
   font-size: 24px;
   opacity: 0.12;
   transform: rotate(15deg);
+  pointer-events: none;
 }
 
 .msg.system-error.important {

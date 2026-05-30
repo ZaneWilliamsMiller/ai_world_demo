@@ -195,7 +195,7 @@ def suggest_item_price(item_name: str, player: Any = None, weather: str | None =
 
     # 构建市场行情提示（含地点与倍数）
     if player and hasattr(player, 'map_id'):
-        str(getattr(player, 'map_id', ''))
+        pass
     market_hint = f"{map_hint}，{item_name}当地约{local}文（基准{base}文）"
 
     return {
@@ -552,7 +552,6 @@ def use_player_item(p: PlayerState, item_name: str) -> dict[str, object]:
             p.item_use_tracker = {}
         current_day = int(getattr(p, "world_day", 1) or 1)
         if p.item_use_tracker.get("_day") != current_day:
-            p.item_use_tracker.get("_day")
             p.item_use_tracker["_day"] = current_day
             keys_to_remove = [k for k in p.item_use_tracker if k != "_day" and not k.startswith("fish_") and not k.startswith("fruit_") and not k.startswith("rest_")]
             for k in keys_to_remove:

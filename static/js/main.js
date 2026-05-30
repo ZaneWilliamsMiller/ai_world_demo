@@ -134,7 +134,7 @@ window.App = window.App || {};
     } catch (_e) {
       const savesList = DOM.savesList || document.getElementById("savesList");
       // 错误消息使用安全方式显示
-      HtmlUtils.setSafeHtml(savesList, '<div style="color:#ef5350;">加载存档列表失败</div>');
+      HtmlUtils.setTrustedHtml(savesList, '<div style="color:#ef5350;">加载存档列表失败</div>');
     }
   };
 
@@ -224,6 +224,8 @@ window.App = window.App || {};
       function() {
         if (_statePollTimer) { clearInterval(_statePollTimer); _statePollTimer = null; }
         App.playerId = null;
+        App.isStreaming = false;
+        App.selectedNpcId = null;
         const mainUI = DOM.mainUI || document.getElementById("mainUI");
         const topbar = DOM.topbar || document.getElementById("topbar");
         const loginOverlay = DOM.loginOverlay || document.getElementById("loginOverlay");
@@ -360,11 +362,7 @@ window.App = window.App || {};
       "确定要删除此存档吗？<br><br>⚠️ <b>此操作不可逆</b>",
       async function() {
         try {
-          await fetch(App.API + "/delete-save", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ player_id: pid })
-          });
+          await App.backendPost("/api/delete-save", { player_id: pid });
           App.addMsg("system", "存档已删除");
           App.showLoadForm();
         } catch (e) {
@@ -408,7 +406,14 @@ window.App = window.App || {};
       e.stopPropagation();
       cleanup();
       if (typeof onConfirm === "function") {
-        onConfirm();
+        try {
+          var result = onConfirm();
+          if (result && typeof result.catch === "function") {
+            result.catch(function(err) { console.error("onConfirm error:", err); });
+          }
+        } catch (err) {
+          console.error("onConfirm error:", err);
+        }
       }
     }
 
@@ -612,7 +617,7 @@ window.App = window.App || {};
   document.addEventListener("visibilitychange", function() {
     _pageVisible = !document.hidden;
     if (_pageVisible && App.playerId && App.apiMode === "backend") {
-      App.fetchState().then(function(data) { if (data) App.updateUI(data); });
+      App.fetchState().then(function(data) { if (data) App.updateUI(data); }).catch(function() {});
     }
   });
 
@@ -641,9 +646,12 @@ window.App = window.App || {};
     fetch("/api/health", { cache: "no-store" })
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        if (data.shutdown_secret) {
-          App.SHUTDOWN_SECRET = data.shutdown_secret;
-        }
+        try {
+          var cfg = JSON.parse(localStorage.getItem("lp_config") || "{}");
+          if (cfg.shutdownSecret) {
+            App.SHUTDOWN_SECRET = cfg.shutdownSecret;
+          }
+        } catch(_e) {}
       })
       .catch(function() {});
 
@@ -675,7 +683,6 @@ window.App = window.App || {};
     if (cancelStreamBtn) {
       cancelStreamBtn.addEventListener("click", function() {
         App.cancelTalkStream();
-        cancelStreamBtn.classList.remove("visible");
       });
     }
   });

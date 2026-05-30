@@ -52,13 +52,13 @@ async def _auto_save_loop():
         try:
             await asyncio.sleep(settings.auto_save_interval_s)
             saved = 0
-            async with room._lock:
-                snapshot = list(room.players.items())
+            snapshot = await room.snapshot()
             for pid, p in snapshot:
                 if p.dead or p.ended:
                     continue
                 try:
-                    await asyncio.to_thread(save_game, p)
+                    async with p.lock:
+                        await asyncio.to_thread(save_game, p)
                     saved += 1
                 except Exception as e:
                     _save_log.error("auto-save failed %s: %s", pid, e)
@@ -78,17 +78,23 @@ async def lifespan(app: FastAPI):
     yield
     if _auto_save_task and not _auto_save_task.done():
         _auto_save_task.cancel()
+        try:
+            await _auto_save_task
+        except asyncio.CancelledError:
+            pass
     if _shutdown_requested:
         _log.info("shutdown already saved by shutdown endpoint, skipping lifespan save")
     else:
         saved = 0
-        for pid, p in list(room.players.items()):
+        snapshot = await room.snapshot()
+        for pid, p in snapshot:
             if p.dead or p.ended:
                 continue
             max_save_retries = 2
             for save_attempt in range(max_save_retries):
                 try:
-                    await asyncio.to_thread(save_game, p)
+                    async with p.lock:
+                        await asyncio.to_thread(save_game, p)
                     saved += 1
                     break
                 except (ConnectionError, TimeoutError, OSError) as transient_err:
@@ -140,28 +146,8 @@ async def log_requests(request: Request, call_next):
 
     return response
 
-if STATIC.is_dir():
-    @app.get("/")
-    async def _index():
-        index_path = STATIC / "index.html"
-        if not index_path.is_file():
-            raise HTTPException(500, "缺少 static/index.html")
-        return FileResponse(index_path)
-
-    @app.get("/tests.html")
-    async def _tests():
-        tests_path = STATIC / "tests.html"
-        if not tests_path.is_file():
-            raise HTTPException(404)
-        return FileResponse(tests_path)
-
-    app.mount("/", StaticFiles(directory=str(STATIC)), name="static")
-
-
 @app.post("/api/shutdown")
 async def shutdown_server(request: Request):
-    """关闭服务（仅用于开发环境）"""
-
     secret = request.headers.get("X-Shutdown-Secret", "")
     expected = settings.shutdown_secret
     if not expected:
@@ -174,13 +160,22 @@ async def shutdown_server(request: Request):
     global _shutdown_requested
     _shutdown_requested = True
 
-    def delayed_shutdown():
+    snapshot = await room.snapshot()
+
+    def delayed_shutdown(players_snapshot):
         _time.sleep(3.0)
         _log.info("进程即将退出...")
 
+        shutdown_marker = str(Path(__file__).resolve().parent.parent / ".shutdown_requested")
+        try:
+            with open(shutdown_marker, "w") as f:
+                f.write("1")
+        except Exception:
+            pass
+
         try:
             saved = 0
-            for pid, p in list(room.players.items()):
+            for pid, p in players_snapshot:
                 if p.dead or p.ended:
                     continue
                 try:
@@ -201,7 +196,7 @@ async def shutdown_server(request: Request):
 
         os._exit(0)
 
-    thread = threading.Thread(target=delayed_shutdown, daemon=True)
+    thread = threading.Thread(target=delayed_shutdown, args=(snapshot,), daemon=True)
     thread.start()
 
     return {
@@ -209,3 +204,20 @@ async def shutdown_server(request: Request):
         "message": "服务正在关闭",
         "hint": "检查终端窗口查看详细日志"
     }
+
+if STATIC.is_dir():
+    @app.get("/")
+    async def _index():
+        index_path = STATIC / "index.html"
+        if not index_path.is_file():
+            raise HTTPException(500, "缺少 static/index.html")
+        return FileResponse(index_path)
+
+    @app.get("/tests.html")
+    async def _tests():
+        tests_path = STATIC / "tests.html"
+        if not tests_path.is_file():
+            raise HTTPException(404)
+        return FileResponse(tests_path)
+
+    app.mount("/", StaticFiles(directory=str(STATIC)), name="static")

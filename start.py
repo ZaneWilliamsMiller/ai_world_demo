@@ -12,9 +12,11 @@
 """
 
 import atexit
+import contextlib
 import io
 import os
 import platform
+import re
 import signal
 import socket
 import subprocess
@@ -26,11 +28,11 @@ _CREATE_NO_WINDOW: int = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 if sys.platform == "win32" and sys.stdout and hasattr(sys.stdout, "buffer"):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
-import contextlib
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_PORT = 8765
 PID_FILE = os.path.join(PROJECT_ROOT, ".server.pid")
+SHUTDOWN_MARKER = os.path.join(PROJECT_ROOT, ".shutdown_requested")
 
 _child_processes = []
 
@@ -107,7 +109,7 @@ def kill_port_process(port: int) -> bool:
             capture_output=True, text=True, timeout=5, check=False
         )
         for line in result.stdout.splitlines():
-            if f":{port}" in line and "LISTENING" in line:
+            if re.search(rf":{port}\s", line) and "LISTENING" in line:
                 parts = line.split()
                 pid = int(parts[-1])
                 if pid > 0:
@@ -160,12 +162,15 @@ def start_server(port: int = DEFAULT_PORT, background: bool = False) -> subproce
     if not background:
         print(f"🔧 启动服务 (端口 {port})...")
 
+    try:
+        os.remove(SHUTDOWN_MARKER)
+    except Exception:
+        pass
+
     if is_port_in_use(port) and not is_backend_running(port=port):
         if not background:
             print(f"⚠️ 端口 {port} 被占用但不是有效服务，尝试清理...")
         kill_port_process(port)
-
-    os.chdir(PROJECT_ROOT)
 
     cmd = [sys.executable, "-m", "uvicorn", "backend.app:app",
            "--host", "127.0.0.1", "--port", str(port)]
@@ -198,6 +203,7 @@ def start_server(port: int = DEFAULT_PORT, background: bool = False) -> subproce
         t = threading.Thread(target=_forward_output, args=(proc,), daemon=True)
         t.start()
 
+    _child_processes[:] = [p for p in _child_processes if p.poll() is None]
     _child_processes.append(proc)
 
     max_wait = 15
@@ -214,7 +220,7 @@ def start_server(port: int = DEFAULT_PORT, background: bool = False) -> subproce
 
     if not background:
         print(f"⚠️ 服务启动超时 ({max_wait}s)，请手动检查")
-    return proc
+    return None
 
 
 def open_browser(url: str) -> None:
@@ -278,7 +284,9 @@ def start_godot_frontend(godot_path: str | None = None) -> None:
     cmd = [godot_path, "--path", godot_project]
     creationflags = _CREATE_NO_WINDOW if platform.system() == "Windows" else 0
 
-    subprocess.Popen(cmd, cwd=PROJECT_ROOT, creationflags=creationflags)
+    godot_proc = subprocess.Popen(cmd, cwd=PROJECT_ROOT, creationflags=creationflags)
+    _child_processes[:] = [p for p in _child_processes if p.poll() is None]
+    _child_processes.append(godot_proc)
     print(f"✅ Godot已启动 → 项目: {godot_project}")
 
 
@@ -361,6 +369,15 @@ def main():
     try:
         while True:
             time.sleep(10)
+            if os.path.isfile(SHUTDOWN_MARKER):
+                print("🛑 检测到关闭请求标记，停止监控...")
+                try:
+                    os.remove(SHUTDOWN_MARKER)
+                except Exception:
+                    pass
+                _cleanup_children()
+                _remove_pid_file()
+                break
             if not is_backend_running(port=port):
                 restart_count += 1
                 if restart_count > max_restarts:
@@ -373,6 +390,7 @@ def main():
                 new_proc = start_server(port)
                 if new_proc:
                     print("✅ 服务已重启")
+                    restart_count = 0
                 else:
                     print("❌ 服务重启失败")
     except KeyboardInterrupt:

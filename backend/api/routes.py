@@ -43,6 +43,5 @@ async def health() -> dict[str, str]:
         "status": "ok",
         "llm_configured": str(llm_ok).lower(),
         "shutdown_configured": str(shutdown_ok).lower(),
-        "shutdown_secret": settings.shutdown_secret if shutdown_ok else "",
         "world": WORLD_NAME,
     }

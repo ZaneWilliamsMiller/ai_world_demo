@@ -14,7 +14,7 @@ window.App = window.App || {};
   var interactiveStats = { success: 0, failed: 0 };
 
   function apiBase() {
-    return App.API;
+    return "/api";
   }
 
   function safeId(name) {
@@ -501,6 +501,7 @@ window.App = window.App || {};
 
     stats.success = 0;
     stats.error = 0;
+    stats.running = 0;
     updateStats();
 
     for (var i = 0; i < modules.length; i++) {
@@ -532,6 +533,26 @@ window.App = window.App || {};
 
     try {
       var resp = await fetch(apiBase() + '/tests/interactive/stream/' + testName);
+      if (!resp.ok) {
+        statusEl.className = 'test-row-status status-error';
+        statusEl.textContent = '\u274c \u670d\u52a1\u7aef\u9519\u8bef ' + resp.status;
+        resultEl.textContent = '\u8bf7\u6c42\u5931\u8d25: HTTP ' + resp.status;
+        interactiveStats.failed++;
+        updateInteractiveStats();
+        btn.disabled = false;
+        btn.textContent = '\u25b6';
+        return;
+      }
+      if (!resp.body) {
+        statusEl.className = 'test-row-status status-error';
+        statusEl.textContent = '\u274c \u65e0\u54cd\u5e94\u4f53';
+        resultEl.textContent = '\u8bf7\u6c42\u5931\u8d25: \u65e0\u54cd\u5e94\u4f53';
+        interactiveStats.failed++;
+        updateInteractiveStats();
+        btn.disabled = false;
+        btn.textContent = '\u25b6';
+        return;
+      }
       var reader = resp.body.getReader();
       var decoder = new TextDecoder();
       var buffer = '';
@@ -658,7 +679,7 @@ window.App = window.App || {};
 
     for (var i = 0; i < mod.tests.length; i++) {
       var t = mod.tests[i];
-      badge.textContent = '\u23f3 ' + (i + 1) + '/' + mod.tests.length + ' \u8fd0\u884c\u4e2d';
+      badge.textContent = '\u23f3 ' + modPassed + '\u2705 ' + modFailed + '\u274c ' + (i + 1) + '/' + mod.tests.length + ' \u8fd0\u884c\u4e2d';
 
       var tBtn = document.getElementById('irowbtn-' + safeId(t.name));
       if (tBtn) {
@@ -672,11 +693,13 @@ window.App = window.App || {};
           modFailed++;
         }
       }
+
+      badge.textContent = '\u23f3 ' + modPassed + '\u2705 ' + modFailed + '\u274c ' + (i + 1) + '/' + mod.tests.length;
     }
 
     var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    var total = mod.tests.length;
-    var badgeText = total + '\u603b ' + modPassed + '\u901a\u8fc7';
+    var modTotal = modPassed + modFailed;
+    var badgeText = modTotal + '\u603b ' + modPassed + '\u901a\u8fc7';
     if (modFailed > 0) badgeText += ' ' + modFailed + '\u5931\u8d25';
     badgeText += ' (' + elapsed + 's)';
 
@@ -701,6 +724,7 @@ window.App = window.App || {};
 
     interactiveStats.success = 0;
     interactiveStats.failed = 0;
+    interactiveResults = {};
     updateInteractiveStats();
 
     for (var i = 0; i < interactiveModules.length; i++) {
@@ -715,21 +739,22 @@ window.App = window.App || {};
   }
 
   function formatOutput(testName, data, elapsed) {
+    var output = data.output || '';
     if (verbose) {
-      return '[' + testName + '] \u8017\u65f6: ' + elapsed + 's [\u9000\u51fa\u7801: ' + (data.exit_code ?? '?') + ']\n\n' + data.output;
+      return '[' + testName + '] \u8017\u65f6: ' + elapsed + 's [\u9000\u51fa\u7801: ' + (data.exit_code ?? '?') + ']\n\n' + output;
     }
     if (data.success) {
-      var summary = extractSummary(data.output);
+      var summary = extractSummary(output);
       if (summary) {
         return '\u2705 \u901a\u8fc7 (' + elapsed + 's)\n' + summary;
       }
       return '\u2705 \u901a\u8fc7 (' + elapsed + 's)';
     }
-    var failInfo = extractFailure(data.output);
+    var failInfo = extractFailure(output);
     if (failInfo) {
       return '\u274c \u5931\u8d25: ' + failInfo;
     }
-    var lines = data.output.trim().split('\n');
+    var lines = output.trim().split('\n');
     var lastErr = '';
     for (var i = lines.length - 1; i >= 0; i--) {
       if (lines[i].trim()) {

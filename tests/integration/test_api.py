@@ -106,7 +106,7 @@ class TestPlayerRoutes:
             [],
             None,
         )
-        mock_post_update.return_value = (None, [])
+        mock_post_update.return_value = (None, False)
         try:
             response = client.post("/api/move", json={
                 "player_id": "move_test",

@@ -60,23 +60,37 @@ window.App = window.App || {};
 
   async function llmChat(messages, options) {
     options = options || {};
-    var r = await fetch(App.LLM_API_URL + "/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + App.LLM_API_KEY
-      },
-      body: JSON.stringify({
-        model: App.LLM_MODEL,
-        messages: messages,
-        temperature: options.temperature || 0.7,
-        max_tokens: options.maxTokens || 1024,
-        stream: options.stream || false
-      })
-    });
+    var controller = new AbortController();
+    var timeout = setTimeout(function() { controller.abort(); }, 30000);
+    var r;
+    try {
+      r = await fetch(App.LLM_API_URL + "/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + App.LLM_API_KEY
+        },
+        body: JSON.stringify({
+          model: App.LLM_MODEL,
+          messages: messages,
+          temperature: options.temperature || 0.7,
+          max_tokens: options.maxTokens || 1024,
+          stream: options.stream || false
+        }),
+        signal: controller.signal
+      });
+    } catch (e) {
+      clearTimeout(timeout);
+      if (e.name === 'AbortError') throw new Error('LLM 请求超时 (30s)');
+      throw e;
+    }
+    clearTimeout(timeout);
     if (!r.ok) throw new Error("LLM API " + r.status + ": " + r.statusText);
     return await r.json();
   }
+
+  App.backendPost = backendPost;
+  App.backendGet = backendGet;
 
   App.createPlayer = async function(name, gender, permadeath) {
     if (App.apiMode === "backend") {
@@ -107,6 +121,7 @@ window.App = window.App || {};
   };
 
   App.doMove = async function(tx, ty) {
+    if (App.apiMode !== "backend") return null;
     App.setLoading(true, "行走中...");
     try {
       return await backendPost("/api/move", {
@@ -170,6 +185,9 @@ window.App = window.App || {};
   };
 
   App.talkStream = async function(npcId, message) {
+    if (App.apiMode !== "backend") {
+      throw new Error("流式对话仅支持服务器模式");
+    }
     var requestBody = {
       player_id: App.playerId,
       npc_id: npcId,
@@ -227,6 +245,9 @@ window.App = window.App || {};
 
   App.testLLM = async function() {
     try {
+      if (!App.LLM_API_URL && App.apiMode === "standalone") {
+        return { ok: false, detail: "请先在配置面板中填写 LLM API 地址" };
+      }
       const data = await llmChat([{ role: "user", content: "你好" }], { maxTokens: 20 });
       const content = data.choices[0].message.content;
       return { ok: true, detail: "reply_len=" + content.length };

@@ -18,6 +18,12 @@ window.App = window.App || {};
     renderPortals(p);
     renderAtmosphere(p, data);
     renderBounty(data);
+
+    if (p.move_locked) {
+      App.updatePlayerMarker(p.px, p.py, "locked");
+    } else {
+      App.updatePlayerMarker(p.px, p.py, "normal");
+    }
   };
 
   function updateTopbar(p) {

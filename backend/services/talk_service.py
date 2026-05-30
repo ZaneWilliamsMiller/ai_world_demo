@@ -324,7 +324,7 @@ def _apply_parsed_effects(
     items_added = []
     items_lost = remove_items(p, parsed.items_lose)
 
-    actually_received = apply_npc_trade(p, npc_id, parsed.items_lose, parsed.items_gain)
+    actually_received = apply_npc_trade(p, npc_id, items_lost, parsed.items_gain)
     items_added.extend(actually_received)
 
     if parsed.rep_delta:
@@ -499,8 +499,9 @@ def _record_cross_npc_awareness(
         short = (meta.get("short") or "").lower()
         if not name:
             continue
-        # 检测该 NPC 的名字/简称是否出现在对话中
-        if name in visible_lower or name in user_lower or (short and (short in visible_lower or short in user_lower)):
+        if len(name) < 2 and len(short) < 2:
+            continue
+        if name in visible_lower or name in user_lower or (short and len(short) >= 2 and (short in visible_lower or short in user_lower)):
             mentioned.add(nid)
 
     for target_id in mentioned:
@@ -618,8 +619,8 @@ def _evolve_npc_mood(
 
     # 文本信号：玩家话语中的善意/敌意
     umsg = (user_message or "").lower()
-    positive_words = {"谢", "请", "有劳", "劳驾", "费心", "恩", "感激", "拜", "敬", "善"}
-    negative_words = {"滚", "找死", "狗", "猪", "贱", "蠢", "杀你", "灭你", "刁难", "不识抬举"}
+    positive_words = {"多谢", "有劳", "劳驾", "费心", "感激", "拜托", "敬佩", "善哉"}
+    negative_words = {"滚开", "找死", "狗贼", "猪狗", "下贱", "蠢货", "杀你", "灭你", "刁难", "不识抬举"}
     if any(kw in umsg for kw in positive_words):
         valence_d += MOOD_POSITIVE_WORD_VALENCE
     if any(kw in umsg for kw in negative_words):

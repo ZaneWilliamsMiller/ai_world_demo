@@ -198,6 +198,7 @@ async def _post_move_world_update(p, prev_map, actual_path, prev_day, bg):
         update_all_npc_states_dynamic(p)
         maybe_npc_gossip(p, ticks=ticks)
     respawn_msg: str | None = None
+    need_delete = False
     if p.permadeath:
         reason = hazard_roll_death(p)
         if reason:
@@ -206,20 +207,11 @@ async def _post_move_world_update(p, prev_map, actual_path, prev_day, bg):
             p.move_locked = False
             p.move_lock_npc_id = None
             push_event(p, f"{p.display_name}于{MAPS.get(p.map_id, {}).get('name', '未知之地')}遭难:{reason[:24]}", scope="near", actor="天意")
-            await asyncio.to_thread(save_game, p)
-            try:
-                delete_save(p.player_id)
-            except Exception as e:
-                logging.getLogger('move').error('delete_save failed for %s: %s', p.player_id, e)
-            await room.remove_player(p.player_id)
+            need_delete = True
     if not p.dead and not p.ended:
         collapsed = maybe_collapse_from_attrs(p)
         if collapsed and not p.permadeath:
             respawn_msg = respawn_at_supply_point(p)
-    try:
-        await asyncio.to_thread(save_game, p)
-    except Exception as e:
-        logging.getLogger('move').error('save failed for %s: %s', p.player_id, e)
     p.last_move_map_id = p.map_id
     p.last_move_px = p.px
     p.last_move_py = p.py
@@ -236,7 +228,7 @@ async def _post_move_world_update(p, prev_map, actual_path, prev_day, bg):
                 npc_ids_for_plan.append(nid)
     if npc_ids_for_plan:
         bg.add_task(bg_plan_for_npcs, p.player_id, npc_ids_for_plan, new_day)
-    return respawn_msg, npc_ids_for_plan
+    return respawn_msg, need_delete
 
 
 def _build_move_response(p, prev_map, actual_path, forced, vigor_cost, spirit_cost, injuries, respawn_msg):
@@ -292,7 +284,20 @@ async def move(body: MoveBody, bg: BackgroundTasks) -> dict[str, Any]:
         prev_map = p.map_id
         prev_day = int(p.world_day)
         actual_path, vigor_cost, spirit_cost, injuries, forced = _walk_path(p, path, allow_steep)
-        respawn_msg, _ = await _post_move_world_update(p, prev_map, actual_path, prev_day, bg)
+        respawn_msg, need_delete = await _post_move_world_update(p, prev_map, actual_path, prev_day, bg)
+
+    if need_delete:
+        try:
+            await asyncio.to_thread(save_game, p)
+            await asyncio.to_thread(delete_save, p.player_id)
+        except Exception as e:
+            logging.getLogger('move').error('delete_save failed for %s: %s', p.player_id, e)
+        await room.remove_player(p.player_id)
+    elif not p.dead and not p.ended:
+        try:
+            await asyncio.to_thread(save_game, p)
+        except Exception as e:
+            logging.getLogger('move').error('save failed for %s: %s', p.player_id, e)
 
     if not p.dead and not p.ended and not getattr(p, "move_locked", False) and should_trigger_encounter(p):
         bg.add_task(_bg_encounter, p.player_id)

@@ -166,7 +166,7 @@
           <input type="text" id="msgInput" placeholder="对 TA 说些什么..."
                  onkeydown="if(event.key==='Enter')App.doTalk()">
           <button onclick="App.doTalk()" id="talkBtn">发送</button>
-          <button id="cancelStreamBtn" onclick="App.cancelTalkStream()" style="display:none;">取消</button>
+          <button id="cancelStreamBtn" onclick="App.cancelTalkStream()">取消</button>
         </div>
       </div>
 
@@ -219,6 +219,11 @@
     <div class="cfg-group">
       <label>LLM 模型</label>
       <input type="text" id="cfgLlmModel" placeholder="your-model-name">
+    </div>
+
+    <div class="cfg-group">
+      <label>关闭服务密钥</label>
+      <input type="password" id="cfgShutdownSecret" placeholder="与 .env 中 SHUTDOWN_SECRET 一致">
     </div>
 
     <!-- 连接测试 -->

@@ -196,9 +196,9 @@ async def _run_single(test_path: str) -> TestResult:
         env=env,
     )
 
-    t0 = asyncio.get_event_loop().time()
+    t0 = asyncio.get_running_loop().time()
     stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
-    elapsed = round(asyncio.get_event_loop().time() - t0, 1)
+    elapsed = round(asyncio.get_running_loop().time() - t0, 1)
     output = stdout.decode("utf-8", errors="replace")
 
     cp, cf, cs = _parse_pytest_counts(output)
@@ -233,11 +233,6 @@ async def run_test(test_path: str):
         try:
             return await _run_single(test_path)
         except TimeoutError:
-            try:
-                proc.kill()
-                await proc.wait()
-            except Exception:
-                pass
             raise HTTPException(408, f"Test timed out: {test_name}") from None
         except Exception as e:
             raise HTTPException(500, f"Failed to run test: {e!s}") from e
@@ -428,17 +423,13 @@ async def _run_interactive_single(test_path: str) -> InteractiveTestResult:
             output=f"测试文件不存在: {test_path}",
         )
 
-    module_name = "tests." + test_path.replace("/", ".").replace("\\", ".").replace(".py", "")
+    _run_id = f"_itest_{test_path.replace('/', '_').replace('.', '_')}_{int(time.time()*1000)}"
 
     def _run_sync() -> InteractiveTestResult:
         t0 = time.time()
         try:
-            if module_name in sys.modules:
-                del sys.modules[module_name]
-
-            spec = importlib.util.spec_from_file_location(module_name, str(test_file))
+            spec = importlib.util.spec_from_file_location(_run_id, str(test_file))
             mod = importlib.util.module_from_spec(spec)
-            sys.modules[module_name] = mod
             spec.loader.exec_module(mod)
 
             test_class = None
@@ -511,18 +502,25 @@ async def _run_interactive_single(test_path: str) -> InteractiveTestResult:
                 elapsed=round(time.time() - t0, 1),
             )
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, _run_sync)
 
 
 @router.post("/interactive/reset-circuit-breaker")
 async def reset_circuit_breaker():
-    from backend.llm.circuit_breaker import get_circuit_breaker
+    from backend.llm.circuit_breaker import get_circuit_breaker, CircuitState
     cb = get_circuit_breaker()
-    if hasattr(cb, '_state'):
-        cb._state = __import__('backend.llm.circuit_breaker', fromlist=['CircuitState']).CircuitState.CLOSED
-        cb._failure_times.clear()
-        cb._opened_at = 0.0
+    if hasattr(cb, '_lock'):
+        async with cb._lock:
+            if hasattr(cb, '_state'):
+                cb._state = CircuitState.CLOSED
+                cb._failure_times.clear()
+                cb._opened_at = 0.0
+    else:
+        if hasattr(cb, '_state'):
+            cb._state = CircuitState.CLOSED
+            cb._failure_times.clear()
+            cb._opened_at = 0.0
     return {"status": "ok", "state": cb.stats["state"]}
 
 
@@ -557,7 +555,7 @@ async def stream_interactive_test(test_path: str):
         raise HTTPException(429, "已有测试正在运行，请稍后再试")
 
     queue: asyncio.Queue = asyncio.Queue()
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     def _on_entry(entry: dict):
         try:

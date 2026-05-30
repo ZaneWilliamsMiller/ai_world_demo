@@ -122,13 +122,13 @@ def move_should_fire_encounter(path: list[tuple[int, int]]) -> bool:
     return len(path) >= 2
 
 def init_npc_positions(p: PlayerState) -> None:
-    if getattr(p, "npc_positions", None):
-        return
-    p.npc_positions = {}
+    if getattr(p, "npc_positions", None) is None:
+        p.npc_positions = {}
     for nid, meta in NPCS.items():
-        cell = meta.get("cell")
-        if cell:
-            p.npc_positions[nid] = (str(cell[0]), int(cell[1]), int(cell[2]))
+        if nid not in p.npc_positions:
+            cell = meta.get("cell")
+            if cell:
+                p.npc_positions[nid] = (str(cell[0]), int(cell[1]), int(cell[2]))
 
 def npc_catalog_for_player(p: PlayerState) -> list[dict[str, Any]]:
     init_npc_positions(p)

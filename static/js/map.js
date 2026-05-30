@@ -519,20 +519,23 @@ window.App = window.App || {};
   // ═══════════════════════════════════════════
   function onMapClick(e) {
     var rect = mainCanvas.getBoundingClientRect();
-    var mx = e.clientX - rect.left;
-    var my = e.clientY - rect.top;
+    var scaleX = mainCanvas.width / rect.width;
+    var scaleY = mainCanvas.height / rect.height;
+    var mx = (e.clientX - rect.left) * scaleX;
+    var my = (e.clientY - rect.top) * scaleY;
     var tileX = Math.floor((mx / TILE) + cam.x);
     var tileY = Math.floor((my / TILE) + cam.y);
     if (tileX < 0 || tileX >= mapState.cols || tileY < 0 || tileY >= mapState.rows.length) return;
 
-    // 首先尝试移动到该格子
     App.moveTo(tileX, tileY);
   }
 
   function onMapHover(e) {
     var rect = mainCanvas.getBoundingClientRect();
-    var mx = e.clientX - rect.left;
-    var my = e.clientY - rect.top;
+    var scaleX = mainCanvas.width / rect.width;
+    var scaleY = mainCanvas.height / rect.height;
+    var mx = (e.clientX - rect.left) * scaleX;
+    var my = (e.clientY - rect.top) * scaleY;
     var newX = Math.floor((mx / TILE) + cam.x);
     var newY = Math.floor((my / TILE) + cam.y);
     if (newX !== _hoverX || newY !== _hoverY) {
@@ -544,8 +547,10 @@ window.App = window.App || {};
 
   function onMiniClick(e) {
     var rect = miniCanvas.getBoundingClientRect();
-    var mx = e.clientX - rect.left;
-    var my = e.clientY - rect.top;
+    var scaleX = miniCanvas.width / rect.width;
+    var scaleY = miniCanvas.height / rect.height;
+    var mx = (e.clientX - rect.left) * scaleX;
+    var my = (e.clientY - rect.top) * scaleY;
     var tileX = Math.floor(mx / MINI_TILE);
     var tileY = Math.floor(my / MINI_TILE);
     App.moveTo(tileX, tileY);
@@ -681,6 +686,20 @@ window.App = window.App || {};
       clearPath();
       App.updateUI(data);
 
+      if (data.forced_encounter && data.forced_encounter.npc_id) {
+        var fe = data.forced_encounter;
+        var npcInfo = (data.npcs_here || []).find(function(n) { return n.id === fe.npc_id; });
+        var npcName = npcInfo ? npcInfo.name : (fe.blurb || "对方");
+        App.addMsg("system", "🚫 身陷险局 — " + npcName + "挡住了去路！", true);
+        App.selectedNpcId = fe.npc_id;
+        var selEl = document.getElementById("npcSelect");
+        if (selEl) selEl.value = fe.npc_id;
+        var autoMsg = fe.user_line || "[际遇] 狭路相逢，请开口说话。";
+        setTimeout(function() {
+          App.doTalk(autoMsg);
+        }, 600);
+      }
+
     } catch (e) {
       var errorMsg = e.message;
       if (errorMsg.includes("/api/move ")) {
@@ -691,6 +710,11 @@ window.App = window.App || {};
       
       if (isLockError) {
         App.addMsg("system-error", errorMsg, true);
+        if (App.selectedNpcId && !App.isStreaming) {
+          setTimeout(function() {
+            App.doTalk("[系统指令] 我要离开这里，请让我过去。");
+          }, 800);
+        }
       } else {
         App.addMsg("system", errorMsg);
       }

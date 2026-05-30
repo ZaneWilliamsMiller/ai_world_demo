@@ -42,6 +42,7 @@ saves/
 *.tmp
 *.pid
 *.seed
+.shutdown_requested
 backups/
 
 # ── Node.js ──

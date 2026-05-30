@@ -144,7 +144,6 @@ async def use_item(body: UseItemBody) -> dict[str, Any]:
 
     if result.get("success"):
         from backend.systems.reputation import push_event
-        str(result.get("item_consumed", body.item))
         note = str(result.get("note", ""))
         if note:
             push_event(p, f"{p.display_name}用掉了{note}", scope="self", actor=p.display_name)
@@ -370,7 +369,8 @@ async def agent_mind(player_id: str = Path(..., min_length=1, max_length=64), np
         raise HTTPException(400, "本局已收束")
     if npc_id not in NPCS:
         raise HTTPException(404, "未知 npc_id")
-    mind = p.minds.get(npc_id)
+    async with p.lock:
+        mind = p.minds.get(npc_id)
     if mind is None:
         return {
             "npc_id": npc_id,
@@ -418,14 +418,14 @@ async def agent_reflect(body: AgentActBody) -> dict[str, Any]:
         raise HTTPException(404, "未知 npc_id")
     async with p.lock:
         mind = get_or_init_mind(p, body.npc_id)
-        new_refls = await agent_brain.reflect(
-            npc_id=body.npc_id,
-            npc_name=npc.get("name", body.npc_id),
-            npc_blurb=str(npc.get("short", "")),
-            mind=mind,
-            world_day=int(p.world_day),
-            world_shichen=shichen_name(p.world_shichen),
-        )
+    new_refls = await agent_brain.reflect(
+        npc_id=body.npc_id,
+        npc_name=npc.get("name", body.npc_id),
+        npc_blurb=str(npc.get("short", "")),
+        mind=mind,
+        world_day=int(p.world_day),
+        world_shichen=shichen_name(p.world_shichen),
+    )
     return {
         "added": [m.to_dict() for m in new_refls],
         "count": len(new_refls),
@@ -452,13 +452,13 @@ async def agent_plan(body: AgentActBody) -> dict[str, Any]:
         raise HTTPException(404, "未知 npc_id")
     async with p.lock:
         mind = get_or_init_mind(p, body.npc_id)
-        ok = await agent_brain.plan_day(
-            npc_id=body.npc_id,
-            npc_name=npc.get("name", body.npc_id),
-            npc_blurb=str(npc.get("short", "")),
-            mind=mind,
-            world_day=int(p.world_day),
-        )
+    ok = await agent_brain.plan_day(
+        npc_id=body.npc_id,
+        npc_name=npc.get("name", body.npc_id),
+        npc_blurb=str(npc.get("short", "")),
+        mind=mind,
+        world_day=int(p.world_day),
+    )
     return {
         "ok": ok,
         "plan_day": mind.plan_day,
