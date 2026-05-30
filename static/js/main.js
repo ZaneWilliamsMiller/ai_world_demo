@@ -252,6 +252,16 @@ window.App = window.App || {};
   };
 
   App.shutdownAll = function() {
+    if (!App.SHUTDOWN_SECRET) {
+      var input = prompt("请输入关闭服务密钥（与 .env 中 SHUTDOWN_SECRET 一致）：");
+      if (!input) return;
+      App.SHUTDOWN_SECRET = input;
+      try {
+        var cfg = JSON.parse(localStorage.getItem("lp_config") || "{}");
+        cfg.shutdownSecret = input;
+        localStorage.setItem("lp_config", JSON.stringify(cfg));
+      } catch(_e) {}
+    }
     App.showConfirm(
       "关闭服务",
       "确定要关闭服务吗？<br><br>" +
@@ -504,12 +514,6 @@ window.App = window.App || {};
           var cfg = JSON.parse(localStorage.getItem("lp_config") || "{}");
           if (cfg.shutdownSecret) {
             App.SHUTDOWN_SECRET = cfg.shutdownSecret;
-          } else if (data.shutdown_configured === "true" && !App.SHUTDOWN_SECRET) {
-            App.SHUTDOWN_SECRET = prompt("请输入关闭服务密钥（与 .env 中 SHUTDOWN_SECRET 一致）：") || "";
-            if (App.SHUTDOWN_SECRET) {
-              cfg.shutdownSecret = App.SHUTDOWN_SECRET;
-              localStorage.setItem("lp_config", JSON.stringify(cfg));
-            }
           }
         } catch(_e) {}
       })
