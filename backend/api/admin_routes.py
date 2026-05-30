@@ -109,12 +109,15 @@ async def recent_calls(n: int = 20):
 
 @router.post("/shutdown", response_model=ShutdownResponse)
 async def shutdown_server(request: Request):
+    client_host = request.client.host if request.client else ""
+    is_local = client_host in ("127.0.0.1", "::1", "localhost")
     secret = request.headers.get("X-Shutdown-Secret", "")
     expected = settings.shutdown_secret
-    if not expected:
-        raise HTTPException(403, "未配置 SHUTDOWN_SECRET，拒绝远程关闭")
-    if not hmac.compare_digest(secret, expected):
-        raise HTTPException(403, "无权关闭服务")
+    if not is_local:
+        if not expected:
+            raise HTTPException(403, "未配置 SHUTDOWN_SECRET，拒绝远程关闭")
+        if not hmac.compare_digest(secret, expected):
+            raise HTTPException(403, "无权关闭服务")
 
     _shutdown_log.info("收到关闭请求")
 
