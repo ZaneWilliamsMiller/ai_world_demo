@@ -16,7 +16,7 @@ window.App = window.App || {};
     }
 
     if (input && !autoMsg) input.value = "";
-    App.addMsg("player", msg);
+    if (!autoMsg) App.addMsg("player", msg);
 
     App.isStreaming = true;
     var btn = document.getElementById("talkBtn");
