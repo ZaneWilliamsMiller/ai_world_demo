@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import contextlib
 import os
 import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
@@ -13,7 +14,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import httpx
 import pytest
-
 from backend.data.npcs_data import NPCS
 
 _BASE_URL = os.environ.get("BACKEND_URL", "http://127.0.0.1:8765")
@@ -43,15 +43,13 @@ def _release_lock(f):
 def _serial_lock():
     global _LOCK_FILE
     lock_path = Path(__file__).resolve().parent / ".interactive.lock"
-    _LOCK_FILE = open(lock_path, "w")
-    _acquire_lock(_LOCK_FILE)
-    yield
-    _release_lock(_LOCK_FILE)
-    _LOCK_FILE.close()
-    try:
+    with open(lock_path, "w") as f:
+        _LOCK_FILE = f
+        _acquire_lock(_LOCK_FILE)
+        yield
+        _release_lock(_LOCK_FILE)
+    with contextlib.suppress(Exception):
         lock_path.unlink(missing_ok=True)
-    except Exception:
-        pass
 
 _NPC_CELL_MAP: dict[str, tuple[int, int]] = {}
 for _nid, _meta in NPCS.items():
@@ -61,7 +59,7 @@ for _nid, _meta in NPCS.items():
 
 
 class InteractiveClient:
-    _global_dialogue_log: list[dict[str, Any]] = []
+    _global_dialogue_log: ClassVar[list[dict[str, Any]]] = []
     _on_dialogue: Any = None
 
     def __init__(self):
@@ -74,10 +72,8 @@ class InteractiveClient:
         self.player_id = f"itest_{uuid.uuid4().hex[:12]}"
         self._dialogue_log = []
 
-        try:
+        with contextlib.suppress(Exception):
             self.client.post("/api/tests/interactive/reset-circuit-breaker")
-        except Exception:
-            pass
 
         resp = self.client.post("/api/hello", json={
             "player_id": self.player_id,
@@ -111,10 +107,8 @@ class InteractiveClient:
             p.stop()
         self._patches.clear()
         InteractiveClient._global_dialogue_log = list(self._dialogue_log)
-        try:
+        with contextlib.suppress(Exception):
             self.client.post("/api/delete-save", json={"player_id": self.player_id})
-        except Exception:
-            pass
 
     def talk(self, npc_id: str, message: str, timeout: float = 60.0) -> dict[str, Any]:
         t0 = time.time()
@@ -170,10 +164,8 @@ class InteractiveClient:
         }
         self._dialogue_log.append(entry)
         if InteractiveClient._on_dialogue is not None:
-            try:
+            with contextlib.suppress(Exception):
                 InteractiveClient._on_dialogue(entry)
-            except Exception:
-                pass
         return data
 
     def dialogue(self, npc_id: str, messages: list[str], timeout: float = 60.0) -> list[dict[str, Any]]:
@@ -200,7 +192,7 @@ class InteractiveClient:
 
 
 class ResponseEvaluator:
-    NPC_VOICE_KEYWORDS: dict[str, list[str]] = {
+    NPC_VOICE_KEYWORDS: ClassVar[dict[str, list[str]]] = {
         "zhanggui": ["客官", "小店", "好说", "可议", "掌柜", "栈房", "房", "店", "住"],
         "yaren": ["行价", "例规", "秤尾", "金某", "牙行", "价", "货", "买卖", "利"],
         "bullya": ["按例", "规费", "凡事", "衙门", "皂隶", "公事", "告", "状"],
@@ -219,7 +211,7 @@ class ResponseEvaluator:
         "jintang": ["赌", "骰", "牌", "局"],
     }
 
-    FALLBACK_PATTERNS: list[str] = [
+    FALLBACK_PATTERNS: ClassVar[list[str]] = [
         "一阵风吹过",
         "灯火摇曳",
         "那人低头想着心事",
@@ -233,14 +225,14 @@ class ResponseEvaluator:
         "旁人打断",
     ]
 
-    WORLD_LOCATIONS: list[str] = [
+    WORLD_LOCATIONS: ClassVar[list[str]] = [
         "青石县", "同福栈", "牙行", "衙前", "镖局", "黑店",
         "野径", "渡头", "画舫", "芦花墟", "驿舍", "寺廊",
         "帮坞", "书院", "厘卡", "桥口", "码口", "山门",
         "青石", "县", "栈", "寺", "渡", "驿",
     ]
 
-    FACTION_NAMES: list[str] = [
+    FACTION_NAMES: ClassVar[list[str]] = [
         "衙门", "镖局", "绿林", "漕帮", "书院",
         "官", "帮", "匪", "盗", "学",
     ]

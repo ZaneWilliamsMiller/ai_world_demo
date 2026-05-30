@@ -6,8 +6,9 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
+from backend.systems.time_weather import advance_clock, is_night, shichen_name, shichen_phase
+
 from conftest import make_player
-from backend.systems.time_weather import shichen_name, is_night, shichen_phase, advance_clock
 
 
 class TestShichenName(unittest.TestCase):

@@ -3,15 +3,15 @@ from __future__ import annotations
 import asyncio
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from conftest import make_player
-
 from backend.agents.actor import NpcAction, NpcActionResult, act_loop, decide_next_action, execute_plan_step
 from backend.memory import AgentMind
+
+from conftest import make_player
 
 
 class TestDecideNextAction:

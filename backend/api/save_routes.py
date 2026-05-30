@@ -2,12 +2,11 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from backend.api.schema import SavesListResponse, SaveResponse, InitResponse, DeleteSaveResponse
+from backend.api.schema import DeleteSaveResponse, InitResponse, SaveResponse, SavesListResponse
 from backend.api.views import build_init_response
 from backend.systems.core import init_npc_positions
 from backend.systems.economy import init_npc_inventories

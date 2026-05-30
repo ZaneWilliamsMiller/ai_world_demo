@@ -181,8 +181,9 @@ def execute_plan_step(p: PlayerState, npc_id: str, mind: mem.AgentMind) -> NpcAc
             p.npc_positions[npc_id] = old_pos
         log.warning("action rollback for npc=%s: %s", npc_id, e)
         try:
-            from backend.observability.tracker import get_tracker, CallRecord
             import time as _time
+
+            from backend.observability.tracker import CallRecord, get_tracker
             get_tracker().record(CallRecord(
                 timestamp=_time.time(),
                 operation="npc_action_rollback",
@@ -300,8 +301,9 @@ async def _execute_talk_async(
     dialogue_lines: list[str] = []
     raw_dialogue: list[dict] = []
     try:
-        from backend.llm.client import chat_completion
         import json as _json
+
+        from backend.llm.client import chat_completion
         messages = _build_npc_talk_messages(npc_id, other_id, mind, sh_name, world_day)
         raw = await chat_completion(
             messages,
@@ -382,8 +384,9 @@ async def execute_plan_step_async(
             p.npc_positions[npc_id] = old_pos
         log.warning("action rollback for npc=%s: %s", npc_id, e)
         try:
-            from backend.observability.tracker import get_tracker, CallRecord
             import time as _time
+
+            from backend.observability.tracker import CallRecord, get_tracker
             get_tracker().record(CallRecord(
                 timestamp=_time.time(),
                 operation="npc_action_rollback",

@@ -7,11 +7,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from backend.services.talk_service import _assemble_messages, build_graceful_fallback
-
-from conftest import make_player
 
 
 class TestBuildGracefulFallback(unittest.TestCase):

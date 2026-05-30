@@ -118,7 +118,6 @@ def advance_clock(p: PlayerState, ticks: int = 1) -> None:
             logging.warning("NPC %s plan step failed: %s", _nid, exc)
     # ── NPC 货柜自然补货：世界日翻篇时检测 ──
     if int(p.world_day) > old_day:
-        import logging
         log = logging.getLogger("time_weather")
         try:
             from backend.systems.economy import restock_npc_inventories

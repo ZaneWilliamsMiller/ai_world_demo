@@ -6,19 +6,16 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from conftest import make_player
 from backend.systems.perception import (
-    perception_scan,
-    danger_sense_narrative,
     can_rest_at,
+    danger_sense_narrative,
+    perception_scan,
+    relevant_events_for,
     val_in_range,
     world_status_block,
-    relevant_events_for,
-    DANGER_SENSE_TILES,
-    FOG_WEATHERS,
-    REST_TILES,
-    TILE_REST_MOOD,
 )
+
+from conftest import make_player
 
 
 class TestPerceptionScan(unittest.TestCase):

@@ -65,7 +65,7 @@ def _write_pid_file(pid: int, port: int) -> None:
 
 def _read_pid_file() -> tuple[int, int] | None:
     try:
-        with open(PID_FILE, "r", encoding="utf-8") as f:
+        with open(PID_FILE, encoding="utf-8") as f:
             lines = f.read().strip().splitlines()
             return int(lines[0]), int(lines[1])
     except Exception:

@@ -15,10 +15,10 @@ from backend.data.prompts import WORLD_NAME
 
 router = APIRouter()
 
+from backend.api.admin_routes import router as admin_router
 from backend.api.npc_routes import router as npc_router
 from backend.api.player_routes import router as player_router
 from backend.api.save_routes import router as save_router
-from backend.api.admin_routes import router as admin_router
 from backend.config import settings
 
 router.include_router(player_router)

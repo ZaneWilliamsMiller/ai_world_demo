@@ -1,11 +1,10 @@
 """从 Pydantic 模型生成 TypeScript 类型定义。"""
-import sys
-import os
 import argparse
+import sys
+from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from backend.api.schema import *
 import backend.api.schema as schema_mod
 from pydantic import BaseModel
 
@@ -49,9 +48,7 @@ def json_schema_to_ts(schema: dict, defs: dict | None = None) -> str:
 
     if schema_type == "string":
         return "string"
-    elif schema_type == "integer":
-        return "number"
-    elif schema_type == "number":
+    elif schema_type in {"integer", "number"}:
         return "number"
     elif schema_type == "boolean":
         return "boolean"
@@ -126,10 +123,7 @@ for model in sorted(models, key=lambda m: m.__name__):
     lines.append(generate_interface(model))
     lines.append("")
 
-output_path = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "static", "js", "api-types.d.ts",
-)
+output_path = Path(__file__).resolve().parents[1] / "static" / "js" / "api-types.d.ts"
 
 generated = "\n".join(lines)
 
@@ -138,16 +132,16 @@ parser.add_argument("--check", action="store_true", help="Compare generated outp
 args = parser.parse_args()
 
 if args.check:
-    if not os.path.isfile(output_path):
+    if not output_path.is_file():
         print(f"CHECK FAILED: {output_path} does not exist", file=sys.stderr)
         sys.exit(1)
-    with open(output_path, "r", encoding="utf-8") as f:
+    with output_path.open(encoding="utf-8") as f:
         existing = f.read()
     if generated != existing:
         print(f"CHECK FAILED: {output_path} is out of date. Run: python tools/gen_ts_schema.py", file=sys.stderr)
         sys.exit(1)
     print(f"CHECK PASSED: {output_path} is up to date")
 else:
-    with open(output_path, "w", encoding="utf-8") as f:
+    with output_path.open("w", encoding="utf-8") as f:
         f.write(generated)
     print(f"Generated {output_path}")

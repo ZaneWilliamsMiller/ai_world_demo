@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import importlib
 import os
 import re
@@ -241,8 +242,8 @@ async def run_test(test_path: str):
         try:
             await asyncio.wait_for(_func_lock.acquire(), timeout=10.0)
             _func_lock.release()
-        except asyncio.TimeoutError:
-            raise HTTPException(429, "已有功能测试正在运行，请稍后再试")
+        except TimeoutError:
+            raise HTTPException(429, "已有功能测试正在运行，请稍后再试") from None
 
     async with _func_lock:
         try:
@@ -268,8 +269,8 @@ async def run_module(module_id: str):
         try:
             await asyncio.wait_for(_func_lock.acquire(), timeout=10.0)
             _func_lock.release()
-        except asyncio.TimeoutError:
-            raise HTTPException(429, "已有功能测试正在运行，请稍后再试")
+        except TimeoutError:
+            raise HTTPException(429, "已有功能测试正在运行，请稍后再试") from None
 
     async with _func_lock:
         results = []
@@ -306,8 +307,8 @@ async def run_all():
         try:
             await asyncio.wait_for(_func_lock.acquire(), timeout=10.0)
             _func_lock.release()
-        except asyncio.TimeoutError:
-            raise HTTPException(429, "已有功能测试正在运行，请稍后再试")
+        except TimeoutError:
+            raise HTTPException(429, "已有功能测试正在运行，请稍后再试") from None
 
     all_tests = _discover_tests()
 
@@ -518,7 +519,7 @@ async def _run_interactive_single(test_path: str) -> InteractiveTestResult:
                 elapsed=elapsed,
                 dialogue_log=dialogue_log,
             )
-        except Exception as e:
+        except Exception:
             return InteractiveTestResult(
                 test_name=test_path, success=False,
                 output=traceback.format_exc(),
@@ -551,8 +552,8 @@ async def run_interactive_test(test_path: str):
         try:
             await asyncio.wait_for(_interactive_lock.acquire(), timeout=10.0)
             _interactive_lock.release()
-        except asyncio.TimeoutError:
-            raise HTTPException(429, "已有交互测试正在运行，请稍后再试")
+        except TimeoutError:
+            raise HTTPException(429, "已有交互测试正在运行，请稍后再试") from None
 
     async with _interactive_lock:
         return await _run_interactive_single(test_path)
@@ -572,17 +573,15 @@ async def stream_interactive_test(test_path: str):
         try:
             await asyncio.wait_for(_interactive_lock.acquire(), timeout=10.0)
             _interactive_lock.release()
-        except asyncio.TimeoutError:
-            raise HTTPException(429, "已有交互测试正在运行，请稍后再试")
+        except TimeoutError:
+            raise HTTPException(429, "已有交互测试正在运行，请稍后再试") from None
 
     queue: asyncio.Queue = asyncio.Queue()
     loop = asyncio.get_running_loop()
 
     def _on_entry(entry: dict):
-        try:
+        with contextlib.suppress(Exception):
             loop.call_soon_threadsafe(queue.put_nowait, entry)
-        except Exception:
-            pass
 
     async def _run_and_queue():
         from tests.interactive.conftest import InteractiveClient as _IC
@@ -591,7 +590,7 @@ async def stream_interactive_test(test_path: str):
             async with _interactive_lock:
                 result = await _run_interactive_single(test_path)
             await queue.put({"__done__": True, "result": result.model_dump()})
-        except Exception as e:
+        except Exception:
             await queue.put({"__done__": True, "result": {
                 "test_name": test_path, "success": False,
                 "output": traceback.format_exc(), "elapsed": 0.0,
@@ -606,7 +605,7 @@ async def stream_interactive_test(test_path: str):
             while True:
                 try:
                     item = await asyncio.wait_for(queue.get(), timeout=120.0)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     yield f"data: {__import__('json').dumps({'__error__': '超时'})}\n\n"
                     break
 
@@ -638,8 +637,8 @@ async def run_interactive_module(module_id: str):
         try:
             await asyncio.wait_for(_interactive_lock.acquire(), timeout=10.0)
             _interactive_lock.release()
-        except asyncio.TimeoutError:
-            raise HTTPException(429, "已有交互测试正在运行，请稍后再试")
+        except TimeoutError:
+            raise HTTPException(429, "已有交互测试正在运行，请稍后再试") from None
 
     async with _interactive_lock:
         results = []
@@ -663,8 +662,8 @@ async def run_interactive_all():
         try:
             await asyncio.wait_for(_interactive_lock.acquire(), timeout=10.0)
             _interactive_lock.release()
-        except asyncio.TimeoutError:
-            raise HTTPException(429, "已有交互测试正在运行，请稍后再试")
+        except TimeoutError:
+            raise HTTPException(429, "已有交互测试正在运行，请稍后再试") from None
 
     all_tests = _discover_interactive_tests()
 

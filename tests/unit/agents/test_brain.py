@@ -3,12 +3,11 @@ from __future__ import annotations
 import sys
 import time
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from conftest import make_player
 
 from backend.agents.brain import (
     _plan_deviation_analysis,
@@ -18,7 +17,7 @@ from backend.agents.brain import (
     plan_day,
     reflect,
 )
-from backend.memory import AgentMind, Memory, make_memory
+from backend.memory import AgentMind, make_memory
 
 
 class TestSelectWithRecency:

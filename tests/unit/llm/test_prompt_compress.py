@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -13,8 +12,8 @@ from backend.llm.prompt_compress import (
     COMPRESS_THRESHOLD,
     COMPRESS_WINDOW,
     KEEP_RECENT,
-    compress_conversation_history,
     _llm_summarize,
+    compress_conversation_history,
 )
 
 

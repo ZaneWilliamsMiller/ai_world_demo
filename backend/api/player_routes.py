@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Path, status
 from pydantic import BaseModel, Field
 
-from backend.api.schema import InitResponse, MoveResponse, StateResponse, JournalResponse
+from backend.api.schema import InitResponse, JournalResponse, MoveResponse, StateResponse
 from backend.api.views import build_init_response
 from backend.api.views import factions_public as _factions_public
 from backend.api.views import map_locations_public as _map_locations_public
@@ -210,7 +210,6 @@ def _walk_path(p, path, allow_steep):
 
 
 async def _post_move_world_update(p, prev_map, actual_path, prev_day, bg):
-    from backend.session.store import room
 
     cost = path_cost(prev_map, actual_path)
     ticks = cost_to_ticks(cost)

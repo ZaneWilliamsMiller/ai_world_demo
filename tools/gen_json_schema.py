@@ -1,12 +1,11 @@
 """从 Pydantic 模型生成 JSON Schema 文件供 Godot 参考。"""
-import sys
-import os
-import json
 import argparse
+import json
+import sys
+from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from backend.api.schema import *
 import backend.api.schema as schema_mod
 from pydantic import BaseModel
 
@@ -17,10 +16,7 @@ for name in dir(schema_mod):
         if name.endswith("Response"):
             response_models.append((name, obj))
 
-output_dir = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "godot", "api-schema",
-)
+output_dir = Path(__file__).resolve().parents[1] / "godot" / "api-schema"
 
 combined = {}
 for name, model in sorted(response_models):
@@ -35,22 +31,22 @@ parser.add_argument("--check", action="store_true", help="Compare generated outp
 args = parser.parse_args()
 
 if args.check:
-    combined_path = os.path.join(output_dir, "api-schema.json")
-    if not os.path.isfile(combined_path):
+    combined_path = output_dir / "api-schema.json"
+    if not combined_path.is_file():
         print(f"CHECK FAILED: {combined_path} does not exist", file=sys.stderr)
         sys.exit(1)
-    with open(combined_path, "r", encoding="utf-8") as f:
+    with combined_path.open(encoding="utf-8") as f:
         existing_combined = json.load(f)
     generated_combined = json.loads(json.dumps(combined, indent=2, ensure_ascii=False))
     if existing_combined != generated_combined:
         print(f"CHECK FAILED: {combined_path} is out of date. Run: python tools/gen_json_schema.py", file=sys.stderr)
         sys.exit(1)
     for name in per_model_schemas:
-        model_path = os.path.join(output_dir, f"{name}.json")
-        if not os.path.isfile(model_path):
+        model_path = output_dir / f"{name}.json"
+        if not model_path.is_file():
             print(f"CHECK FAILED: {model_path} does not exist", file=sys.stderr)
             sys.exit(1)
-        with open(model_path, "r", encoding="utf-8") as f:
+        with model_path.open(encoding="utf-8") as f:
             existing_model = json.load(f)
         generated_model = json.loads(json.dumps(per_model_schemas[name], indent=2, ensure_ascii=False))
         if existing_model != generated_model:
@@ -58,10 +54,10 @@ if args.check:
             sys.exit(1)
     print(f"CHECK PASSED: all {len(response_models)} JSON Schema files are up to date")
 else:
-    os.makedirs(output_dir, exist_ok=True)
-    with open(os.path.join(output_dir, "api-schema.json"), "w", encoding="utf-8") as f:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    with (output_dir / "api-schema.json").open("w", encoding="utf-8") as f:
         json.dump(combined, f, indent=2, ensure_ascii=False)
     for name in per_model_schemas:
-        with open(os.path.join(output_dir, f"{name}.json"), "w", encoding="utf-8") as f:
+        with (output_dir / f"{name}.json").open("w", encoding="utf-8") as f:
             json.dump(per_model_schemas[name], f, indent=2, ensure_ascii=False)
     print(f"Generated {len(response_models)} JSON Schema files in {output_dir}")

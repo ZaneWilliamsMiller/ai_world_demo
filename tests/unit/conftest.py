@@ -15,4 +15,4 @@ if PARENT_CONFTEST.exists():
     spec.loader.exec_module(_mod)
     make_player = _mod.make_player
 else:
-    from conftest import make_player
+    pass

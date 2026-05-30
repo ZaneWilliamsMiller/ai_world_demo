@@ -9,7 +9,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-
 # ── 基础组件模型 ──────────────────────────────────────────
 
 

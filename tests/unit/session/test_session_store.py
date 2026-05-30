@@ -8,11 +8,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import asyncio
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
-
-from conftest import make_player
+from unittest.mock import patch
 
 from backend.session.store import SessionStore
+
+from conftest import make_player
 
 
 def _run(coro):

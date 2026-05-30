@@ -1,13 +1,15 @@
 from __future__ import annotations
+
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from conftest import make_player
 from backend.systems.consistency import clamp_player_state, validate_player_state
 from backend.systems.constants import INITIAL_PX, INITIAL_PY
+
+from conftest import make_player
 
 
 class TestValidatePlayerState:

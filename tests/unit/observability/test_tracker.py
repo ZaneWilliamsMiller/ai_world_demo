@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import sys
 import time
 from dataclasses import asdict
@@ -192,7 +191,7 @@ class TestCallTracker:
         for i in range(10):
             _record(tracker, CallRecord(timestamp=now, operation=f"op_{i}", model="gpt-4"))
         assert len(tracker._records) == 5
-        assert list(tracker._records)[0].operation == "op_5"
+        assert next(iter(tracker._records)).operation == "op_5"
         assert list(tracker._records)[-1].operation == "op_9"
 
 

@@ -7,9 +7,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from conftest import make_player
 from backend.data.factions import FACTIONS
 from backend.models.player import PlayerState, _default_flags, _default_reputation
+
+from conftest import make_player
 
 
 class TestPlayerStateDefaults(unittest.TestCase):

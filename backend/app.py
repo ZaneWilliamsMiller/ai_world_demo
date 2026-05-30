@@ -12,7 +12,7 @@ import logging
 import os
 import threading
 import time as _time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -78,10 +78,8 @@ async def lifespan(app: FastAPI):
     yield
     if _auto_save_task and not _auto_save_task.done():
         _auto_save_task.cancel()
-        try:
+        with suppress(asyncio.CancelledError):
             await _auto_save_task
-        except asyncio.CancelledError:
-            pass
     if _shutdown_requested:
         _log.info("shutdown already saved by shutdown endpoint, skipping lifespan save")
     else:

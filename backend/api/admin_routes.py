@@ -26,8 +26,8 @@ async def _verify_admin(request: Request) -> None:
 
 @router.get("/metrics", dependencies=[Depends(_verify_admin)], response_model=AdminMetricsResponse)
 async def metrics():
-    from backend.observability.tracker import get_tracker
     from backend.llm.circuit_breaker import get_circuit_breaker
+    from backend.observability.tracker import get_tracker
     tracker = get_tracker()
     cb = get_circuit_breaker()
     result = tracker.summary()

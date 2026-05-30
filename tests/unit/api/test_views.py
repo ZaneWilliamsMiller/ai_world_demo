@@ -1,13 +1,14 @@
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
+from backend.api.views import _strip_private, build_init_response, maps_public, npcs_here, player_public
+
 from conftest import make_player
-from backend.api.views import _strip_private, player_public, npcs_here, maps_public, build_init_response
 
 
 class TestStripPrivate(unittest.TestCase):
@@ -84,7 +85,7 @@ class TestNpcsHere(unittest.TestCase):
 class TestMapsPublic(unittest.TestCase):
     @patch("backend.api.views.MAPS", {"world": {"name": "江湖", "rows": [], "portals": []}})
     def test_returns_map_data(self):
-        import backend.api.views as views
+        from backend.api import views
         views._maps_cache = None
         result = maps_public()
         self.assertIn("world", result)
@@ -93,7 +94,7 @@ class TestMapsPublic(unittest.TestCase):
 
 class TestBuildInitResponse(unittest.TestCase):
     def test_returns_full_response(self):
-        import backend.api.views as views
+        from backend.api import views
         views._maps_cache = None
         views._factions_cache = None
         views._map_locations_cache = None

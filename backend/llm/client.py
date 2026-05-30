@@ -572,25 +572,24 @@ async def stream_chat_completion(
             llm_base_url or settings.llm_base_url,
             llm_api_key or settings.llm_api_key,
         )
-        async with sem:
-            async with client.stream("POST", url, json=body, headers=headers) as r:
-                try:
-                    r.raise_for_status()
-                    async for line in r.aiter_lines():
-                        piece = _parse_stream_line(line)
-                        if piece:
-                            yield piece
-                    await cb.success()
-                    tracker = get_tracker()
-                    latency_ms = (time.time() - _start) * 1000
-                    tracker.record(CallRecord(
-                        timestamp=time.time(), operation="stream_custom", model=llm_model or settings.llm_model,
-                        latency_ms=round(latency_ms, 2), status="success",
-                    ))
-                except Exception as stream_err:
-                    await cb.failure()
-                    log.error(f"Custom config stream error: {stream_err}")
-                    raise
+        async with sem, client.stream("POST", url, json=body, headers=headers) as r:
+            try:
+                r.raise_for_status()
+                async for line in r.aiter_lines():
+                    piece = _parse_stream_line(line)
+                    if piece:
+                        yield piece
+                await cb.success()
+                tracker = get_tracker()
+                latency_ms = (time.time() - _start) * 1000
+                tracker.record(CallRecord(
+                    timestamp=time.time(), operation="stream_custom", model=llm_model or settings.llm_model,
+                    latency_ms=round(latency_ms, 2), status="success",
+                ))
+            except Exception as stream_err:
+                await cb.failure()
+                log.error(f"Custom config stream error: {stream_err}")
+                raise
         return
 
     else:
@@ -685,15 +684,14 @@ def _extract_json(text: str) -> str | None:
                 continue
             if ch == '"':
                 in_string = False
-        else:
-            if ch == '"':
-                in_string = True
-            elif ch == "{":
-                depth += 1
-            elif ch == "}":
-                depth -= 1
-                if depth == 0:
-                    return text[start:i+1]
+        elif ch == '"':
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start:i+1]
         i += 1
     return None
 

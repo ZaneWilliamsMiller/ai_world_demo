@@ -8,8 +8,8 @@ import unittest
 
 from backend.data.atmosphere import TILE_ATMOSPHERE, WORLD_REGIONS
 from backend.data.factions import FACTIONS
-from backend.data.maps_data import MAPS, MAP_LOCATIONS, MAP_AMBUSH_MARKERS
-from backend.data.npcs_data import NPCS, NPC_SEEDS
+from backend.data.maps_data import MAP_AMBUSH_MARKERS, MAP_LOCATIONS, MAPS
+from backend.data.npcs_data import NPC_SEEDS, NPCS
 from backend.data.prompts import FIXED_INTRO, WORLD_NAME
 from backend.data.relationships import NPC_RELATIONSHIPS
 from backend.data.zones import ECONOMY_ZONES, SAFE_ZONES

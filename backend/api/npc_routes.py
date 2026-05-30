@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-import copy
 import json
 import logging
 import random
@@ -36,7 +35,8 @@ from backend.api.schema import (
     TalkResponse,
     WaitResponse,
 )
-from backend.api.views import npcs_here as _npcs_here, player_public as _player_public
+from backend.api.views import npcs_here as _npcs_here
+from backend.api.views import player_public as _player_public
 from backend.data.factions import FACTIONS
 from backend.data.npcs_data import NPCS
 from backend.data.prompts import SOCIETY_BIBLE, WORLD_NAME
@@ -234,9 +234,9 @@ class WaitBody(BaseModel):
 
 @router.post("/api/wait", response_model=WaitResponse)
 async def player_wait(body: WaitBody):
+    from backend.data.atmosphere import scene_context
     from backend.session.store import room
     from backend.systems.time_weather import advance_clock
-    from backend.data.atmosphere import scene_context
     p = room.players.get(body.player_id)
     if not p:
         raise HTTPException(404, f"未知 player_id: {body.player_id}")
@@ -661,7 +661,8 @@ async def agent_act_loop_stream(body: AgentActLoopStreamBody) -> StreamingRespon
     async def event_gen():
         from backend.agents.actor import NpcAction, decide_next_action, execute_plan_step_async
         from backend.agents.game_state import get_or_init_mind
-        from backend.observability.tracker import CallRecord, get_tracker as _get_tracker
+        from backend.observability.tracker import CallRecord
+        from backend.observability.tracker import get_tracker as _get_tracker
 
         t0 = time.perf_counter()
         total_steps = 0

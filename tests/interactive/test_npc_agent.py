@@ -304,7 +304,7 @@ class TestNpcCrossTalkLLM(unittest.TestCase):
         with _httpx.stream("POST", str(base_url) + "/api/agent/act_loop_stream",
                           json={"player_id": self.client.player_id, "npc_id": npc_id, "max_steps": 3},
                           timeout=60.0) as resp:
-            self.assertEqual(resp.status_code, 200, f"stream failed")
+            self.assertEqual(resp.status_code, 200, "stream failed")
 
             events = []
             for line in resp.iter_lines():

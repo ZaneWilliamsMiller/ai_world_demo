@@ -5,10 +5,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from pydantic import ValidationError
-
-from backend.models.llm_schema import NpcResponseSchema, StateUpdate, RepDelta
+from backend.models.llm_schema import NpcResponseSchema, RepDelta, StateUpdate
 from backend.models.npc import format_npc_character_sheet
+from pydantic import ValidationError
 
 
 class TestNpcResponseSchema(unittest.TestCase):

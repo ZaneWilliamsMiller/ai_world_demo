@@ -11,8 +11,6 @@ from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-from backend.config import settings
-
 
 def _mock_settings():
     s = MagicMock()

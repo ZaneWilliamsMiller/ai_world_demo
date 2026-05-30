@@ -11,12 +11,12 @@ import unittest
 
 from backend.api.schema import (
     DangerSense,
+    HealthResponse,
     InitResponse,
     MoveResponse,
     PlayerPublic,
     StateResponse,
     TalkResponse,
-    HealthResponse,
 )
 
 
@@ -85,11 +85,14 @@ class TestSchemaCompleteness(unittest.TestCase):
             self.assertIn(field, fields, f"TalkResponse missing field: {field}")
 
     def test_response_model_matches_routes(self):
-        from backend.app import app
         from backend.api.schema import (
-            InitResponse, MoveResponse, StateResponse, JournalResponse,
-            HealthResponse, TalkResponse, FinaleResponse,
+            FinaleResponse,
+            InitResponse,
+            JournalResponse,
+            MoveResponse,
+            TalkResponse,
         )
+        from backend.app import app
         expected = {
             "/api/health": HealthResponse,
             "/api/hello": InitResponse,
