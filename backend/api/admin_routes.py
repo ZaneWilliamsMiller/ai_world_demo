@@ -17,6 +17,7 @@ from backend.api.schema import (
     AdminNpcStatesResponse,
     AdminPlayersResponse,
     AdminRecentCallsResponse,
+    ShutdownResponse,
 )
 from backend.config import settings
 
@@ -106,7 +107,7 @@ async def recent_calls(n: int = 20):
     return {"calls": tracker.recent_calls(n)}
 
 
-@router.post("/shutdown")
+@router.post("/shutdown", response_model=ShutdownResponse)
 async def shutdown_server(request: Request):
     secret = request.headers.get("X-Shutdown-Secret", "")
     expected = settings.shutdown_secret

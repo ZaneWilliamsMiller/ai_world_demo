@@ -57,7 +57,7 @@ class TestSchemaCompleteness(unittest.TestCase):
                 continue
             if route.path and ("stream" in route.path or "/stream" in route.path):
                 continue
-            if route.path and route.path == "/api/shutdown":
+            if route.path and route.path == "/api/admin/shutdown":
                 continue
             if route.path and not route.path.startswith("/api/"):
                 continue
