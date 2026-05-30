@@ -38,6 +38,7 @@ PRIVATE_PROP_OWNERS = {
     "_mapLocations": ["ui.js"],
     "_streamAbortController": ["api.js", "dialogue.js"],
     "_actLoopAbortController": ["api.js", "dialogue.js", "main.js"],
+    "_showOfflineScreen": ["main.js"],
 }
 
 errors = []
