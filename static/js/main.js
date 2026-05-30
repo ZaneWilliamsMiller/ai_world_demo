@@ -74,12 +74,17 @@ window.App = window.App || {};
           if (d) { _pollErrorCount = 0; App.updateUI(d); }
         }).catch(function(err) {
           _pollErrorCount++;
-          if (err.message && err.message.includes('404')) {
+          var msg = err.message || '';
+          if (msg.includes('404')) {
             App.doLogout();
+          } else if (msg.includes('网络连接中断')) {
+            if (_pollErrorCount >= 2) {
+              App.addMsg("system", "⚠️ 与服务器连接中断，请检查后端服务是否运行");
+            }
           } else if (_pollErrorCount >= 3) {
             fetch("/api/health", { cache: "no-store" })
               .then(function() { _pollErrorCount = 0; })
-              .catch(function() { App.addMsg("system", "\u26a0\ufe0f \u4e0e\u670d\u52a1\u5668\u8fde\u63a5\u4e2d\u65ad\uff0c\u8bf7\u68c0\u67e5\u540e\u7aef\u670d\u52a1\u662f\u5426\u8fd0\u884c"); });
+              .catch(function() { App.addMsg("system", "⚠️ 与服务器连接中断，请检查后端服务是否运行"); });
           }
         });
       }
@@ -514,15 +519,17 @@ window.App = window.App || {};
     var bountyExpandBtn = document.getElementById("bountyExpandBtn");
     var bountyOverlay = document.getElementById("bountyOverlay");
     var bountyOverlayClose = document.getElementById("bountyOverlayClose");
-    if (bountyExpandBtn && bountyOverlay) {
-      bountyExpandBtn.addEventListener("click", function() {
-        var isVisible = bountyOverlay.classList.contains("visible");
-        if (isVisible) {
-          bountyOverlay.classList.remove("visible");
-          bountyExpandBtn.textContent = "展开";
+    var bountyDetailPanel = document.getElementById("bountyDetailPanel");
+    var bountySummary = document.getElementById("bountySummary");
+    if (bountySummary && bountyDetailPanel) {
+      bountySummary.addEventListener("click", function() {
+        var isExpanded = bountyDetailPanel.classList.contains("expanded");
+        if (isExpanded) {
+          bountyDetailPanel.classList.remove("expanded");
+          if (bountyExpandBtn) bountyExpandBtn.textContent = "展开 ▾";
         } else {
-          bountyOverlay.classList.add("visible");
-          bountyExpandBtn.textContent = "收起";
+          bountyDetailPanel.classList.add("expanded");
+          if (bountyExpandBtn) bountyExpandBtn.textContent = "收起 ▴";
         }
       });
     }

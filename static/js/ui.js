@@ -308,10 +308,21 @@ window.App = window.App || {};
     var bounties = p.bounties || data.bounties;
     var activeBounty = p.active_bounty;
     var listEl = document.getElementById("bountyList");
+    var summaryText = document.getElementById("bountySummaryText");
     if (!listEl) return;
     listEl.innerHTML = "";
 
     _renderBountyOverlay(data);
+
+    if (summaryText) {
+      if (activeBounty) {
+        summaryText.textContent = "悬赏: " + (activeBounty.title || "进行中") + " ✓";
+      } else if (bounties && bounties.length > 0) {
+        summaryText.textContent = "悬赏: " + bounties.length + "项可接";
+      } else {
+        summaryText.textContent = "悬赏: 暂无";
+      }
+    }
 
     if (activeBounty) {
       var activeDiv = document.createElement("div");

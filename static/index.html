@@ -158,13 +158,19 @@
       </div>
 
       <!-- 悬赏榜 -->
-      <div class="bounty-section">
-        <h3>📜 悬赏榜 <span id="bountyExpandBtn" class="bounty-expand-btn">展开</span></h3>
-        <div id="bountyList"></div>
-        <div class="bounty-actions">
-          <button id="bountyRefreshBtn">刷新悬赏</button>
-          <button id="bountyCompleteBtn">完成悬赏</button>
-          <button id="bountyAbandonBtn">放弃悬赏</button>
+      <div class="bounty-section" id="bountySection">
+        <div class="bounty-summary" id="bountySummary">
+          <span class="bounty-summary-icon">📜</span>
+          <span class="bounty-summary-text" id="bountySummaryText">悬赏: 暂无</span>
+          <span class="bounty-expand-btn" id="bountyExpandBtn">展开 ▾</span>
+        </div>
+        <div class="bounty-detail-panel" id="bountyDetailPanel">
+          <div id="bountyList"></div>
+          <div class="bounty-actions">
+            <button id="bountyRefreshBtn">刷新悬赏</button>
+            <button id="bountyCompleteBtn">完成悬赏</button>
+            <button id="bountyAbandonBtn">放弃悬赏</button>
+          </div>
         </div>
       </div>
 

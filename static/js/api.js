@@ -34,6 +34,7 @@ window.App = window.App || {};
     } catch (e) {
       clearTimeout(timeoutId);
       if (e.name === 'AbortError') throw new Error('请求超时');
+      if (e instanceof TypeError) throw new Error('网络连接中断，请检查后端服务');
       throw e;
     }
   }
@@ -53,6 +54,7 @@ window.App = window.App || {};
     } catch (e) {
       clearTimeout(timeoutId);
       if (e.name === 'AbortError') throw new Error('请求超时');
+      if (e instanceof TypeError) throw new Error('网络连接中断，请检查后端服务');
       throw e;
     }
   }

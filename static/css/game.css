@@ -1236,8 +1236,40 @@
   border-bottom: 2px solid rgba(42, 42, 74, 0.6);
   background: var(--glass-bg);
   backdrop-filter: blur(8px);
-  max-height: 180px;
+  overflow: hidden;
+}
+.bounty-summary {
+  padding: 8px 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  transition: background 0.12s ease;
+}
+.bounty-summary:hover {
+  background: rgba(234, 179, 8, 0.04);
+}
+.bounty-summary-icon {
+  font-size: 13px;
+}
+.bounty-summary-text {
+  flex: 1;
+  color: var(--accent-yellow);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bounty-detail-panel {
+  display: none;
+  max-height: 200px;
   overflow-y: auto;
+  border-top: 1px solid rgba(42, 42, 74, 0.6);
+}
+.bounty-detail-panel.expanded {
+  display: block;
 }
 .bounty-section h3 {
   padding: 10px 20px;

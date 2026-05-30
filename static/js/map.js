@@ -304,7 +304,7 @@ window.App = window.App || {};
     miniCanvas = document.createElement("canvas");
     miniCanvas.id = "miniMap";
     miniCanvas.style.cssText =
-      "position:absolute;right:12px;bottom:36px;border:" + MINI_BORDER +
+      "position:absolute;left:12px;top:12px;border:" + MINI_BORDER +
       "px solid rgba(80,100,140,0.9);border-radius:8px;cursor:pointer;z-index:5;" +
       "box-shadow: 0 6px 20px rgba(0,0,0,0.45);background:rgba(10,10,20,0.7);";
     container.appendChild(miniCanvas);
