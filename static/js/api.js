@@ -94,9 +94,28 @@ window.App = window.App || {};
     }
   };
 
-  App.fetchState = async function() {
+  App.fetchState = async function(signal) {
     if (!App.playerId) return null;
-    return await backendGet("/api/state/" + App.playerId);
+    var path = "/api/state/" + App.playerId;
+    var fullUrl = App.API + path;
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function() { controller.abort(); }, _defaultTimeout);
+    if (signal) {
+      signal.addEventListener("abort", function() { controller.abort(); });
+    }
+    try {
+      var r = await fetch(fullUrl, { cache: 'no-store', signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (!r.ok) {
+        await _handleErrorResponse(r, path);
+      }
+      return await r.json();
+    } catch (e) {
+      clearTimeout(timeoutId);
+      if (e.name === 'AbortError') throw e;
+      if (e instanceof TypeError) throw new Error('网络连接中断，请检查后端服务');
+      throw e;
+    }
   };
 
   App.doSave = async function() {

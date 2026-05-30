@@ -70,9 +70,14 @@ window.App = window.App || {};
     _statePollTimer = setInterval(function() {
       if (_shuttingDown || !_pageVisible) return;
       if (App.playerId && !App.isStreaming) {
-        App.fetchState().then(function(d) {
+        if (_pollAbortController) { _pollAbortController.abort(); }
+        _pollAbortController = new AbortController();
+        App.fetchState(_pollAbortController.signal).then(function(d) {
+          _pollAbortController = null;
           if (d) { _pollErrorCount = 0; App.updateUI(d); }
         }).catch(function(err) {
+          _pollAbortController = null;
+          if (err.name === 'AbortError') return;
           _pollErrorCount++;
           var msg = err.message || '';
           if (msg.includes('404')) {
@@ -453,11 +458,30 @@ window.App = window.App || {};
 
   let _pollErrorCount = 0;
   var _pageVisible = true;
+  var _pollAbortController = null;
+
+  window.addEventListener("unhandledrejection", function(ev) {
+    if (ev.reason && ev.reason.message &&
+        (ev.reason.message.includes("网络连接中断") || ev.reason.message.includes("请求超时"))) {
+      ev.preventDefault();
+    }
+  });
 
   document.addEventListener("visibilitychange", function() {
     _pageVisible = !document.hidden;
     if (_pageVisible && App.playerId && !_shuttingDown) {
-      App.fetchState().then(function(data) { if (data) App.updateUI(data); }).catch(function() {});
+      if (_pollAbortController) { _pollAbortController.abort(); }
+      _pollAbortController = new AbortController();
+      App.fetchState(_pollAbortController.signal).then(function(data) {
+        _pollAbortController = null;
+        if (data) App.updateUI(data);
+      }).catch(function(err) {
+        _pollAbortController = null;
+        if (err.name === 'AbortError') return;
+      });
+    } else if (!_pageVisible && _pollAbortController) {
+      _pollAbortController.abort();
+      _pollAbortController = null;
     }
   });
 
@@ -519,16 +543,15 @@ window.App = window.App || {};
     var bountyExpandBtn = document.getElementById("bountyExpandBtn");
     var bountyOverlay = document.getElementById("bountyOverlay");
     var bountyOverlayClose = document.getElementById("bountyOverlayClose");
-    var bountyDetailPanel = document.getElementById("bountyDetailPanel");
     var bountySummary = document.getElementById("bountySummary");
-    if (bountySummary && bountyDetailPanel) {
+    if (bountySummary && bountyOverlay) {
       bountySummary.addEventListener("click", function() {
-        var isExpanded = bountyDetailPanel.classList.contains("expanded");
-        if (isExpanded) {
-          bountyDetailPanel.classList.remove("expanded");
+        var isVisible = bountyOverlay.classList.contains("visible");
+        if (isVisible) {
+          bountyOverlay.classList.remove("visible");
           if (bountyExpandBtn) bountyExpandBtn.textContent = "展开 ▾";
         } else {
-          bountyDetailPanel.classList.add("expanded");
+          bountyOverlay.classList.add("visible");
           if (bountyExpandBtn) bountyExpandBtn.textContent = "收起 ▴";
         }
       });
@@ -536,7 +559,7 @@ window.App = window.App || {};
     if (bountyOverlayClose && bountyOverlay) {
       bountyOverlayClose.addEventListener("click", function() {
         bountyOverlay.classList.remove("visible");
-        if (bountyExpandBtn) bountyExpandBtn.textContent = "展开";
+        if (bountyExpandBtn) bountyExpandBtn.textContent = "展开 ▾";
       });
     }
 

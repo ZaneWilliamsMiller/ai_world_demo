@@ -103,10 +103,15 @@
       <div class="map-container" id="mapContainer"></div>
       <div id="bountyOverlay" class="bounty-overlay">
         <div class="bounty-overlay-header">
-          <h3>📜 悬赏详情</h3>
+          <h3>📜 悬赏榜</h3>
           <button id="bountyOverlayClose" class="bounty-overlay-close">✕</button>
         </div>
         <div id="bountyOverlayContent" class="bounty-overlay-content"></div>
+        <div class="bounty-overlay-actions" id="bountyOverlayActions">
+          <button id="bountyRefreshBtn">刷新悬赏</button>
+          <button id="bountyCompleteBtn">完成悬赏</button>
+          <button id="bountyAbandonBtn">放弃悬赏</button>
+        </div>
       </div>
       <div id="loadingOverlay" class="loading-overlay" style="display:none;" role="status" aria-label="加载中">
         <div class="loading-spinner"></div>
@@ -163,14 +168,6 @@
           <span class="bounty-summary-icon">📜</span>
           <span class="bounty-summary-text" id="bountySummaryText">悬赏: 暂无</span>
           <span class="bounty-expand-btn" id="bountyExpandBtn">展开 ▾</span>
-        </div>
-        <div class="bounty-detail-panel" id="bountyDetailPanel">
-          <div id="bountyList"></div>
-          <div class="bounty-actions">
-            <button id="bountyRefreshBtn">刷新悬赏</button>
-            <button id="bountyCompleteBtn">完成悬赏</button>
-            <button id="bountyAbandonBtn">放弃悬赏</button>
-          </div>
         </div>
       </div>
 
