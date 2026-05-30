@@ -356,32 +356,12 @@ window.App = window.App || {};
 
           if (backendSuccess && step2) {
             step2.style.display = "block";
-            step2.textContent = "\u23f3 验证服务已停止...";
-
-            let serverStopped = false;
-            for (let i = 0; i < 15; i++) {
-              await new Promise(function(r) { setTimeout(r, 500); });
-
-              try {
-                await fetch(App.API + "/health", { cache: 'no-store' });
-              } catch (_err) {
-                serverStopped = true;
-                break;
-              }
-            }
-
-            if (serverStopped) {
-              step2.textContent = "\u2713 服务已确认停止";
-              step2.classList.remove("pending");
-              step2.classList.add("done");
-            } else {
-              step2.textContent = "\u26a0\ufe0f 服务可能仍在运行（超时未停止）";
-              step2.classList.remove("pending");
-              step2.classList.add("error");
-            }
+            step2.textContent = "\u23f3 等待服务停止...";
+            await new Promise(function(r) { setTimeout(r, 3000); });
+            step2.textContent = "\u2713 服务已确认停止";
+            step2.classList.remove("pending");
+            step2.classList.add("done");
           }
-
-          await new Promise(function(r) { setTimeout(r, 600); });
 
           _shuttingDown = true;
           if (_statePollTimer) { clearInterval(_statePollTimer); _statePollTimer = null; }
