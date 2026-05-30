@@ -12,6 +12,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 async def diagnose():
     import httpx
+    from backend.config import settings
 
     timeout = httpx.Timeout(connect=30.0, read=300.0, write=30.0, pool=30.0)
     base = os.environ.get("BACKEND_URL", "http://127.0.0.1:8765")
@@ -47,7 +48,6 @@ async def diagnose():
         print("第3步：直接测试LLM API调用（简单消息）")
         print("=" * 60)
         try:
-            from backend.config import settings
             print(f"  LLM URL: {settings.llm_base_url}")
             print(f"  LLM Model: {settings.llm_model}")
 

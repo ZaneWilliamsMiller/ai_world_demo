@@ -129,7 +129,7 @@ def plan_driven_step(p: PlayerState, npc_id: str, mind: object) -> tuple[str, in
 
     mid, x, y = str(pos[0]), int(pos[1]), int(pos[2])
     sh_name = shichen_name(p.world_shichen)
-    plan = mind.plan_by_shichen.get(sh_name, "")
+    plan = getattr(mind, "plan_by_shichen", {}).get(sh_name, "")
     if not plan:
         return None
 

@@ -193,9 +193,10 @@ def start_server(port: int = DEFAULT_PORT, background: bool = False) -> subproce
 
         def _forward_output(p: subprocess.Popen) -> None:
             try:
-                for line in p.stdout:
-                    if line:
-                        print(line.decode(errors="replace"), end="", flush=True)
+                if p.stdout is not None:
+                    for line in p.stdout:
+                        if line:
+                            print(line.decode(errors="replace"), end="", flush=True)
             except Exception:
                 pass
 
@@ -346,7 +347,8 @@ def main():
             sys.exit(1)
 
         if background:
-            _write_pid_file(server_proc.pid, port)
+            if server_proc is not None:
+                _write_pid_file(server_proc.pid, port)
             time.sleep(1)
             open_browser(f"http://127.0.0.1:{port}")
             return

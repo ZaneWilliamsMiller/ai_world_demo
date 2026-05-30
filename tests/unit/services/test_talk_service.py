@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
+
 import unittest
 from unittest.mock import patch
 
@@ -45,7 +46,7 @@ class TestAssembleMessages(unittest.TestCase):
 
     @patch("backend.services.talk_service.cached_system", side_effect=lambda x: x)
     def test_with_history(self, mock_cached):
-        hist = [
+        hist: list[dict[str, str | int]] = [
             {"user": "你好", "assistant": "你好啊"},
             {"user": "天气如何", "assistant": "尚可"},
         ]

@@ -1,3 +1,4 @@
+# pyright: reportCallIssue=false
 import sys
 import unittest
 from pathlib import Path

@@ -122,6 +122,7 @@ class InteractiveClient:
     def talk(self, npc_id: str, message: str, timeout: float = 60.0) -> dict[str, Any]:
         t0 = time.time()
         max_retries = 3
+        resp: httpx.Response | None = None
         for attempt in range(max_retries):
             try:
                 resp = self.client.post("/api/npc/talk", json={
@@ -138,10 +139,12 @@ class InteractiveClient:
                 self._dialogue_log.append(entry)
                 return {"success": False, "error": str(e), "elapsed": elapsed}
         elapsed = round(time.time() - t0, 1)
-        if resp.status_code != 200:
-            entry = {"npc": npc_id, "player": message, "reply": "", "error": f"HTTP {resp.status_code}", "elapsed": elapsed, "favor_delta": 0, "coin_delta": 0}
+        if resp is None or resp.status_code != 200:
+            status_code = resp.status_code if resp is not None else 0
+            resp_text = resp.text[:200] if resp is not None else "no response"
+            entry = {"npc": npc_id, "player": message, "reply": "", "error": f"HTTP {status_code}", "elapsed": elapsed, "favor_delta": 0, "coin_delta": 0}
             self._dialogue_log.append(entry)
-            return {"success": False, "error": f"HTTP {resp.status_code}: {resp.text[:200]}", "elapsed": elapsed}
+            return {"success": False, "error": f"HTTP {status_code}: {resp_text}", "elapsed": elapsed}
         data = resp.json()
         data["elapsed"] = elapsed
         data["success"] = True

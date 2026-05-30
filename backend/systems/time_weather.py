@@ -100,6 +100,7 @@ def advance_clock(p: PlayerState, ticks: int = 1) -> None:
             choices = [w for w in pool if w != cur] or list(pool)
             p.weather = random.choice(choices)
         # NPC 自主行动（同步，不消耗 LLM）
+        _nid = ""
         try:
             from backend.agents.actor import execute_plan_step
             from backend.agents.game_state import get_or_init_mind

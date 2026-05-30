@@ -89,6 +89,7 @@ class TestParseFinale(unittest.TestCase):
         long_title = "A" * 50
         text = f"Body text\nENDING_TITLE: {long_title}"
         body, title = parse_finale(text)
+        assert title is not None
         self.assertEqual(len(title), 32)
         self.assertEqual(title, "A" * 32)
 
@@ -119,7 +120,7 @@ class TestCachedSystem(unittest.TestCase):
     def test_cached_system_enabled(self, mock_settings):
         mock_settings.llm_enable_prompt_cache = True
         result = cached_system("hello")
-        self.assertIsInstance(result, list)
+        assert isinstance(result, list)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["type"], "text")
         self.assertEqual(result[0]["text"], "hello")
@@ -139,7 +140,7 @@ class TestUncached(unittest.TestCase):
     def test_uncached_enabled(self, mock_settings):
         mock_settings.llm_enable_prompt_cache = True
         result = uncached("hello")
-        self.assertIsInstance(result, list)
+        assert isinstance(result, list)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["type"], "text")
         self.assertEqual(result[0]["text"], "hello")

@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import importlib
+import importlib.util
 import os
 import re
 import sys
@@ -453,6 +454,11 @@ async def _run_interactive_single(test_path: str) -> InteractiveTestResult:
         t0 = time.time()
         try:
             spec = importlib.util.spec_from_file_location(_run_id, str(test_file))
+            if spec is None or spec.loader is None:
+                return InteractiveTestResult(
+                    test_name=test_path, success=False,
+                    output=f"无法加载测试模块: {test_path}",
+                )
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
 

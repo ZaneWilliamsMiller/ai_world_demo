@@ -38,6 +38,7 @@ class TestPerceptionScan(unittest.TestCase):
         p = make_player(px=2, py=2, weather="薄阴", spirit=80)
         result = perception_scan(p)
         self.assertIsNotNone(result)
+        assert result is not None
         self.assertIn("warnings", result)
         self.assertGreater(len(result["warnings"]), 0)
 
@@ -50,6 +51,8 @@ class TestPerceptionScan(unittest.TestCase):
         result_fog = perception_scan(p_fog)
         self.assertIsNotNone(result_clear)
         self.assertIsNotNone(result_fog)
+        assert result_clear is not None
+        assert result_fog is not None
         self.assertTrue(result_fog["weather_penalty"])
         self.assertLessEqual(result_fog["radius"], result_clear["radius"])
 
@@ -61,6 +64,8 @@ class TestPerceptionScan(unittest.TestCase):
         result_high = perception_scan(p_high)
         result_low = perception_scan(p_low)
         self.assertIsNotNone(result_low)
+        assert result_low is not None
+        assert result_high is not None
         self.assertTrue(result_low["spirit_penalty"])
         self.assertLessEqual(result_low["radius"], result_high["radius"])
 
@@ -84,6 +89,7 @@ class TestPerceptionScan(unittest.TestCase):
         p = make_player(px=2, py=2, weather="重雾", spirit=10)
         result = perception_scan(p)
         self.assertIsNotNone(result)
+        assert result is not None
         self.assertGreaterEqual(result["radius"], 1)
 
 

@@ -10,6 +10,8 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from typing import Any
+
 from backend.data.maps_data import MAPS
 from backend.models.player import PlayerState
 from backend.systems.constants import (
@@ -26,7 +28,7 @@ from backend.systems.economy import init_npc_inventories
 
 
 def _make_player(**overrides):
-    defaults = dict(
+    defaults: dict[str, Any] = dict(
         player_id="sim_player",
         display_name="仿真侠客",
         gender="男",

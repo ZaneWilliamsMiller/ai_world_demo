@@ -377,6 +377,7 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
     async def event_gen():
         t0 = time.perf_counter()
         is_fallback = False
+        is_light_inquiry = False
         parsed = None
 
         try:

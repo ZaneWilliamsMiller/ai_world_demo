@@ -18,6 +18,7 @@ from backend.api.schema import (
     StateResponse,
     TalkResponse,
 )
+from fastapi.routing import APIRoute
 
 
 class TestSchemaCompleteness(unittest.TestCase):
@@ -52,9 +53,7 @@ class TestSchemaCompleteness(unittest.TestCase):
         from backend.app import app
         missing = []
         for route in app.routes:
-            if not hasattr(route, "methods"):
-                continue
-            if not hasattr(route, "response_model"):
+            if not isinstance(route, APIRoute):
                 continue
             if route.path and ("stream" in route.path or "/stream" in route.path):
                 continue
@@ -104,7 +103,7 @@ class TestSchemaCompleteness(unittest.TestCase):
         }
         route_map = {}
         for route in app.routes:
-            if hasattr(route, "path") and hasattr(route, "response_model") and route.response_model:
+            if isinstance(route, APIRoute) and route.response_model:
                 route_map[route.path] = route.response_model
         for path, expected_model in expected.items():
             self.assertIn(path, route_map, f"路由 {path} 未在 app.routes 中找到")

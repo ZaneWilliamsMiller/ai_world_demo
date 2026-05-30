@@ -29,6 +29,7 @@ try:
     HAS_JIEBA = True
 except ImportError:
     HAS_JIEBA = False
+    jieba = None  # type: ignore[misc]
 
 _PUNCT_RE = re.compile(r"[\s,。、,.;;::!?!?\"'「」『』《》()()【】]+")
 
@@ -43,7 +44,7 @@ def tokenize(text: str) -> frozenset[str]:
     s = (_PUNCT_RE.sub("", text or "")).strip()
     if not s:
         return frozenset()
-    if HAS_JIEBA:
+    if HAS_JIEBA and jieba is not None:
         words = set(jieba.cut(s))
         return frozenset({
             w for w in words

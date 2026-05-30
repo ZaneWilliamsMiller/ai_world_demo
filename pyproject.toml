@@ -58,7 +58,7 @@ ignore = [
 
 [tool.pyright]
 pythonVersion = "3.11"
-typeCheckingMode = "basic"
+typeCheckingMode = "standard"
 include = ["backend", "tests", "tools", "start.py"]
 reportOptionalSubscript = "warning"
 reportOptionalMemberAccess = "warning"

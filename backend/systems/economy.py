@@ -545,6 +545,7 @@ def use_player_item(p: PlayerState, item_name: str) -> dict[str, object]:
 
     # 日上限检查
     max_per_day = int(effect.get("max_per_day", 0) or 0)  # type: ignore[arg-type]
+    used_today = 0
     if max_per_day > 0:
         if not hasattr(p, "item_use_tracker") or p.item_use_tracker is None:
             p.item_use_tracker = {}
