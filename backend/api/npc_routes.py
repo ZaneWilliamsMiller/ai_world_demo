@@ -678,55 +678,72 @@ async def agent_act_loop_stream(body: AgentActLoopStreamBody) -> StreamingRespon
         total_steps = 0
         reflected = False
 
-        async with p.lock:
-            mind = get_or_init_mind(p, body.npc_id)
-            before_reflect_at = mind.last_reflect_at
+        try:
+            async with p.lock:
+                mind = get_or_init_mind(p, body.npc_id)
+                before_reflect_at = mind.last_reflect_at
 
-            for step_i in range(body.max_steps):
-                action = decide_next_action(mind, p, body.npc_id)
-                if action == NpcAction.IDLE:
-                    yield _sse({"step": total_steps, "action": "idle", "description": "无事可做", "success": True, "done": False})
-                    break
+                for step_i in range(body.max_steps):
+                    action = decide_next_action(mind, p, body.npc_id)
+                    if action == NpcAction.IDLE:
+                        yield _sse({"step": total_steps, "action": "idle", "description": "无事可做", "success": True, "done": False})
+                        break
 
-                result = await execute_plan_step_async(p, body.npc_id, mind)
-                total_steps += 1
-
-                if result.action_type == NpcAction.TALK and result.success and result.description:
-                    lines = result.description.split("\n")
-                    for line in lines:
-                        if line.strip():
-                            yield _sse({"step": total_steps, "action": "talk_chunk", "chunk": line.strip(), "done": False})
-                            await asyncio.sleep(0.02)
-                    yield _sse({"step": total_steps, "action": "talk", "description": result.description, "success": result.success, "done": False})
-                else:
-                    yield _sse({
-                        "step": total_steps,
-                        "action": result.action_type.value,
-                        "description": result.description,
-                        "success": result.success,
-                        "done": False,
-                    })
-
-                if mind.needs_reflect():
                     try:
-                        from backend.agents import brain as agent_brain
-                        npc_meta = NPCS.get(body.npc_id, {})
-                        await agent_brain.reflect(
-                            npc_id=body.npc_id,
-                            npc_name=npc_meta.get("name", body.npc_id),
-                            npc_blurb=str(npc_meta.get("short", "")),
-                            mind=mind,
-                            world_day=int(p.world_day),
-                            world_shichen=shichen_name(p.world_shichen),
+                        result = await asyncio.wait_for(
+                            execute_plan_step_async(p, body.npc_id, mind),
+                            timeout=90.0,
                         )
-                        reflected = True
-                        yield _sse({"step": total_steps, "action": "reflect", "done": False})
-                    except Exception as e:
-                        logging.getLogger("agent_actor").warning("stream reflect failed for %s: %s", body.npc_id, e)
+                    except TimeoutError:
+                        yield _sse({"step": total_steps, "action": "timeout", "description": "步骤执行超时", "success": False, "done": False})
+                        break
+                    total_steps += 1
 
-                await asyncio.sleep(0.3)
+                    if result.action_type == NpcAction.TALK and result.success and result.description:
+                        lines = result.description.split("\n")
+                        for line in lines:
+                            if line.strip():
+                                yield _sse({"step": total_steps, "action": "talk_chunk", "chunk": line.strip(), "done": False})
+                                await asyncio.sleep(0.02)
+                        yield _sse({"step": total_steps, "action": "talk", "description": result.description, "success": result.success, "done": False})
+                    else:
+                        yield _sse({
+                            "step": total_steps,
+                            "action": result.action_type.value,
+                            "description": result.description,
+                            "success": result.success,
+                            "done": False,
+                        })
 
-            reflected = mind.last_reflect_at != before_reflect_at
+                    if mind.needs_reflect():
+                        try:
+                            from backend.agents import brain as agent_brain
+                            npc_meta = NPCS.get(body.npc_id, {})
+                            await asyncio.wait_for(
+                                agent_brain.reflect(
+                                    npc_id=body.npc_id,
+                                    npc_name=npc_meta.get("name", body.npc_id),
+                                    npc_blurb=str(npc_meta.get("short", "")),
+                                    mind=mind,
+                                    world_day=int(p.world_day),
+                                    world_shichen=shichen_name(p.world_shichen),
+                                ),
+                                timeout=60.0,
+                            )
+                            reflected = True
+                            yield _sse({"step": total_steps, "action": "reflect", "done": False})
+                        except TimeoutError:
+                            logging.getLogger("agent_actor").warning("stream reflect timeout for %s", body.npc_id)
+                        except Exception as e:
+                            logging.getLogger("agent_actor").warning("stream reflect failed for %s: %s", body.npc_id, e)
+
+                    await asyncio.sleep(0.3)
+
+                reflected = mind.last_reflect_at != before_reflect_at
+
+        except asyncio.CancelledError:
+            logging.getLogger("agent_actor").info("act_loop_stream cancelled for %s", body.npc_id)
+            return
 
         elapsed_ms = int((time.perf_counter() - t0) * 1000)
         _get_tracker().record(CallRecord(

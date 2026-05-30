@@ -7,10 +7,7 @@ from __future__ import annotations
   python -m uvicorn backend.app:app --host 127.0.0.1 --port 8765
 """
 import asyncio
-import hmac
 import logging
-import os
-import threading
 import time as _time
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
@@ -30,23 +27,6 @@ _log = logging.getLogger("app")
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "static"
-
-_NO_STORE_HEADERS = {
-    "cache-control": "no-store, no-cache, must-revalidate",
-    "pragma": "no-cache",
-    "expires": "0",
-}
-
-class _NoCacheStaticFiles(StaticFiles):
-    async def __call__(self, scope, receive, send):
-        async def _send(message):
-            if message["type"] == "http.response.start":
-                headers = list(message.get("headers", []))
-                for k, v in _NO_STORE_HEADERS.items():
-                    headers.append((k.encode(), v.encode()))
-                message["headers"] = headers
-            await send(message)
-        await super().__call__(scope, receive, _send)
 
 def _cors_allow_origins() -> tuple[list[str], bool]:
     """返回 (origins, allow_credentials)。origins 为 * 时凭证必须为 False（浏览器规范）。"""
@@ -85,6 +65,10 @@ async def _auto_save_loop():
             _save_log.error("auto-save loop error: %s", e, exc_info=True)
 
 _shutdown_requested = False
+
+def mark_shutdown_requested():
+    global _shutdown_requested
+    _shutdown_requested = True
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -151,9 +135,10 @@ async def no_cache_static(request: Request, call_next):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
+        for hdr in ("etag", "last-modified"):
+            if hdr in response.headers:
+                del response.headers[hdr]
     return response
-
-app.include_router(api_router)
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -170,64 +155,7 @@ async def log_requests(request: Request, call_next):
 
     return response
 
-@app.post("/api/shutdown")
-async def shutdown_server(request: Request):
-    secret = request.headers.get("X-Shutdown-Secret", "")
-    expected = settings.shutdown_secret
-    if not expected:
-        raise HTTPException(403, "未配置 SHUTDOWN_SECRET，拒绝远程关闭")
-    if not hmac.compare_digest(secret, expected):
-        raise HTTPException(403, "无权关闭服务")
-
-    shutdown_log = _log.getChild("shutdown")
-    shutdown_log.info("收到关闭请求")
-    global _shutdown_requested
-    _shutdown_requested = True
-
-    snapshot = await room.snapshot()
-
-    def delayed_shutdown(players_snapshot):
-        _time.sleep(3.0)
-        _log.info("进程即将退出...")
-
-        shutdown_marker = str(Path(__file__).resolve().parent.parent / ".shutdown_requested")
-        try:
-            with open(shutdown_marker, "w") as f:
-                f.write("1")
-        except Exception:
-            pass
-
-        try:
-            saved = 0
-            for pid, p in players_snapshot:
-                if p.dead or p.ended:
-                    continue
-                try:
-                    save_game(p)
-                    saved += 1
-                except Exception as e:
-                    _log.error("shutdown save failed %s: %s", pid, e)
-            if saved:
-                _log.info("shutdown saved %d active player(s)", saved)
-
-            from backend.llm.client import _close_client_sync
-            try:
-                _close_client_sync()
-            except Exception as e:
-                _log.error("LLM client close error: %s", e)
-        except Exception as e:
-            _log.error("shutdown error: %s", e)
-
-        os._exit(0)
-
-    thread = threading.Thread(target=delayed_shutdown, args=(snapshot,), daemon=True)
-    thread.start()
-
-    return {
-        "status": "shutting_down",
-        "message": "服务正在关闭",
-        "hint": "检查终端窗口查看详细日志"
-    }
+app.include_router(api_router)
 
 if STATIC.is_dir():
     @app.get("/")
@@ -235,23 +163,13 @@ if STATIC.is_dir():
         index_path = STATIC / "index.html"
         if not index_path.is_file():
             raise HTTPException(500, "缺少 static/index.html")
-        resp = FileResponse(index_path)
-        resp.headers.update(_NO_STORE_HEADERS)
-        for hdr in ("etag", "last-modified"):
-            if hdr in resp.headers:
-                del resp.headers[hdr]
-        return resp
+        return FileResponse(index_path)
 
     @app.get("/tests.html")
     async def _tests():
         tests_path = STATIC / "tests.html"
         if not tests_path.is_file():
             raise HTTPException(404)
-        resp = FileResponse(tests_path)
-        resp.headers.update(_NO_STORE_HEADERS)
-        for hdr in ("etag", "last-modified"):
-            if hdr in resp.headers:
-                del resp.headers[hdr]
-        return resp
+        return FileResponse(tests_path)
 
-    app.mount("/", _NoCacheStaticFiles(directory=str(STATIC)), name="static")
+    app.mount("/", StaticFiles(directory=str(STATIC)), name="static")

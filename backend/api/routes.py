@@ -38,14 +38,13 @@ async def health():
         from backend.config import settings
 
         llm_ok = bool(settings.llm_api_key and settings.llm_base_url)
-        shutdown_secret = settings.shutdown_secret or ""
+        shutdown_ok = bool(settings.shutdown_secret)
     except Exception:
         llm_ok = False
-        shutdown_secret = ""
+        shutdown_ok = False
     return {
         "status": "ok",
         "llm_configured": str(llm_ok).lower(),
-        "shutdown_configured": str(bool(shutdown_secret)).lower(),
-        "shutdown_secret": shutdown_secret,
+        "shutdown_configured": str(shutdown_ok).lower(),
         "world": WORLD_NAME,
     }

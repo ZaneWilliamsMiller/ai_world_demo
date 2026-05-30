@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════
-//  main.js — 应用入口
+//  main.js — 应用入口（配置、操作、关闭、离线、DOM 初始化）
 // ═══════════════════════════════════════════════════════
 window.App = window.App || {};
 
@@ -8,55 +8,11 @@ window.App = window.App || {};
 
   let _statePollTimer = null;
 
-  // ═══════════════════════════════════════════
-  //  DOM 元素缓存 - 避免重复查询，提升性能
-  // ═══════════════════════════════════════════
-  const DOM = {
-    configOverlay: null,
-    configPanel: null,
-    loginForm: null,
-    loadForm: null,
-    loginOverlay: null,
-    topbar: null,
-    mainUI: null,
-    introMsg: null,
-    confirmOverlay: null,
-    confirmTitle: null,
-    confirmMessage: null,
-    confirmOk: null,
-    confirmCancel: null,
-    savesList: null,
-    npcSelect: null,
-    msgInput: null,
-
-    init() {
-      this.configOverlay = document.getElementById("configOverlay");
-      this.configPanel = document.getElementById("configPanel");
-      this.loginForm = document.getElementById("loginForm");
-      this.loadForm = document.getElementById("loadForm");
-      this.loginOverlay = document.getElementById("loginOverlay");
-      this.topbar = document.getElementById("topbar");
-      this.mainUI = document.getElementById("mainUI");
-      this.introMsg = document.getElementById("introMsg");
-      this.confirmOverlay = document.getElementById("confirmOverlay");
-      this.confirmTitle = document.getElementById("confirmTitle");
-      this.confirmMessage = document.getElementById("confirmMessage");
-      this.confirmOk = document.getElementById("confirmOk");
-      this.confirmCancel = document.getElementById("confirmCancel");
-      this.savesList = document.getElementById("savesList");
-      this.npcSelect = document.getElementById("npcSelect");
-      this.msgInput = document.getElementById("msgInput");
-    }
-  };
-
-  // 暴露 DOM 缓存供其他模块使用
-  App.DOM = DOM;
-
   const HtmlUtils = App.HtmlUtils;
 
   App.toggleConfigPanel = function() {
-    const overlay = DOM.configOverlay || document.getElementById("configOverlay");
-    const panel = DOM.configPanel || document.getElementById("configPanel");
+    const overlay = document.getElementById("configOverlay");
+    const panel = document.getElementById("configPanel");
     if (!overlay || !panel) return;
     if (panel.style.display === "none" || panel.style.display === "") {
       panel.style.display = "block";
@@ -80,136 +36,20 @@ window.App = window.App || {};
     App.toggleConfigPanel();
   };
 
-  App.showLoadForm = async function() {
-    const loginForm = DOM.loginForm || document.getElementById("loginForm");
-    const loadForm = DOM.loadForm || document.getElementById("loadForm");
-    if (loginForm) loginForm.style.display = "none";
-    if (loadForm) loadForm.style.display = "block";
-
-    try {
-      const saves = await App.fetchSaves();
-      const list = DOM.savesList || document.getElementById("savesList");
-      list.innerHTML = "";
-      if (saves.length === 0) {
-        const emptyDiv = document.createElement("div");
-        emptyDiv.textContent = "暂无存档";
-        emptyDiv.style.cssText = "color:#888;padding:12px;text-align:center;";
-        list.appendChild(emptyDiv);
-      }
-      saves.forEach(function(s) {
-        const div = document.createElement("div");
-        // 使用 textContent 设置文本，自动防止 XSS
-        div.textContent = s.display_name + "  (" + s.map_id + ", 第" + s.world_day + "日)" + (s.dead ? " [亡]" : "");
-        div.onclick = function() {
-          const all = list.querySelectorAll("div");
-          for (let i = 0; i < all.length; i++) { all[i].classList.remove("selected"); }
-          div.classList.add("selected");
-          div._pid = s.player_id;
-        };
-        list.appendChild(div);
-      });
-    } catch (_e) {
-      const savesList = DOM.savesList || document.getElementById("savesList");
-      // 错误消息使用安全方式显示
-      HtmlUtils.setTrustedHtml(savesList, '<div style="color:#ef5350;">加载存档列表失败</div>');
-    }
-  };
-
-  App.showLoginForm = function() {
-    const loadForm = DOM.loadForm || document.getElementById("loadForm");
-    const loginForm = DOM.loginForm || document.getElementById("loginForm");
-    if (loadForm) loadForm.style.display = "none";
-    if (loginForm) loginForm.style.display = "block";
-  };
-
-  App.startNewGame = async function() {
-    const btn = document.querySelector('#loginForm button[onclick*="startNewGame"]');
-    var nameEl = document.getElementById("inpName");
-    var name = nameEl ? nameEl.value.trim() : "";
-    if (!name) {
-      var loginFormEl = DOM.loginForm || document.getElementById("loginForm");
-      if (loginFormEl) {
-        var oldErr = loginFormEl.querySelector(".login-error");
-        if (oldErr) oldErr.remove();
-        var errDiv = document.createElement("div");
-        errDiv.className = "login-error";
-        errDiv.style.cssText = "color:#ef5350;margin-top:8px;font-size:13px;";
-        errDiv.textContent = "❌ 江湖名号不能为空";
-        loginFormEl.appendChild(errDiv);
-      }
-      return;
-    }
-    try {
-      var saves = await App.fetchSaves();
-      var dup = saves.find(function(s) { return s.display_name === name; });
-      if (dup) {
-        var loginFormEl2 = DOM.loginForm || document.getElementById("loginForm");
-        if (loginFormEl2) {
-          var oldErr2 = loginFormEl2.querySelector(".login-error");
-          if (oldErr2) oldErr2.remove();
-          var errDiv2 = document.createElement("div");
-          errDiv2.className = "login-error";
-          errDiv2.style.cssText = "color:#ef5350;margin-top:8px;font-size:13px;";
-          errDiv2.textContent = "❌ 已有名号「" + name + "」的存档，请换一个名号";
-          loginFormEl2.appendChild(errDiv2);
-        }
-        return;
-      }
-    } catch (_e) {}
-
-    if (btn) { btn.disabled = true; btn.textContent = "⏳ 进入江湖..."; }
-
-    const gender = document.getElementById("inpGender").value;
-    const permadeath = document.getElementById("inpPermadeath").checked;
-    console.log("[App] startNewGame:", { name: name, gender: gender, permadeath: permadeath });
-
-    try {
-      console.log("[App] calling createPlayer...");
-      const result = await App.createPlayer(name, gender, permadeath);
-      console.log("[App] createPlayer OK:", result);
-      App.onGameReady(result.data, result.pid, result.data.display_name);
-    } catch (e) {
-      console.error("[App] createPlayer FAILED:", e);
-      // 用页面内提示代替 alert（避免被浏览器拦截）
-      const errDiv = document.createElement("div");
-      errDiv.className = "login-error";
-      errDiv.style.cssText = "color:#ef5350;margin-top:8px;font-size:13px;";
-      errDiv.textContent = "❌ 创建角色失败：" + e.message;
-      const loginFormEl = DOM.loginForm || document.getElementById("loginForm");
-      if (loginFormEl) {
-        var oldErr = loginFormEl.querySelector(".login-error");
-        if (oldErr) oldErr.remove();
-        loginFormEl.appendChild(errDiv);
-      }
-      if (btn) { btn.disabled = false; btn.textContent = "踏入江湖"; }
-    }
-  };
-
-  App.loadGame = async function() {
-    const sel = document.querySelector(".saves-list div.selected");
-    if (!sel) { App.addMsg("system", "请先选择一个存档"); return; }
-    try {
-      const data = await App.loadPlayer(sel._pid);
-      App.onGameReady(data, sel._pid, data.display_name);
-    } catch (e) {
-      App.addMsg("system", "读档失败：" + e.message);
-    }
-  };
-
   App.onGameReady = function(data, pid, name) {
     App.playerId    = pid;
     App.displayName = name || "江湖客";
     App.mapsData    = data.maps || {};
     App.selectedNpcId = null;
 
-    const loginOverlay = DOM.loginOverlay || document.getElementById("loginOverlay");
-    const topbar = DOM.topbar || document.getElementById("topbar");
-    const mainUI = DOM.mainUI || document.getElementById("mainUI");
+    const loginOverlay = document.getElementById("loginOverlay");
+    const topbar = document.getElementById("topbar");
+    const mainUI = document.getElementById("mainUI");
     if (loginOverlay) loginOverlay.style.display = "none";
     if (topbar) topbar.style.display = "flex";
     if (mainUI) mainUI.style.display = "flex";
 
-    const introMsg = DOM.introMsg || document.getElementById("introMsg");
+    const introMsg = document.getElementById("introMsg");
     if (introMsg) {
       introMsg.textContent = "";
       var b = document.createElement("b");
@@ -248,7 +88,7 @@ window.App = window.App || {};
   App.doLogout = function() {
     App.showConfirm(
       "退出游戏",
-      "确定要退出游戏吗？<br><br>⚠️ <b>未存档的进度将丢失</b>",
+      "确定要退出游戏吗？<br><br>\u26a0\ufe0f <b>未存档的进度将丢失</b>",
       function() {
         if (_statePollTimer) { clearInterval(_statePollTimer); _statePollTimer = null; }
         App.cancelTalkStream();
@@ -258,16 +98,16 @@ window.App = window.App || {};
         App.selectedNpcId = null;
         App.mapsData = {};
         App.currentMapId = null;
-        const mainUI = DOM.mainUI || document.getElementById("mainUI");
-        const topbar = DOM.topbar || document.getElementById("topbar");
-        const loginOverlay = DOM.loginOverlay || document.getElementById("loginOverlay");
+        const mainUI = document.getElementById("mainUI");
+        const topbar = document.getElementById("topbar");
+        const loginOverlay = document.getElementById("loginOverlay");
         if (mainUI) mainUI.style.display = "none";
         if (topbar) topbar.style.display = "none";
         if (loginOverlay) loginOverlay.style.display = "flex";
         var startBtn = document.querySelector('#loginForm button[onclick*="startNewGame"]');
         if (startBtn) { startBtn.disabled = false; startBtn.textContent = "踏入江湖"; }
-        var loginForm = DOM.loginForm || document.getElementById("loginForm");
-        var loadForm = DOM.loadForm || document.getElementById("loadForm");
+        var loginForm = document.getElementById("loginForm");
+        var loadForm = document.getElementById("loadForm");
         if (loginForm) loginForm.style.display = "block";
         if (loadForm) loadForm.style.display = "none";
         if (loginForm) {
@@ -334,13 +174,13 @@ window.App = window.App || {};
     if (!App.playerId) return;
     App.showConfirm(
       "终局收束",
-      "确定要结束这段江湖旅程吗？<br><br>⚠️ <b>此操作不可逆</b>",
+      "确定要结束这段江湖旅程吗？<br><br>\u26a0\ufe0f <b>此操作不可逆</b>",
       async function() {
         try {
           const data = await App.finale();
           if (data) {
             if (data.epilogue) {
-              App.addMsg("system", "【" + (data.ending_label || "江湖路尽") + "】");
+              App.addMsg("system", "\u3010" + (data.ending_label || "江湖路尽") + "\u3011");
               App.addMsg("npc", {speaker: "终局叙事", text: data.epilogue}, true);
             } else {
               App.addMsg("system", data.ending_label || "江湖路尽");
@@ -411,106 +251,22 @@ window.App = window.App || {};
     );
   };
 
-  App.deleteSave = async function() {
-    var sel = document.querySelector(".saves-list div.selected");
-    if (!sel) { App.addMsg("system", "请先选择一个存档"); return; }
-    var pid = sel._pid;
-    App.showConfirm(
-      "删除存档",
-      "确定要删除此存档吗？<br><br>⚠️ <b>此操作不可逆</b>",
-      async function() {
-        try {
-          await App.backendPost("/api/delete-save", { player_id: pid });
-          App.addMsg("system", "存档已删除");
-          App.showLoadForm();
-        } catch (e) {
-          App.addMsg("system", "删除失败: " + e.message);
-        }
-      }
-    );
-  };
-
-  // showConfirm: message 参数必须为调用方硬编码的可信 HTML（不可传入用户输入）
-  var _confirmActive = false;
-
-  App.showConfirm = function(title, message, onConfirm) {
-    if (_confirmActive) return;
-    _confirmActive = true;
-
-    const overlay = DOM.confirmOverlay || document.getElementById("confirmOverlay");
-    const titleEl = DOM.confirmTitle || document.getElementById("confirmTitle");
-    const msgEl = DOM.confirmMessage || document.getElementById("confirmMessage");
-    const okBtn = DOM.confirmOk || document.getElementById("confirmOk");
-    const cancelBtn = DOM.confirmCancel || document.getElementById("confirmCancel");
-
-    titleEl.textContent = title;
-    HtmlUtils.setTrustedHtml(msgEl, message);
-
-    overlay.classList.add("show");
-
-    var _onOverlayClick, _onKeydown;
-
-    function cleanup() {
-      _confirmActive = false;
-      overlay.classList.remove("show");
-      okBtn.removeEventListener("click", handleOk);
-      cancelBtn.removeEventListener("click", handleCancel);
-      if (_onOverlayClick) overlay.removeEventListener("click", _onOverlayClick);
-      if (_onKeydown) document.removeEventListener("keydown", _onKeydown);
-    }
-
-    function handleOk(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      cleanup();
-      if (typeof onConfirm === "function") {
-        try {
-          var result = onConfirm();
-          if (result && typeof result.catch === "function") {
-            result.catch(function(err) { console.error("onConfirm error:", err); });
-          }
-        } catch (err) {
-          console.error("onConfirm error:", err);
-        }
-      }
-    }
-
-    function handleCancel(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      cleanup();
-    }
-
-    okBtn.addEventListener("click", handleOk);
-    cancelBtn.addEventListener("click", handleCancel);
-
-    _onOverlayClick = function(e) {
-      if (e.target === overlay) { cleanup(); }
-    };
-    overlay.addEventListener("click", _onOverlayClick);
-
-    _onKeydown = function(e) {
-      if (e.key === "Escape") { cleanup(); }
-    };
-    document.addEventListener("keydown", _onKeydown);
-  };
-
   App.shutdownAll = function() {
     App.showConfirm(
       "关闭服务",
       "确定要关闭服务吗？<br><br>" +
-      "⚠️ <b>这将停止后端服务</b><br><br>" +
-      "💡 所有未保存的进度将丢失",
+      "\u26a0\ufe0f <b>这将停止后端服务</b><br><br>" +
+      "\ud83d\udca1 所有未保存的进度将丢失",
       async function() {
         try {
-          const overlay = DOM.loginOverlay || document.getElementById("loginOverlay");
+          const overlay = document.getElementById("loginOverlay");
           if (overlay) {
               HtmlUtils.setTrustedHtml(overlay,
                 '<div class="shutdown-screen">' +
-                '<div class="shutdown-icon">⏳</div>' +
+                '<div class="shutdown-icon">\u23f3</div>' +
                 '<h2>正在关闭服务...</h2>' +
-                '<p class="shutdown-step pending" id="shutdownStep1">⏳ 正在发送关闭指令...</p>' +
-                '<p class="shutdown-step pending" id="shutdownStep2" style="display:none;">⏳ 验证服务已停止...</p>' +
+                '<p class="shutdown-step pending" id="shutdownStep1">\u23f3 正在发送关闭指令...</p>' +
+                '<p class="shutdown-step pending" id="shutdownStep2" style="display:none;">\u23f3 验证服务已停止...</p>' +
                 '</div>');
               overlay.style.display = 'flex';
             }
@@ -524,14 +280,14 @@ window.App = window.App || {};
           const maxRetries = 3;
           for (let attempt = 1; attempt <= maxRetries; attempt++) {
             if (step1) {
-              step1.textContent = "⏳ 正在发送关闭指令 (第" + attempt + "/" + maxRetries + "次)...";
+              step1.textContent = "\u23f3 正在发送关闭指令 (第" + attempt + "/" + maxRetries + "次)...";
             }
 
             try {
               const controller = new AbortController();
               const timeoutId = setTimeout(function() { controller.abort(); }, 15000);
 
-              const resp = await fetch(App.API + "/shutdown", {
+              const resp = await fetch(App.API + "/admin/shutdown", {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
@@ -550,7 +306,7 @@ window.App = window.App || {};
               lastError = null;
 
               if (step1) {
-                step1.textContent = "✓ 服务已接收关闭指令 (第" + attempt + "次尝试成功)";
+                step1.textContent = "\u2713 服务已接收关闭指令 (第" + attempt + "次尝试成功)";
                 step1.classList.remove("pending");
                 step1.classList.add("done");
               }
@@ -567,7 +323,7 @@ window.App = window.App || {};
                 lastError = null;
 
                 if (step1) {
-                  step1.textContent = "✓ 服务已接收关闭指令 (网络断开确认)";
+                  step1.textContent = "\u2713 服务已接收关闭指令 (网络断开确认)";
                   step1.classList.remove("pending");
                   step1.classList.add("done");
                 }
@@ -578,7 +334,7 @@ window.App = window.App || {};
 
               if (attempt < maxRetries) {
                 if (step1) {
-                  step1.textContent = "⚠️ 第" + attempt + "次失败，2秒后重试...";
+                  step1.textContent = "\u26a0\ufe0f 第" + attempt + "次失败，2秒后重试...";
                   step1.classList.remove("pending");
                   step1.classList.add("error");
                 }
@@ -590,7 +346,7 @@ window.App = window.App || {};
                 }
               } else {
                 if (step1) {
-                  step1.textContent = "✗ 无法连接服务 (" + maxRetries + "次尝试均失败)";
+                  step1.textContent = "\u2717 无法连接服务 (" + maxRetries + "次尝试均失败)";
                   step1.classList.add("error");
                 }
               }
@@ -599,7 +355,7 @@ window.App = window.App || {};
 
           if (backendSuccess && step2) {
             step2.style.display = "block";
-            step2.textContent = "⏳ 验证服务已停止...";
+            step2.textContent = "\u23f3 验证服务已停止...";
 
             let serverStopped = false;
             for (let i = 0; i < 15; i++) {
@@ -614,11 +370,11 @@ window.App = window.App || {};
             }
 
             if (serverStopped) {
-              step2.textContent = "✓ 服务已确认停止";
+              step2.textContent = "\u2713 服务已确认停止";
               step2.classList.remove("pending");
               step2.classList.add("done");
             } else {
-              step2.textContent = "⚠️ 服务可能仍在运行（超时未停止）";
+              step2.textContent = "\u26a0\ufe0f 服务可能仍在运行（超时未停止）";
               step2.classList.remove("pending");
               step2.classList.add("error");
             }
@@ -627,14 +383,14 @@ window.App = window.App || {};
           await new Promise(function(r) { setTimeout(r, 600); });
 
           if (overlay) {
-            const resultIcon = backendSuccess ? "✅" : "🔶";
+            const resultIcon = backendSuccess ? "\u2705" : "\ud83d\udf36";
             const resultTitle = backendSuccess ? "服务已关闭" : "服务关闭未完全成功";
 
             let statusHtml = "";
             if (backendSuccess) {
-              statusHtml = "✅ 服务已停止<br>";
+              statusHtml = "\u2705 服务已停止<br>";
             } else {
-              statusHtml = "❌ 服务未能自动关闭<br>";
+              statusHtml = "\u274c 服务未能自动关闭<br>";
               if (lastError) {
                 statusHtml += "   错误: " + HtmlUtils.escape(lastError.message.substring(0, 80)) + "<br>";
               }
@@ -678,13 +434,11 @@ window.App = window.App || {};
   };
 
   App._showOfflineScreen = function() {
-    var mainUI = DOM.mainUI || document.getElementById("mainUI");
-    if (mainUI) mainUI.style.display = "none";
-    var topbar = DOM.topbar || document.getElementById("topbar");
-    if (topbar) topbar.style.display = "none";
-    var overlay = document.getElementById("loginOverlay");
-    if (!overlay) return;
-    overlay.textContent = "";
+    var existing = document.getElementById("offlineOverlay");
+    if (existing) return;
+    var overlay = document.createElement("div");
+    overlay.id = "offlineOverlay";
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(10,10,18,0.97);z-index:99998;display:flex;align-items:center;justify-content:center;flex-direction:column;";
     var box = document.createElement("div");
     box.className = "login-box";
     var icon = document.createElement("div");
@@ -704,9 +458,8 @@ window.App = window.App || {};
     btn.textContent = "\ud83d\udd04 \u5237\u65b0\u91cd\u8bd5";
     btn.onclick = function() { window.location.reload(); };
     box.appendChild(btn);
-    overlay.textContent = "";
     overlay.appendChild(box);
-    overlay.style.display = "flex";
+    document.body.appendChild(overlay);
   };
 
   let _pollErrorCount = 0;
@@ -719,30 +472,7 @@ window.App = window.App || {};
     }
   });
 
-  _statePollTimer = setInterval(function() {
-    if (!_pageVisible) return;
-    if (App.playerId && !App.isStreaming) {
-      App.fetchState().then(function(data) {
-        if (data) {
-          _pollErrorCount = 0;
-          App.updateUI(data);
-        }
-      }).catch(function(err) {
-        _pollErrorCount++;
-        if (err.message && err.message.includes('404')) {
-          App.doLogout();
-        } else if (_pollErrorCount >= 3) {
-          fetch("/api/health", { cache: "no-store" })
-            .then(function() { _pollErrorCount = 0; })
-            .catch(function() { App._showOfflineScreen(); });
-        }
-      });
-    }
-  }, 30000);
-
   document.addEventListener("DOMContentLoaded", function() {
-    DOM.init();
-
     window.addEventListener("pageshow", function(event) {
       if (event.persisted) {
         var co = document.getElementById("connectingOverlay");
@@ -774,8 +504,12 @@ window.App = window.App || {};
           var cfg = JSON.parse(localStorage.getItem("lp_config") || "{}");
           if (cfg.shutdownSecret) {
             App.SHUTDOWN_SECRET = cfg.shutdownSecret;
-          } else if (data.shutdown_secret) {
-            App.SHUTDOWN_SECRET = data.shutdown_secret;
+          } else if (data.shutdown_configured === "true" && !App.SHUTDOWN_SECRET) {
+            App.SHUTDOWN_SECRET = prompt("请输入关闭服务密钥（与 .env 中 SHUTDOWN_SECRET 一致）：") || "";
+            if (App.SHUTDOWN_SECRET) {
+              cfg.shutdownSecret = App.SHUTDOWN_SECRET;
+              localStorage.setItem("lp_config", JSON.stringify(cfg));
+            }
           }
         } catch(_e) {}
       })
@@ -785,7 +519,7 @@ window.App = window.App || {};
         App._showOfflineScreen();
       });
 
-    const sel = DOM.npcSelect;
+    var sel = document.getElementById("npcSelect");
     if (sel) {
       sel.addEventListener("change", function() {
         App.selectedNpcId = sel.value;

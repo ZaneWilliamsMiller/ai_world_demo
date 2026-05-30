@@ -161,7 +161,6 @@ class HealthResponse(BaseModel):
     status: str = "ok"
     llm_configured: str = "false"
     shutdown_configured: str = "false"
-    shutdown_secret: str = ""
     world: str = ""
 
 

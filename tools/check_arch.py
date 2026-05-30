@@ -25,7 +25,9 @@ JS_DEP_CHAIN = {
     "ui.js": ["store.js", "html-utils.js", "api.js"],
     "map.js": ["store.js", "html-utils.js", "api.js", "ui.js"],
     "dialogue.js": ["store.js", "html-utils.js", "api.js", "ui.js"],
-    "main.js": ["store.js", "html-utils.js", "api.js", "ui.js", "map.js", "dialogue.js"],
+    "confirm.js": ["store.js", "html-utils.js"],
+    "auth.js": ["store.js", "html-utils.js", "api.js", "confirm.js"],
+    "main.js": ["store.js", "html-utils.js", "api.js", "ui.js", "map.js", "dialogue.js", "confirm.js", "auth.js"],
     "tests.js": ["store.js", "html-utils.js", "api.js"],
 }
 
