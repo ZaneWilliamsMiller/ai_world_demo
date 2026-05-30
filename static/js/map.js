@@ -19,29 +19,177 @@ window.App = window.App || {};
 
   // 游戏风格配色 - 肉鸽风格
   var TERRAIN = {
-    "#": { fill: "#2a2a4a", border: "#4a4a8a", label: "城墙" },
-    ".": { fill: "#3a3a2a", border: "#4a4a3a", label: "平地" },
-    ",": { fill: "#3a4a2a", border: "#4a5a3a", label: "草地" },
-    "~": { fill: "#2a4a6a", border: "#3a5a7a", label: "险水" },
-    "=": { fill: "#3a5a7a", border: "#4a6a8a", label: "河道" },
-    "F": { fill: "#2a4a3a", border: "#3a5a4a", label: "密林" },
-    "m": { fill: "#5a4a3a", border: "#6a5a4a", label: "山岭" },
-    "/": { fill: "#4a3a2a", border: "#5a4a3a", label: "山道" },
-    ";": { fill: "#5a3a2a", border: "#6a4a3a", label: "泥沼" },
-    "T": { fill: "#6a5a3a", border: "#8a7a4a", label: "客栈" },
-    "Y": { fill: "#4a5a6a", border: "#5a6a7a", label: "塔楼" },
-    "I": { fill: "#5a3a5a", border: "#6a4a6a", label: "废墟" },
-    "M": { fill: "#5a5a3a", border: "#6a6a4a", label: "集市" },
-    "B": { fill: "#5a3a3a", border: "#6a4a4a", label: "桥梁" },
-    "@": { fill: "#4a2a3a", border: "#5a3a4a", label: "危险" },
-    "!": { fill: "#6a2a2a", border: "#8a3a3a", label: "深渊" },
-    "^": { fill: "#4a4a5a", border: "#6a6a7a", label: "悬崖" },
-    "&": { fill: "#2a3a3a", border: "#3a4a4a", label: "伏击点" },
-    " ": { fill: "#0a0a12", label: "虚空" },
+    "#": { fill: "#2e2845", border: "#5a50a0", label: "城墙", deco: "brick" },
+    ".": { fill: "#4a4230", border: "#5e5640", label: "平地" },
+    ",": { fill: "#2a5030", border: "#3a7040", label: "草地", deco: "grass" },
+    "~": { fill: "#153a5e", border: "#2060a0", label: "险水", deco: "wave" },
+    "=": { fill: "#1e4e6e", border: "#2a6ea0", label: "河道", deco: "wave" },
+    "F": { fill: "#1a3e1e", border: "#2a5e2a", label: "密林", deco: "tree" },
+    "m": { fill: "#5a4030", border: "#806050", label: "山岭", deco: "rock" },
+    "/": { fill: "#4a4035", border: "#6a6055", label: "山道" },
+    ";": { fill: "#3a3520", border: "#5a5540", label: "泥沼", deco: "swamp" },
+    "T": { fill: "#6a5020", border: "#c09030", label: "客栈", deco: "inn" },
+    "Y": { fill: "#3a4a70", border: "#5a6aa0", label: "塔楼", deco: "tower" },
+    "I": { fill: "#4a3545", border: "#6a5565", label: "废墟", deco: "ruin" },
+    "M": { fill: "#6a5a20", border: "#b0a030", label: "集市", deco: "market" },
+    "B": { fill: "#6a3535", border: "#a05555", label: "桥梁", deco: "bridge" },
+    "@": { fill: "#5a1a2a", border: "#902a3a", label: "危险", deco: "danger" },
+    "!": { fill: "#3a0a0a", border: "#701a1a", label: "深渊", deco: "abyss" },
+    "^": { fill: "#4a4a58", border: "#6a6a80", label: "悬崖", deco: "cliff" },
+    "&": { fill: "#1a3a3a", border: "#2a5a5a", label: "伏击点" },
+    " ": { fill: "#06060c", label: "虚空" },
   };
 
   function terrainColor(ch) {
     return (TERRAIN[ch] || TERRAIN[" "]).fill;
+  }
+
+  function _drawDeco(ctx, sx, sy, deco, fill, border) {
+    var cx = sx + TILE / 2;
+    var cy = sy + TILE / 2;
+    ctx.save();
+    switch (deco) {
+      case "brick":
+        ctx.strokeStyle = "rgba(120,110,180,0.35)";
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(sx + 3, cy); ctx.lineTo(sx + TILE - 3, cy);
+        ctx.moveTo(cx, sy + 3); ctx.lineTo(cx, cy);
+        ctx.moveTo(sx + TILE * 0.25, cy); ctx.lineTo(sx + TILE * 0.25, sy + TILE - 3);
+        ctx.moveTo(sx + TILE * 0.75, cy); ctx.lineTo(sx + TILE * 0.75, sy + TILE - 3);
+        ctx.stroke();
+        break;
+      case "grass":
+        ctx.strokeStyle = "rgba(80,160,80,0.45)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx - 4, sy + TILE - 4); ctx.lineTo(cx - 2, sy + TILE - 10);
+        ctx.moveTo(cx, sy + TILE - 3); ctx.lineTo(cx + 1, sy + TILE - 11);
+        ctx.moveTo(cx + 4, sy + TILE - 4); ctx.lineTo(cx + 3, sy + TILE - 9);
+        ctx.stroke();
+        break;
+      case "wave":
+        ctx.strokeStyle = "rgba(100,180,240,0.35)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(sx + 3, cy - 3);
+        ctx.quadraticCurveTo(sx + TILE * 0.3, cy - 7, sx + TILE * 0.5, cy - 3);
+        ctx.quadraticCurveTo(sx + TILE * 0.7, cy + 1, sx + TILE - 3, cy - 3);
+        ctx.moveTo(sx + 5, cy + 4);
+        ctx.quadraticCurveTo(sx + TILE * 0.3, cy, sx + TILE * 0.5, cy + 4);
+        ctx.quadraticCurveTo(sx + TILE * 0.7, cy + 8, sx + TILE - 5, cy + 4);
+        ctx.stroke();
+        break;
+      case "tree":
+        ctx.fillStyle = "rgba(40,100,40,0.5)";
+        ctx.beginPath();
+        ctx.moveTo(cx, sy + 4); ctx.lineTo(cx - 6, cy + 2); ctx.lineTo(cx + 6, cy + 2);
+        ctx.closePath(); ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(cx, sy + 8); ctx.lineTo(cx - 5, cy + 6); ctx.lineTo(cx + 5, cy + 6);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "rgba(80,50,30,0.5)";
+        ctx.fillRect(cx - 1, cy + 4, 2, TILE - cy + sy - 6);
+        break;
+      case "rock":
+        ctx.strokeStyle = "rgba(140,120,100,0.4)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx - 5, sy + TILE - 5); ctx.lineTo(cx - 3, cy - 2);
+        ctx.lineTo(cx + 2, sy + 5); ctx.lineTo(cx + 6, cy + 1);
+        ctx.lineTo(cx + 4, sy + TILE - 5);
+        ctx.stroke();
+        break;
+      case "swamp":
+        ctx.fillStyle = "rgba(80,70,30,0.4)";
+        ctx.beginPath();
+        ctx.arc(cx - 3, cy, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cx + 4, cy + 3, 1.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cx, cy - 4, 1, 0, Math.PI * 2); ctx.fill();
+        break;
+      case "inn":
+        ctx.fillStyle = "rgba(220,170,50,0.6)";
+        ctx.beginPath();
+        ctx.moveTo(cx, sy + 3); ctx.lineTo(sx + 4, sy + 10); ctx.lineTo(sx + TILE - 4, sy + 10);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "rgba(180,130,40,0.5)";
+        ctx.fillRect(cx - 4, sy + 10, 8, TILE - 14);
+        ctx.fillStyle = "rgba(255,200,80,0.7)";
+        ctx.fillRect(cx - 1, sy + 12, 2, 3);
+        break;
+      case "tower":
+        ctx.fillStyle = "rgba(90,110,170,0.5)";
+        ctx.fillRect(cx - 3, sy + 6, 6, TILE - 10);
+        ctx.fillStyle = "rgba(110,130,190,0.6)";
+        ctx.beginPath();
+        ctx.moveTo(cx, sy + 2); ctx.lineTo(cx - 5, sy + 8); ctx.lineTo(cx + 5, sy + 8);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "rgba(200,200,240,0.5)";
+        ctx.fillRect(cx - 1, sy + 10, 2, 2);
+        break;
+      case "ruin":
+        ctx.strokeStyle = "rgba(120,90,110,0.5)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(sx + 5, sy + TILE - 5); ctx.lineTo(sx + 5, cy);
+        ctx.moveTo(sx + TILE - 5, sy + TILE - 5); ctx.lineTo(sx + TILE - 5, cy + 3);
+        ctx.moveTo(sx + 4, cy); ctx.lineTo(sx + TILE - 4, cy + 3);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(100,70,90,0.3)";
+        ctx.fillRect(sx + 6, cy + 1, 4, 3);
+        break;
+      case "market":
+        ctx.fillStyle = "rgba(200,170,40,0.5)";
+        ctx.beginPath();
+        ctx.moveTo(sx + 3, cy + 2); ctx.lineTo(cx, sy + 4); ctx.lineTo(sx + TILE - 3, cy + 2);
+        ctx.lineTo(sx + TILE - 3, sy + TILE - 4); ctx.lineTo(sx + 3, sy + TILE - 4);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "rgba(240,200,60,0.6)";
+        ctx.fillRect(cx - 1, cy + 2, 2, TILE / 2 - 4);
+        break;
+      case "bridge":
+        ctx.strokeStyle = "rgba(180,80,80,0.5)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(sx + 3, cy); ctx.lineTo(sx + TILE - 3, cy);
+        ctx.moveTo(sx + 3, cy + 4); ctx.lineTo(sx + TILE - 3, cy + 4);
+        ctx.stroke();
+        ctx.strokeStyle = "rgba(160,70,70,0.4)";
+        ctx.lineWidth = 1;
+        for (var bi = 0; bi < 3; bi++) {
+          var bx = sx + 5 + bi * 7;
+          ctx.beginPath(); ctx.moveTo(bx, cy - 2); ctx.lineTo(bx, cy + 6); ctx.stroke();
+        }
+        break;
+      case "danger":
+        ctx.fillStyle = "rgba(200,40,60,0.3)";
+        ctx.beginPath();
+        ctx.moveTo(cx, sy + 4); ctx.lineTo(cx + 5, sy + TILE - 5); ctx.lineTo(cx - 5, sy + TILE - 5);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "rgba(255,80,80,0.6)";
+        ctx.fillRect(cx - 1, cy + 2, 2, 4);
+        ctx.fillRect(cx - 0.5, cy, 1, 2);
+        break;
+      case "abyss":
+        var ag = ctx.createRadialGradient(cx, cy, 0, cx, cy, TILE / 2);
+        ag.addColorStop(0, "rgba(0,0,0,0.5)");
+        ag.addColorStop(0.6, "rgba(60,10,10,0.3)");
+        ag.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = ag;
+        ctx.fillRect(sx, sy, TILE, TILE);
+        break;
+      case "cliff":
+        ctx.strokeStyle = "rgba(100,100,130,0.4)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(sx + 3, sy + 4); ctx.lineTo(sx + TILE - 3, sy + TILE - 4);
+        ctx.moveTo(sx + TILE - 3, sy + 4); ctx.lineTo(sx + 3, sy + TILE - 4);
+        ctx.stroke();
+        break;
+    }
+    ctx.restore();
   }
 
   if (typeof CanvasRenderingContext2D !== "undefined" && !CanvasRenderingContext2D.prototype.roundRect) {
@@ -288,19 +436,26 @@ window.App = window.App || {};
         var sy = row * TILE - subY;
         var tileInfo = TERRAIN[ch] || TERRAIN[" "];
 
-        // 绘制瓦片 - 添加细微的视觉效果
         ctx.fillStyle = tileInfo.fill;
         ctx.fillRect(sx, sy, TILE, TILE);
 
-        // 添加深浅变化，让地图有层次感
         if (ch !== " ") {
           var shade = ((mx + my) % 2 === 0) ? 0.03 : -0.02;
           ctx.fillStyle = "rgba(0,0,0," + (shade > 0 ? shade : 0) + ")";
           if (shade < 0) ctx.fillStyle = "rgba(255,255,255," + (-shade) + ")";
           ctx.fillRect(sx, sy, TILE, TILE);
+
+          if (tileInfo.border) {
+            ctx.strokeStyle = tileInfo.border;
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(sx + 0.5, sy + 0.5, TILE - 1, TILE - 1);
+          }
         }
 
-        // 悬停高亮
+        if (tileInfo.deco) {
+          _drawDeco(ctx, sx, sy, tileInfo.deco, tileInfo.fill, tileInfo.border);
+        }
+
         if (mx === _hoverX && my === _hoverY) {
           ctx.strokeStyle = "rgba(80,180,255,0.8)";
           ctx.lineWidth = 3;
@@ -334,6 +489,7 @@ window.App = window.App || {};
       var parts = npcKey.split(",");
       var nx = parseInt(parts[0], 10);
       var ny = parseInt(parts[1], 10);
+      var npcData = _npcCoords[npcKey];
       
       if (nx >= startCol && nx <= startCol + viewCols && 
           ny >= startRow && ny <= startRow + viewRows) {
@@ -349,17 +505,24 @@ window.App = window.App || {};
         
         ctx.fillStyle = "rgba(0,0,0,0.25)";
         ctx.beginPath();
-        ctx.arc(TILE/2 + 2, TILE/2 + 2, 6, 0, Math.PI * 2);
+        ctx.arc(TILE/2 + 2, TILE/2 + 2, 8, 0, Math.PI * 2);
         ctx.fill();
         
-        ctx.fillStyle = "#ff8c64";
+        ctx.fillStyle = "#e87040";
         ctx.beginPath();
-        ctx.arc(TILE/2, TILE/2, 6, 0, Math.PI * 2);
+        ctx.arc(TILE/2, TILE/2, 8, 0, Math.PI * 2);
         ctx.fill();
         
-        ctx.strokeStyle = "#fff";
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#ffd0a0";
+        ctx.lineWidth = 1.5;
         ctx.stroke();
+
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 10px 'PingFang SC','Microsoft YaHei',sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        var npcChar = (npcData && npcData.name) ? npcData.name[0] : "人";
+        ctx.fillText(npcChar, TILE/2, TILE/2 + 1);
 
         ctx.restore();
       }
@@ -400,13 +563,11 @@ window.App = window.App || {};
     var playerStroke = App._playerMarkerState === "locked" ? "#cc0000" : "#50b4ff";
     var glowColor = App._playerMarkerState === "locked" ? "rgba(255,60,60," : "rgba(80,180,255,";
 
-    // 玩家投影 - 增加深度感
     ctx.fillStyle = "rgba(0,0,0,0.3)";
     ctx.beginPath();
-    ctx.arc(playerScreenX + 2, playerScreenY + 2, 7, 0, Math.PI * 2);
+    ctx.arc(playerScreenX + 2, playerScreenY + 2, 8, 0, Math.PI * 2);
     ctx.fill();
 
-    // 外圈大光晕
     var glowR = TILE * 1.1;
     var grd = ctx.createRadialGradient(
       playerScreenX, playerScreenY, 2,
@@ -420,28 +581,22 @@ window.App = window.App || {};
     ctx.arc(playerScreenX, playerScreenY, glowR, 0, Math.PI * 2);
     ctx.fill();
 
-    // 玩家主体 - 更精致
     ctx.fillStyle = playerFill;
     ctx.beginPath();
-    ctx.arc(playerScreenX, playerScreenY, 7, 0, Math.PI * 2);
+    ctx.arc(playerScreenX, playerScreenY, 8, 0, Math.PI * 2);
     ctx.fill();
     
-    // 玩家外边框
     ctx.strokeStyle = playerStroke;
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.arc(playerScreenX, playerScreenY, 9, 0, Math.PI * 2);
+    ctx.arc(playerScreenX, playerScreenY, 10, 0, Math.PI * 2);
     ctx.stroke();
 
-    // 方向箭头（最近一次移动方向）
-    if (App._lastDir) {
-      ctx.strokeStyle = "rgba(80,180,255,0.9)";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(playerScreenX, playerScreenY);
-      ctx.lineTo(playerScreenX + App._lastDir.x * 14, playerScreenY + App._lastDir.y * 14);
-      ctx.stroke();
-    }
+    ctx.fillStyle = playerStroke;
+    ctx.font = "bold 11px 'PingFang SC','Microsoft YaHei',sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("侠", playerScreenX, playerScreenY + 1);
 
     // ─── 动画路径高亮 ───
     for (var pi = 0; pi < _animPath.length && _animIdx < _animPath.length; pi++) {
