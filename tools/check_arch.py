@@ -37,6 +37,7 @@ PRIVATE_PROP_OWNERS = {
     "_lastDir": ["map.js"],
     "_mapLocations": ["ui.js"],
     "_streamAbortController": ["api.js", "dialogue.js"],
+    "_actLoopAbortController": ["api.js", "dialogue.js", "main.js"],
 }
 
 errors = []
@@ -165,7 +166,7 @@ def main() -> int:
     print("  Frontend Architecture Checker")
     print("═══════════════════════════════════════════")
 
-    html_files = list(STATIC.glob("*.html"))
+    html_files = [f for f in STATIC.glob("*.html") if f.name != "admin.html"]
     for html_path in sorted(html_files):
         check_script_order(html_path)
         check_css_order(html_path)

@@ -37,6 +37,7 @@ export default [
         Node: "readonly",
         Event: "readonly",
         Promise: "readonly",
+        prompt: "readonly",
       },
     },
     rules: {

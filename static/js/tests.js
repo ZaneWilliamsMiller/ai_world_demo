@@ -78,8 +78,12 @@ window.App = window.App || {};
     try {
       var resp = await fetch(apiBase() + '/tests/interactive/modules');
       if (!resp.ok) {
-        document.getElementById('interactiveModuleList').innerHTML =
-          '<div style="text-align:center;padding:40px;color:#ff4757;">\u274c \u65e0\u6cd5\u52a0\u8f7d\u4ea4\u4e92\u6d4b\u8bd5\u6a21\u5757</div>';
+        var el = document.getElementById('interactiveModuleList');
+        el.textContent = '';
+        var div = document.createElement('div');
+        div.style.cssText = 'text-align:center;padding:40px;color:#ff4757;';
+        div.textContent = '\u274c \u65e0\u6cd5\u52a0\u8f7d\u4ea4\u4e92\u6d4b\u8bd5\u6a21\u5757';
+        el.appendChild(div);
         return;
       }
       var data = await resp.json();
@@ -88,8 +92,12 @@ window.App = window.App || {};
       renderInteractiveModules();
     } catch (err) {
       console.error('Failed to load interactive modules:', err);
-      document.getElementById('interactiveModuleList').innerHTML =
-        '<div style="text-align:center;padding:40px;color:#ff4757;">\u274c \u8fde\u63a5\u5931\u8d25</div>';
+      var el2 = document.getElementById('interactiveModuleList');
+      el2.textContent = '';
+      var div2 = document.createElement('div');
+      div2.style.cssText = 'text-align:center;padding:40px;color:#ff4757;';
+      div2.textContent = '\u274c \u8fde\u63a5\u5931\u8d25';
+      el2.appendChild(div2);
     }
   }
 
