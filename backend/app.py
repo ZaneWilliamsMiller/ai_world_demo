@@ -238,7 +238,8 @@ if STATIC.is_dir():
         resp = FileResponse(index_path)
         resp.headers.update(_NO_STORE_HEADERS)
         for hdr in ("etag", "last-modified"):
-            resp.headers.pop(hdr, None)
+            if hdr in resp.headers:
+                del resp.headers[hdr]
         return resp
 
     @app.get("/tests.html")
@@ -249,7 +250,8 @@ if STATIC.is_dir():
         resp = FileResponse(tests_path)
         resp.headers.update(_NO_STORE_HEADERS)
         for hdr in ("etag", "last-modified"):
-            resp.headers.pop(hdr, None)
+            if hdr in resp.headers:
+                del resp.headers[hdr]
         return resp
 
     app.mount("/", _NoCacheStaticFiles(directory=str(STATIC)), name="static")
