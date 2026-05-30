@@ -264,11 +264,7 @@ def apply_encounter(p: PlayerState, encounter: dict[str, Any]) -> None:
             if not npc_pos or npc_pos[0] != p.map_id:
                 continue
 
-        meta.get("short", nid)
-        meta.get("name", nid)
-
-        # 记忆重要性差异化：基于NPC身份
-        base_importance = 4.0  # 默认：中等，像是"似乎有点什么动静"
+        base_importance = 4.0
 
         # 风闻子：职业敏感，所有奇遇都记
         if nid == "jiang":
@@ -293,7 +289,7 @@ def apply_encounter(p: PlayerState, encounter: dict[str, Any]) -> None:
 
         # 情感记忆加权
         mind = get_or_init_mind(p, nid)
-        affective_imp = mem.affective_memory_importance(base_importance, mind)  # type: ignore[call-arg]
+        affective_imp = mem.affective_memory_importance(base_importance, mind.affect_valence, mind.affect_arousal)
 
         # 写入记忆流
         agent_brain.record_observation(

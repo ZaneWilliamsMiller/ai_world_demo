@@ -194,34 +194,16 @@
     </div>
 
     <div class="cfg-group">
-      <label>LLM API 地址</label>
-      <input type="text" id="cfgLlmUrl" placeholder="https://api.example.com/v1">
-    </div>
-
-    <div class="cfg-group">
-      <label>LLM API Key</label>
-      <input type="password" id="cfgLlmKey" placeholder="sk-...">
-    </div>
-
-    <div class="cfg-group">
-      <label>LLM 模型</label>
-      <input type="text" id="cfgLlmModel" placeholder="your-model-name">
-    </div>
-
-    <div class="cfg-group">
       <label>关闭服务密钥</label>
       <input type="password" id="cfgShutdownSecret" placeholder="与 .env 中 SHUTDOWN_SECRET 一致">
     </div>
 
-    <!-- 连接测试 -->
     <div class="test-section">
       <h4>🔌 连接测试</h4>
       <div class="test-btn-row">
         <button class="test-btn" onclick="App.testBackendConnection()">测试后端</button>
-        <button class="test-btn" onclick="App.testLlmConnection()">测试 LLM</button>
       </div>
       <div id="backendTestResult" class="test-result" style="display:block;"></div>
-      <div id="llmTestResult" class="test-result" style="display:block;"></div>
     </div>
 
     <div class="cfg-actions">

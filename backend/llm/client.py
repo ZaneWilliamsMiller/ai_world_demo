@@ -271,7 +271,7 @@ async def _execute_with_retry(
             log.error(f"{operation_name} Request Failed: {e}")
             raise
 
-    return None
+    raise RuntimeError(f"{operation_name}: all {max_retries} retries exhausted")
 
 
 async def _handle_llm_response(response_data: dict[str, Any], cache, circuit_breaker, messages, *, temperature: float = 0.0, model: str = "", max_tokens: int = 0) -> str:
@@ -467,7 +467,7 @@ async def chat_completion(
             return await _handle_llm_response(data, cache, cb, messages, temperature=temperature, model=settings.llm_model, max_tokens=max_tokens)
 
         result = await _execute_with_retry(_do_request, max_retries, base_delay, cb, "LLM")
-        return result or ""
+        return result
 
 
 async def stream_chat_completion(
@@ -518,7 +518,7 @@ async def stream_chat_completion(
             except Exception as stream_err:
                 await cb.failure()
                 log.error(f"Custom config stream error: {stream_err}")
-                yield "[STREAM_ERROR] 流式响应异常"
+                raise
         return
 
     else:
@@ -555,7 +555,6 @@ async def stream_chat_completion(
                                     yield piece
                         except Exception as stream_err:
                             log.error(f"Stream processing error (attempt {attempt + 1}): {stream_err}")
-                            yield "[STREAM_ERROR] 流式响应异常"
                             raise
 
                     # 流式成功 → 熔断器记录成功

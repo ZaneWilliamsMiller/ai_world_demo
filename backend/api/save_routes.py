@@ -15,17 +15,19 @@ from backend.systems.save_system import delete_save, list_saves, load_game, save
 router = APIRouter()
 
 
+_PID = Field(..., min_length=1, max_length=64, pattern=r'^[A-Za-z0-9_-]+$')
+
 class SaveBody(BaseModel):
-    player_id: str = Field(..., min_length=1, max_length=64)
+    player_id: str = _PID
 
 class LoadBody(BaseModel):
-    player_id: str = Field(..., min_length=1, max_length=64)
+    player_id: str = _PID
     display_name: str | None = Field(None, min_length=1, max_length=24)
     gender: str = Field(default="未言", pattern="^(男|女|未言)$")
     permadeath: bool = False
 
 class DeleteSaveBody(BaseModel):
-    player_id: str = Field(..., min_length=1, max_length=64)
+    player_id: str = _PID
 
 
 @router.get("/api/saves")

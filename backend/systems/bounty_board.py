@@ -130,7 +130,6 @@ def generate_bounties(p: PlayerState, count: int = 3) -> list[dict[str, Any]]:
             dest_id = target_id
         dest_meta = NPCS.get(dest_id, {})
         dest_name = dest_meta.get("name", dest_id)
-        MAP_LOCATIONS.get(map_id, {}).get(dest_name, (10, 16))
 
         # 对于 location_npc：选一个在当前地点活跃的 NPC
         location_npc_id = target_id

@@ -76,24 +76,26 @@ def _get_active_player(player_id: str) -> PlayerState:
     return p
 
 
+_PID = Field(..., min_length=1, max_length=64, pattern=r'^[A-Za-z0-9_-]+$')
+
 class TalkBody(BaseModel):
-    player_id: str = Field(..., min_length=1, max_length=64)
+    player_id: str = _PID
     npc_id: str = Field(..., min_length=1, max_length=32)
     message: str = Field(..., min_length=1, max_length=2000)
 
 class UseItemBody(BaseModel):
-    player_id: str = Field(..., min_length=1, max_length=64)
+    player_id: str = _PID
     item: str = Field(..., min_length=1, max_length=20, description="物品名")
 
 class RestBody(BaseModel):
-    player_id: str = Field(..., min_length=1, max_length=64)
+    player_id: str = _PID
 
 class FinaleBody(BaseModel):
-    player_id: str = Field(..., min_length=1, max_length=64)
+    player_id: str = _PID
     closing_note: str | None = Field(None, max_length=600)
 
 class AgentActBody(BaseModel):
-    player_id: str = Field(..., min_length=1, max_length=64)
+    player_id: str = _PID
     npc_id: str = Field(..., min_length=1, max_length=32)
 
 
@@ -595,17 +597,17 @@ from backend.systems.constants import BOUNTY_COUNT_RANGE
 
 
 class RefreshBountyBody(BaseModel):
-    player_id: str = Field(..., min_length=1, max_length=64)
+    player_id: str = _PID
 
 class AcceptBountyBody(BaseModel):
-    player_id: str = Field(..., min_length=1, max_length=64)
+    player_id: str = _PID
     bounty_id: str = Field(..., min_length=1, max_length=32)
 
 class CompleteBountyBody(BaseModel):
-    player_id: str = Field(..., min_length=1, max_length=64)
+    player_id: str = _PID
 
 class AbandonBountyBody(BaseModel):
-    player_id: str = Field(..., min_length=1, max_length=64)
+    player_id: str = _PID
 
 
 @router.post("/api/bounty/refresh")

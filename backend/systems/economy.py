@@ -194,8 +194,6 @@ def suggest_item_price(item_name: str, player: Any = None, weather: str | None =
         weather_tip = "；".join(parts) if parts else ""
 
     # 构建市场行情提示（含地点与倍数）
-    if player and hasattr(player, 'map_id'):
-        pass
     market_hint = f"{map_hint}，{item_name}当地约{local}文（基准{base}文）"
 
     return {

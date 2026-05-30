@@ -70,8 +70,10 @@ def grid_size(rows: list[str]) -> tuple[int, int]:
     w = len(rows[0]) if h else 0
     return w, h
 
+IMPASSABLE: frozenset[str] = frozenset({"#", "!"})
+
 def is_passable(ch: str) -> bool:
-    return True
+    return ch not in IMPASSABLE
 
 def walkable(ch: str) -> bool:
     return is_passable(ch)

@@ -54,14 +54,17 @@ from backend.systems.time_weather import advance_clock, is_night
 router = APIRouter()
 
 
+_PID_OPT = Field(None, min_length=1, max_length=64, pattern=r'^[A-Za-z0-9_-]+$')
+_PID_REQ = Field(..., min_length=1, max_length=64, pattern=r'^[A-Za-z0-9_-]+$')
+
 class HelloBody(BaseModel):
-    player_id: str | None = Field(None, min_length=1, max_length=64)
+    player_id: str | None = _PID_OPT
     display_name: str | None = Field(None, min_length=1, max_length=24)
     gender: str = Field(default="未言", pattern="^(男|女|未言)$")
     permadeath: bool = False
 
 class MoveBody(BaseModel):
-    player_id: str = Field(..., min_length=1, max_length=64)
+    player_id: str = _PID_REQ
     to_x: int = Field(..., ge=0, le=149)
     to_y: int = Field(..., ge=0, le=99)
 

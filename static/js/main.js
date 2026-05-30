@@ -70,24 +70,12 @@ window.App = window.App || {};
 
   App.fillConfigValues = function() {
     const backendUrl = document.getElementById("cfgBackendUrl");
-    const llmUrl = document.getElementById("cfgLlmUrl");
-    const llmKey = document.getElementById("cfgLlmKey");
-    const llmModel = document.getElementById("cfgLlmModel");
     if (backendUrl) backendUrl.value = App.BACKEND_URL;
-    if (llmUrl) llmUrl.value = App.LLM_API_URL;
-    if (llmKey) llmKey.value = App.LLM_API_KEY;
-    if (llmModel) llmModel.value = App.LLM_MODEL;
   };
 
   App.applyConfig = function() {
     const backendUrl = document.getElementById("cfgBackendUrl");
-    const llmUrl = document.getElementById("cfgLlmUrl");
-    const llmKey = document.getElementById("cfgLlmKey");
-    const llmModel = document.getElementById("cfgLlmModel");
     if (backendUrl) App.BACKEND_URL = backendUrl.value.trim();
-    if (llmUrl) App.LLM_API_URL = llmUrl.value.trim();
-    if (llmKey) App.LLM_API_KEY = llmKey.value.trim();
-    if (llmModel) App.LLM_MODEL = llmModel.value.trim();
     App.saveConfig();
     App.toggleConfigPanel();
   };

@@ -58,37 +58,6 @@ window.App = window.App || {};
     }
   }
 
-  async function llmChat(messages, options) {
-    options = options || {};
-    var controller = new AbortController();
-    var timeout = setTimeout(function() { controller.abort(); }, 30000);
-    var r;
-    try {
-      r = await fetch(App.LLM_API_URL + "/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer " + App.LLM_API_KEY
-        },
-        body: JSON.stringify({
-          model: App.LLM_MODEL,
-          messages: messages,
-          temperature: options.temperature || 0.7,
-          max_tokens: options.maxTokens || 1024,
-          stream: options.stream || false
-        }),
-        signal: controller.signal
-      });
-    } catch (e) {
-      clearTimeout(timeout);
-      if (e.name === 'AbortError') throw new Error('LLM 请求超时 (30s)');
-      throw e;
-    }
-    clearTimeout(timeout);
-    if (!r.ok) throw new Error("LLM API " + r.status + ": " + r.statusText);
-    return await r.json();
-  }
-
   App.backendPost = backendPost;
   App.backendGet = backendGet;
 
@@ -221,19 +190,6 @@ window.App = window.App || {};
     }
   };
 
-  App.testLLM = async function() {
-    try {
-      if (!App.LLM_API_URL) {
-        return { ok: false, detail: "请先在配置面板中填写 LLM API 地址" };
-      }
-      const data = await llmChat([{ role: "user", content: "你好" }], { maxTokens: 20 });
-      const content = data.choices[0].message.content;
-      return { ok: true, detail: "reply_len=" + content.length };
-    } catch (e) {
-      return { ok: false, detail: e.message };
-    }
-  };
-
   App.testBackendConnection = async function() {
     var resultEl = document.getElementById("backendTestResult");
     if (resultEl) {
@@ -258,35 +214,6 @@ window.App = window.App || {};
       var msg3 = "\u8fde\u63a5\u5931\u8d25: " + e.message;
       if (resultEl) { resultEl.textContent = msg3; resultEl.className = "test-result fail"; }
       return { ok: false, latency: latency2, message: msg3 };
-    }
-  };
-
-  App.testLlmConnection = async function() {
-    var startTime = Date.now();
-    var resultEl = document.getElementById("llmTestResult");
-    if (resultEl) {
-      resultEl.textContent = "\u6d4b\u8bd5\u4e2d...";
-      resultEl.className = "test-result testing";
-    }
-    try {
-      var data = await llmChat(
-        [
-          { role: "system", content: "\u4f60\u662f\u4e00\u4e2a\u6d4b\u8bd5\u52a9\u624b\u3002\u8bf7\u7528\u4e00\u53e5\u8bdd\u56de\u590d\u3002" },
-          { role: "user", content: "\u8bf4\u4e00\u53e5\u6c5f\u6e56\u8bdd" }
-        ],
-        { maxTokens: 50, temperature: 0.7 }
-      );
-      var latency = Date.now() - startTime;
-      var reply = data.choices && data.choices[0] && data.choices[0].message
-        ? data.choices[0].message.content : "(\u65e0\u56de\u590d)";
-      var msg = "\u8fde\u63a5\u6210\u529f! \u5ef6\u8fdf: " + latency + "ms | \u56de\u590d: " + reply;
-      if (resultEl) { resultEl.textContent = msg; resultEl.className = "test-result success"; }
-      return { ok: true, latency: latency, message: msg, response: reply };
-    } catch (e) {
-      var latency2 = Date.now() - startTime;
-      var msg2 = "\u8fde\u63a5\u5931\u8d25: " + e.message;
-      if (resultEl) { resultEl.textContent = msg2; resultEl.className = "test-result fail"; }
-      return { ok: false, latency: latency2, message: msg2 };
     }
   };
 
