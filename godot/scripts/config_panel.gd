@@ -1,39 +1,26 @@
 class_name ConfigPanel
 ## ConfigPanel — 活纸 · 江湖行纪 API 配置面板
-## API Configuration Panel for backend/LLM settings
+## API Configuration Panel for backend settings
 ##
 ## 职责:
-##   1. 构建配置面板 UI (API 模式、后端地址、LLM 配置)
+##   1. 构建配置面板 UI (后端地址、关闭密钥)
 ##   2. 填充/读取当前配置值
 ##   3. 应用配置到 ApiClient
-##   4. 执行后端/LLM 连接测试
-##   5. 更新 API 模式指示器
-##
-## 使用方式:
-##   var config := ConfigPanel.new()
-##   config.build(parent, on_indicator_update_callback)
-##   config.toggle()
+##   4. 执行后端连接测试
+##   5. 配置持久化 (非敏感信息存 user://)
 ##
 ## 依赖: GameColors (Autoload), ApiClient (Autoload), UIBuilder
 
 var _overlay: Control
 var _panel: Control
-var _cfg_api_mode: OptionButton
 var _cfg_backend_url: LineEdit
-var _cfg_llm_url: LineEdit
-var _cfg_llm_key: LineEdit
-var _cfg_llm_model: LineEdit
+var _cfg_shutdown_secret: LineEdit
 var _backend_test_result: Label
-var _llm_test_result: Label
-var _on_indicator_updated: Callable
+
+const CONFIG_PATH := "user://living_paper_config.json"
 
 
-## 构建配置面板
-## [param parent] 父节点 (通常是根 Control)
-## [param on_indicator_updated] API模式指示器更新回调 Callable(new_text, new_color)
-func build(parent: Control, on_indicator_updated: Callable) -> void:
-	_on_indicator_updated = on_indicator_updated
-
+func build(parent: Control) -> void:
 	_overlay = Control.new()
 	_overlay.set_anchors_preset(PRESET_FULL_RECT)
 	_overlay.visible = false
@@ -49,7 +36,7 @@ func build(parent: Control, on_indicator_updated: Callable) -> void:
 	_overlay.add_child(panel_container)
 
 	_panel = Panel.new()
-	_panel.custom_minimum_size = Vector2(400, 500)
+	_panel.custom_minimum_size = Vector2(400, 360)
 	UIBuilder.add_panel_style(_panel)
 	panel_container.add_child(_panel)
 
@@ -61,18 +48,6 @@ func build(parent: Control, on_indicator_updated: Callable) -> void:
 
 	vb.add_child(UIBuilder.lbl("⚙ API 配置", 18, GameColors.ACCENT_YELLOW, HORIZONTAL_ALIGNMENT_CENTER))
 
-	# API Mode
-	var mode_vb := VBoxContainer.new()
-	mode_vb.add_theme_constant_override("separation", 4)
-	mode_vb.add_child(UIBuilder.lbl("运行模式", 13, GameColors.DIM))
-	_cfg_api_mode = OptionButton.new()
-	_cfg_api_mode.add_item("服务器模式（连接后端 API）")
-	_cfg_api_mode.add_item("独立模式（直接 LLM API）")
-	_cfg_api_mode.add_theme_font_size_override("font_size", 13)
-	mode_vb.add_child(_cfg_api_mode)
-	vb.add_child(mode_vb)
-
-	# Backend URL
 	var backend_vb := VBoxContainer.new()
 	backend_vb.add_theme_constant_override("separation", 4)
 	backend_vb.add_child(UIBuilder.lbl("后端 API 地址", 13, GameColors.DIM))
@@ -82,66 +57,31 @@ func build(parent: Control, on_indicator_updated: Callable) -> void:
 	backend_vb.add_child(_cfg_backend_url)
 	vb.add_child(backend_vb)
 
-	# LLM URL
-	var llm_url_vb := VBoxContainer.new()
-	llm_url_vb.add_theme_constant_override("separation", 4)
-	llm_url_vb.add_child(UIBuilder.lbl("LLM API 地址", 13, GameColors.DIM))
-	_cfg_llm_url = LineEdit.new()
-	_cfg_llm_url.placeholder_text = "https://api.example.com/v1"
-	_cfg_llm_url.add_theme_font_size_override("font_size", 13)
-	llm_url_vb.add_child(_cfg_llm_url)
-	vb.add_child(llm_url_vb)
+	var secret_vb := VBoxContainer.new()
+	secret_vb.add_theme_constant_override("separation", 4)
+	secret_vb.add_child(UIBuilder.lbl("关闭服务密钥 (SHUTDOWN_SECRET)", 13, GameColors.DIM))
+	_cfg_shutdown_secret = LineEdit.new()
+	_cfg_shutdown_secret.placeholder_text = "dev"
+	_cfg_shutdown_secret.secret = true
+	_cfg_shutdown_secret.add_theme_font_size_override("font_size", 13)
+	secret_vb.add_child(_cfg_shutdown_secret)
+	vb.add_child(secret_vb)
 
-	# LLM Key
-	var llm_key_vb := VBoxContainer.new()
-	llm_key_vb.add_theme_constant_override("separation", 4)
-	llm_key_vb.add_child(UIBuilder.lbl("LLM API Key", 13, GameColors.DIM))
-	_cfg_llm_key = LineEdit.new()
-	_cfg_llm_key.placeholder_text = "sk-..."
-	_cfg_llm_key.secret = true
-	_cfg_llm_key.add_theme_font_size_override("font_size", 13)
-	llm_key_vb.add_child(_cfg_llm_key)
-	vb.add_child(llm_key_vb)
-
-	# LLM Model
-	var llm_model_vb := VBoxContainer.new()
-	llm_model_vb.add_theme_constant_override("separation", 4)
-	llm_model_vb.add_child(UIBuilder.lbl("LLM 模型", 13, GameColors.DIM))
-	_cfg_llm_model = LineEdit.new()
-	_cfg_llm_model.placeholder_text = "your-model-name"
-	_cfg_llm_model.add_theme_font_size_override("font_size", 13)
-	llm_model_vb.add_child(_cfg_llm_model)
-	vb.add_child(llm_model_vb)
-
-	# Test section
 	var test_section := VBoxContainer.new()
 	test_section.add_theme_constant_override("separation", 8)
 	test_section.add_child(UIBuilder.lbl("🔌 连接测试", 14, GameColors.ACCENT))
 
-	var test_btn_hb := HBoxContainer.new()
-	test_btn_hb.add_theme_constant_override("separation", 8)
-
 	var test_backend_btn := UIBuilder.btn("测试后端", GameColors.BORDER_SILVER)
 	test_backend_btn.pressed.connect(_test_backend)
-	test_btn_hb.add_child(test_backend_btn)
-
-	var test_llm_btn := UIBuilder.btn("测试 LLM", GameColors.BORDER_SILVER)
-	test_llm_btn.pressed.connect(_test_llm)
-	test_btn_hb.add_child(test_llm_btn)
-
-	test_section.add_child(test_btn_hb)
+	test_section.add_child(test_backend_btn)
 
 	_backend_test_result = UIBuilder.lbl("", 11, GameColors.DIM)
 	test_section.add_child(_backend_test_result)
-
-	_llm_test_result = UIBuilder.lbl("", 11, GameColors.DIM)
-	test_section.add_child(_llm_test_result)
 
 	vb.add_child(test_section)
 
 	vb.add_child(Control.new())
 
-	# Buttons
 	var btn_hb := HBoxContainer.new()
 	btn_hb.add_theme_constant_override("separation", 8)
 	btn_hb.size_flags_horizontal = SIZE_SHRINK_END
@@ -157,9 +97,9 @@ func build(parent: Control, on_indicator_updated: Callable) -> void:
 	vb.add_child(btn_hb)
 
 	parent.add_child(_overlay)
+	_load_config()
 
 
-## 切换配置面板显示/隐藏
 func toggle() -> void:
 	if _overlay.visible:
 		_overlay.visible = false
@@ -168,57 +108,28 @@ func toggle() -> void:
 		_overlay.visible = true
 
 
-## 从 ApiClient 填充当前配置值到表单
 func _fill_config_values() -> void:
-	_cfg_api_mode.selected = 0 if ApiClient.api_mode == "backend" else 1
 	_cfg_backend_url.text = ApiClient.backend_url
-	_cfg_llm_url.text = ApiClient.llm_api_url
-	_cfg_llm_key.text = ApiClient.llm_api_key
-	_cfg_llm_model.text = ApiClient.llm_model
+	_cfg_shutdown_secret.text = ApiClient.shutdown_secret
 
 
-## 应用配置到 ApiClient 并更新指示器
 func _apply_config() -> void:
 	_cfg_backend_url.add_theme_color_override("font_color", Color(1, 1, 1))
-	_cfg_llm_url.add_theme_color_override("font_color", Color(1, 1, 1))
-	_cfg_llm_key.add_theme_color_override("font_color", Color(1, 1, 1))
-	_cfg_llm_model.add_theme_color_override("font_color", Color(1, 1, 1))
 
-	var new_mode := "backend" if _cfg_api_mode.selected == 0 else "direct"
 	var new_backend_url := _cfg_backend_url.text.strip_edges()
-	var new_llm_url := _cfg_llm_url.text.strip_edges()
-	var new_llm_key := _cfg_llm_key.text.strip_edges()
-	var new_llm_model := _cfg_llm_model.text.strip_edges()
+	var new_secret := _cfg_shutdown_secret.text.strip_edges()
 
-	# 输入验证
-	if new_mode == "backend" and new_backend_url == "":
+	if new_backend_url == "":
 		_cfg_backend_url.add_theme_color_override("font_color", GameColors.ACCENT_RED)
 		return
-	if new_mode == "direct" and new_llm_url == "":
-		_cfg_llm_url.add_theme_color_override("font_color", GameColors.ACCENT_RED)
-		return
-	if new_mode == "direct" and new_llm_key == "":
-		_cfg_llm_key.add_theme_color_override("font_color", GameColors.ACCENT_RED)
-		return
-	if new_mode == "direct" and new_llm_model == "":
-		_cfg_llm_model.add_theme_color_override("font_color", GameColors.ACCENT_RED)
-		return
 
-	ApiClient.api_mode = new_mode
 	ApiClient.backend_url = new_backend_url
-	ApiClient.llm_api_url = new_llm_url
-	ApiClient.llm_api_key = new_llm_key
-	ApiClient.llm_model = new_llm_model
+	ApiClient.shutdown_secret = new_secret
 
-	if _on_indicator_updated.is_valid():
-		var mode_text := "后端模式" if ApiClient.api_mode == "backend" else "独立模式"
-		var mode_color := GameColors.BORDER_GOLD if ApiClient.api_mode == "backend" else GameColors.ACCENT_PURPLE
-		_on_indicator_updated.call(mode_text, mode_color)
-
+	_save_config()
 	toggle()
 
 
-## 测试后端连接
 func _test_backend() -> void:
 	_backend_test_result.text = "⏳ 测试中..."
 	_backend_test_result.add_theme_color_override("font_color", GameColors.DIM)
@@ -232,15 +143,27 @@ func _test_backend() -> void:
 		_backend_test_result.add_theme_color_override("font_color", GameColors.ACCENT_RED)
 
 
-## 测试 LLM 连接
-func _test_llm() -> void:
-	_llm_test_result.text = "⏳ 测试中..."
-	_llm_test_result.add_theme_color_override("font_color", GameColors.DIM)
+func _save_config() -> void:
+	var cfg := {
+		"backend_url": ApiClient.backend_url,
+	}
+	var file := FileAccess.open(CONFIG_PATH, FileAccess.WRITE)
+	if file:
+		file.store_string(JSON.stringify(cfg))
+		file.close()
 
-	var ok: bool = await ApiClient.test_llm()
-	if ok:
-		_llm_test_result.text = "✅ LLM连接成功"
-		_llm_test_result.add_theme_color_override("font_color", GameColors.ACCENT_GREEN)
-	else:
-		_llm_test_result.text = "❌ LLM连接失败"
-		_llm_test_result.add_theme_color_override("font_color", GameColors.ACCENT_RED)
+
+func _load_config() -> void:
+	if not FileAccess.file_exists(CONFIG_PATH):
+		return
+	var file := FileAccess.open(CONFIG_PATH, FileAccess.READ)
+	if not file:
+		return
+	var text := file.get_as_text()
+	file.close()
+	var json := JSON.new()
+	if json.parse(text) != OK:
+		return
+	var data: Dictionary = json.data as Dictionary if json.data is Dictionary else {}
+	if data.has("backend_url") and data.backend_url != "":
+		ApiClient.backend_url = data.backend_url

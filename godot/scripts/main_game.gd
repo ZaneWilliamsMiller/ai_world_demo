@@ -64,7 +64,11 @@ var _inventory_flow: HFlowContainer
 var _favor_vbox: VBoxContainer
 var _npc_list_container: VBoxContainer
 var _portal_list_container: VBoxContainer
-var _api_mode_indicator: Label
+var _atmosphere_label: Label
+var _danger_label: Label
+var _bounty_container: VBoxContainer
+var _rest_btn: Button
+var _finale_btn: Button
 
 
 func _ready() -> void:
@@ -76,7 +80,7 @@ func _ready() -> void:
 
 	_build_login()
 	_build_game_ui()
-	_config_panel.build(self, _on_api_mode_updated)
+	_config_panel.build(self)
 
 	if GameManager.player_id != "":
 		_login_overlay.visible = false
@@ -131,7 +135,6 @@ func _logged_in_deferred() -> void:
 						print("[Game]   child name=%s size=%s cm=%s sf_h=%d sf_v=%d" % [hgc.name, str(hgc.size), str(hgc.custom_minimum_size), hgc.size_flags_horizontal, hgc.size_flags_vertical])
 	print("[Game] _logged_in_deferred — sizes: game_ui=%s, self=%s" % [str(_game_ui.size), str(size)])
 	print("[Game] _npc_select is null: %s" % str(_npc_select == null))
-	_update_api_mode_indicator()
 	_refresh()
 
 
@@ -172,7 +175,7 @@ func _show_load_dialog() -> void:
 func _build_game_ui() -> void:
 	var refs := _ui_builder.build_game_ui(
 		self,
-		func(x, y): GameManager.move_player(x, y),
+		func(x, y): _on_tile_click(x, y),
 		func(nid, nname):
 			for idx in _npc_select.item_count:
 				if _npc_select.get_item_text(idx) == nname:
@@ -220,10 +223,36 @@ func _build_game_ui() -> void:
 	_favor_vbox = refs["favor_vbox"]
 	_npc_list_container = refs["npc_list_container"]
 	_portal_list_container = refs["portal_list_container"]
-	_api_mode_indicator = refs["api_mode_indicator"]
+	_atmosphere_label = refs["atmosphere_label"]
+	_danger_label = refs["danger_label"]
+	_bounty_container = refs["bounty_container"]
+	_rest_btn = refs["rest_btn"]
+	_finale_btn = refs["finale_btn"]
 
 	# Initialize message display with dialogue nodes
 	_msg_display.init(_dialogue_label, _chat_scroll)
+
+	_rest_btn.pressed.connect(func():
+		GameManager.rest()
+	)
+	_finale_btn.pressed.connect(func():
+		_dialog_manager.show_confirm(self,
+			"终局收束",
+			"确定要结束这段江湖旅程吗？\n\n[color=yellow]⚠️ 此操作不可逆[/color]",
+			func(): GameManager.finale()
+		)
+	)
+
+	# Connect map renderer signals
+	_map_renderer.setup_minimap(_map_sub_vp)
+
+	_map_sub_vp.gui_input.connect(func(ev):
+		if ev is InputEventMouseMotion:
+			_map_renderer.on_mouse_moved(ev.position)
+	)
+	_map_sub_vp.mouse_exited.connect(func():
+		_map_renderer.on_mouse_exited()
+	)
 
 
 # ═══════════════════════════════════════════════════════
@@ -239,6 +268,14 @@ func _update_map_player() -> void:
 	if not _map_renderer:
 		return
 	_map_renderer.update_player_position()
+
+
+func _on_tile_click(x: int, y: int) -> void:
+	if GameManager._is_moving:
+		if _map_renderer:
+			_map_renderer.set_pending_move(x, y)
+		return
+	GameManager.move_player(x, y)
 
 
 # ═══════════════════════════════════════════════════════
@@ -262,7 +299,7 @@ func _on_send() -> void:
 	var npc_id: String = npcs[idx].get("id","")
 	var npc_name: String = npcs[idx].get("name", npc_id)
 
-	_msg_display.add_chat(GameColors.TEXT, "", "[right]%s[/right]" % text)
+	_msg_display.add_chat(GameColors.TEXT, "", "[color=#%s]%s[/color]" % [GameColors.DIM.to_html(false), text])
 	_msg_input.clear()
 	_is_streaming = true
 	_send_btn.disabled = true
@@ -291,6 +328,7 @@ func _on_stream_chunk(text: String) -> void:
 
 func _on_stream_done(data: Dictionary) -> void:
 	if not _is_streaming: return
+	_stream_timeout_msec = 0
 
 	if data.has("error"):
 		_stream_text += "\n[错误] " + str(data.error)
@@ -308,6 +346,18 @@ func _on_stream_done(data: Dictionary) -> void:
 
 	if not data.has("player"):
 		GameManager.fetch_state()
+
+
+func _process(_delta: float) -> void:
+	_process_stream_timeout()
+
+
+func _process_stream_timeout() -> void:
+	if not _is_streaming or _stream_timeout_msec == 0:
+		return
+	if (Time.get_ticks_msec() - _stream_timeout_msec) > STREAM_TIMEOUT_MSEC:
+		ApiClient.cancel_stream()
+		_on_stream_done({"error": "对话超时，请重试"})
 
 
 func _on_npc_reply(speaker: String, message: String, _npc_id: String) -> void:
@@ -421,6 +471,11 @@ func _refresh() -> void:
 				else:
 					var lbl := UIBuilder.lbl("%s×%d" % [item, gm.player_inventory[item]], 12, GameColors.GOLD)
 					lbl.name = node_name
+					var item_name := item as String
+					lbl.gui_input.connect(func(ev, i_name=item_name):
+						if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+							gm.use_item(i_name)
+					)
 					_inventory_flow.add_child(lbl)
 			for c_name in existing_inv:
 				if not desired_inv.has(c_name):
@@ -476,6 +531,104 @@ func _refresh() -> void:
 				portal_btn.pressed.connect(func(x=to_x, y=to_y): gm.move_player(x, y))
 				_portal_list_container.add_child(portal_btn)
 
+	# Atmosphere & Danger Sense
+	if _atmosphere_label:
+		var atmo: String = gm.player_weather
+		if not atmo.is_empty():
+			_atmosphere_label.text = "🌫 %s" % atmo
+			_atmosphere_label.visible = true
+		else:
+			_atmosphere_label.visible = false
+	if _danger_label:
+		if gm.player_trap_reason != "":
+			_danger_label.text = "⚠️ %s" % gm.player_trap_reason
+			_danger_label.visible = true
+		else:
+			_danger_label.visible = false
+
+	# Bounty — 增量 diff
+	if _bounty_container:
+		var existing_bty: Dictionary = {}
+		for c in _bounty_container.get_children():
+			if is_instance_valid(c):
+				existing_bty[c.name] = c
+		var bounties: Array = gm.player_bounties
+		if bounties.is_empty():
+			for c_name in existing_bty:
+				existing_bty[c_name].queue_free()
+			if _bounty_container.get_child_count() == 0:
+				var empty_bty := UIBuilder.lbl("暂无悬赏", 11, GameColors.DIM)
+				empty_bty.name = "BtyEmpty"
+				_bounty_container.add_child(empty_bty)
+				var refresh_btn := UIBuilder.btn("🔄 刷新悬赏榜", GameColors.BORDER_SILVER)
+				refresh_btn.name = "BtyRefreshBtn"
+				refresh_btn.pressed.connect(func(): gm.bounty_refresh())
+				_bounty_container.add_child(refresh_btn)
+		else:
+			if existing_bty.has("BtyEmpty"):
+				existing_bty["BtyEmpty"].queue_free()
+				existing_bty.erase("BtyEmpty")
+			if existing_bty.has("BtyRefreshBtn"):
+				existing_bty["BtyRefreshBtn"].queue_free()
+				existing_bty.erase("BtyRefreshBtn")
+			var desired_bty: Dictionary = {}
+			for b in bounties:
+				var bid: String = b.get("id", str(b.hash()))
+				var node_name := "Bty_%s" % bid
+				desired_bty[node_name] = true
+				if existing_bty.has(node_name):
+					var lbl: Label = existing_bty[node_name]
+					if is_instance_valid(lbl):
+						var is_active: bool = b.get("status", "") == "active" or b.get("accepted", false)
+						lbl.text = "%s%s" % [b.get("title", b.get("name", "悬赏")), " ✓已接受" if is_active else ""]
+						lbl.add_theme_color_override("font_color", GameColors.ACCENT_GREEN if is_active else GameColors.TEXT)
+				else:
+					var is_active: bool = b.get("status", "") == "active" or b.get("accepted", false)
+					var bty_lbl := UIBuilder.lbl("%s%s" % [b.get("title", b.get("name", "悬赏")), " ✓已接受" if is_active else ""], 11, GameColors.ACCENT_GREEN if is_active else GameColors.TEXT)
+					bty_lbl.name = node_name
+					_bounty_container.add_child(bty_lbl)
+					if not is_active:
+						bty_lbl.gui_input.connect(func(ev, b_id=bid):
+							if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+								gm.bounty_accept(b_id)
+						)
+			for c_name in existing_bty:
+				if not desired_bty.has(c_name):
+					existing_bty[c_name].queue_free()
+			var has_refresh := false
+			for c in _bounty_container.get_children():
+				if c.name == "BtyRefreshBtn":
+					has_refresh = true
+					break
+			if not has_refresh:
+				var refresh_btn := UIBuilder.btn("🔄 刷新悬赏榜", GameColors.BORDER_SILVER)
+				refresh_btn.name = "BtyRefreshBtn"
+				refresh_btn.pressed.connect(func(): gm.bounty_refresh())
+				_bounty_container.add_child(refresh_btn)
+			var has_complete := false
+			for c in _bounty_container.get_children():
+				if c.name == "BtyCompleteBtn":
+					has_complete = true
+					break
+			if not has_complete:
+				var complete_btn := UIBuilder.btn("✅ 完成悬赏", GameColors.ACCENT_GREEN)
+				complete_btn.name = "BtyCompleteBtn"
+				complete_btn.pressed.connect(func(): gm.bounty_complete())
+				_bounty_container.add_child(complete_btn)
+			var has_abandon := false
+			for c in _bounty_container.get_children():
+				if c.name == "BtyAbandonBtn":
+					has_abandon = true
+					break
+			if not has_abandon:
+				var abandon_btn := UIBuilder.btn("❌ 放弃悬赏", GameColors.ACCENT_RED)
+				abandon_btn.name = "BtyAbandonBtn"
+				abandon_btn.pressed.connect(func():
+					_dialog_manager.show_confirm(self, "放弃悬赏", "确定要放弃当前悬赏吗？",
+						func(): gm.bounty_abandon())
+				)
+				_bounty_container.add_child(abandon_btn)
+
 
 # ═══════════════════════════════════════════════════════
 #  API Mode Indicator — API模式指示器更新回调
@@ -515,17 +668,6 @@ func _animate_bar(bar: ProgressBar, new_value: float) -> void:
 	var tween := create_tween()
 	_bar_tweens[bar_id] = tween
 	tween.tween_property(bar, "value", new_value, 0.3).set_trans(Tween.TRANS_SINE)
-
-
-func _on_api_mode_updated(new_text: String, new_color: Color) -> void:
-	_api_mode_indicator.text = new_text
-	_api_mode_indicator.add_theme_color_override("font_color", new_color)
-
-
-func _update_api_mode_indicator() -> void:
-	_api_mode_indicator.text = "后端模式" if ApiClient.api_mode == "backend" else "独立模式"
-	_api_mode_indicator.add_theme_color_override("font_color",
-		GameColors.BORDER_GOLD if ApiClient.api_mode == "backend" else GameColors.ACCENT_PURPLE)
 
 
 # ═══════════════════════════════════════════════════════

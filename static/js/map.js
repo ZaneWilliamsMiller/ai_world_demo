@@ -173,7 +173,7 @@ window.App = window.App || {};
     // 鼠标事件
     mainCanvas.addEventListener("click", onMapClick);
     mainCanvas.addEventListener("mousemove", onMapHover);
-    mainCanvas.addEventListener("mouseleave", function() { _hoverX = _hoverY = -1; _mouseScreenX = _mouseScreenY = -1; });
+    mainCanvas.addEventListener("mouseleave", function() { _hoverX = _hoverY = -1; _mouseScreenX = _mouseScreenY = -1; markDirty(); });
     miniCanvas.addEventListener("click", onMiniClick);
   }
 
@@ -222,9 +222,16 @@ window.App = window.App || {};
       var dx = cam.targetX - cam.x;
       var dy = cam.targetY - cam.y;
       var dist = Math.sqrt(dx * dx + dy * dy);
-      var factor = dist > 3 ? 0.8 : dist > 1.5 ? 0.6 : cam.lerp;
+      var factor;
+      if (App._isMoving) {
+        factor = dist > 2 ? 0.85 : dist > 0.5 ? 0.7 : 0.6;
+      } else {
+        factor = dist > 3 ? 0.8 : dist > 1.5 ? 0.6 : cam.lerp;
+      }
       cam.x += dx * factor;
       cam.y += dy * factor;
+      if (Math.abs(cam.x - cam.targetX) < 0.005) cam.x = cam.targetX;
+      if (Math.abs(cam.y - cam.targetY) < 0.005) cam.y = cam.targetY;
     }
   }
 
@@ -238,8 +245,9 @@ window.App = window.App || {};
     renderMini();
 
     var camMoving = Math.abs(cam.x - cam.targetX) > 0.01 || Math.abs(cam.y - cam.targetY) > 0.01;
+    var keepRunning = camMoving || _dirty || App._isMoving;
 
-    if (camMoving || _dirty) {
+    if (keepRunning) {
       _dirty = false;
       _rafId = requestAnimationFrame(renderLoop);
     } else {

@@ -164,7 +164,6 @@ func _apply_player(p: Dictionary) -> void:
 
 
 func move_player(tx: int, ty: int) -> void:
-	## Move to target tile.
 	if _is_moving: return
 	_is_moving = true
 	var body := {"player_id": player_id, "to_x": tx, "to_y": ty}
@@ -173,12 +172,14 @@ func move_player(tx: int, ty: int) -> void:
 	if res.has("error"):
 		_is_moving = false
 		system_message.emit("移动失败")
+		_execute_pending_move()
 		return
 
 	var path_data: Array = res.get("path", [])
 	if path_data.is_empty():
 		_is_moving = false
 		system_message.emit("此路不通")
+		_execute_pending_move()
 		return
 
 	for step in path_data:
@@ -224,19 +225,137 @@ func move_player(tx: int, ty: int) -> void:
 	npcs_here = res.get("npcs_here", npcs_here)
 	_is_moving = false
 	state_updated.emit()
+	_execute_pending_move()
+
+
+func _execute_pending_move() -> void:
+	var map_renderer = Engine.get_main_loop().root.find_child("MapRenderer", true, false)
+	if not map_renderer:
+		return
+	if not map_renderer.has_pending_move():
+		return
+	var pm: Vector2i = map_renderer.get_pending_move()
+	if pm.x >= 0 and pm.y >= 0:
+		move_player(pm.x, pm.y)
 
 
 func save_game() -> bool:
-	## Persist current game to disk.
 	var body := {"player_id": player_id}
 	var res: Dictionary = await ApiClient.request("/api/save", "POST", body)
 	return res.get("ok", false)
 
 
 func list_saves() -> Array:
-	## Get all saved games.
 	var res: Dictionary = await ApiClient.request("/api/saves", "GET", {})
 	return res.get("saves", [])
+
+
+func delete_save(pid: String) -> bool:
+	var body := {"player_id": pid}
+	var res: Dictionary = await ApiClient.request("/api/delete-save", "POST", body)
+	return res.get("_status", 0) == 200
+
+
+func rest() -> void:
+	var body := {"player_id": player_id}
+	var res: Dictionary = await ApiClient.request("/api/rest", "POST", body)
+	if res.has("error"):
+		system_message.emit("休息失败: %s" % res.get("error", "?"))
+		return
+	system_message.emit(res.get("note", res.get("message", "休息完毕")))
+	if res.has("player"):
+		_apply_player(res.player)
+	state_updated.emit()
+
+
+func use_item(item_name: String) -> void:
+	var body := {"player_id": player_id, "item": item_name}
+	var res: Dictionary = await ApiClient.request("/api/item/use", "POST", body)
+	if res.has("error"):
+		system_message.emit("使用失败: %s" % res.get("error", "?"))
+		return
+	system_message.emit(res.get("note", res.get("message", "使用了 %s" % item_name)))
+	if res.has("player"):
+		_apply_player(res.player)
+	state_updated.emit()
+
+
+func finale() -> void:
+	var body := {"player_id": player_id}
+	var res: Dictionary = await ApiClient.request("/api/finale", "POST", body)
+	if res.has("error"):
+		system_message.emit("终局失败: %s" % res.get("error", "?"))
+		return
+	if res.has("epilogue"):
+		system_message.emit("【%s】" % res.get("ending_label", "江湖路尽"))
+		chat_message.emit("终局叙事", res.epilogue, "")
+	else:
+		system_message.emit(res.get("ending_label", "江湖路尽"))
+	if res.has("player"):
+		_apply_player(res.player)
+	state_updated.emit()
+
+
+func bounty_refresh() -> void:
+	var body := {"player_id": player_id}
+	var res: Dictionary = await ApiClient.request("/api/bounty/refresh", "POST", body)
+	if res.has("error"):
+		system_message.emit("刷新悬赏失败: %s" % res.get("error", "?"))
+		return
+	system_message.emit(res.get("board_text", "悬赏榜已刷新"))
+	if res.has("player"):
+		_apply_player(res.player)
+	state_updated.emit()
+
+
+func bounty_accept(bounty_id: String) -> void:
+	var body := {"player_id": player_id, "bounty_id": bounty_id}
+	var res: Dictionary = await ApiClient.request("/api/bounty/accept", "POST", body)
+	if res.has("error"):
+		system_message.emit("接受悬赏失败: %s" % res.get("error", "?"))
+		return
+	system_message.emit(res.get("message", "已接受悬赏" if res.get("ok", false) else "无法接受"))
+	if res.get("ok", false):
+		bounty_refresh()
+	else:
+		state_updated.emit()
+
+
+func bounty_complete() -> void:
+	var body := {"player_id": player_id}
+	var res: Dictionary = await ApiClient.request("/api/bounty/complete", "POST", body)
+	if res.has("error"):
+		system_message.emit("完成悬赏失败: %s" % res.get("error", "?"))
+		return
+	if res.get("ok", false):
+		var reward_text := ""
+		if res.has("reward"):
+			reward_text = " 获得奖励: %s" % str(res.reward)
+		system_message.emit("悬赏完成！%s" % reward_text)
+		bounty_refresh()
+	else:
+		system_message.emit(res.get("message", "无法完成悬赏"))
+		state_updated.emit()
+
+
+func bounty_abandon() -> void:
+	var body := {"player_id": player_id}
+	var res: Dictionary = await ApiClient.request("/api/bounty/abandon", "POST", body)
+	if res.has("error"):
+		system_message.emit("放弃悬赏失败: %s" % res.get("error", "?"))
+		return
+	system_message.emit(res.get("message", "已放弃悬赏" if res.get("ok", false) else "无法放弃"))
+	if res.get("ok", false):
+		bounty_refresh()
+	else:
+		state_updated.emit()
+
+
+func fetch_journal() -> String:
+	var res: Dictionary = await ApiClient.request("/api/journal/" + player_id, "GET", {})
+	if res.has("error"):
+		return ""
+	return res.get("journal", res.get("text", ""))
 
 
 func fetch_state() -> void:
@@ -300,16 +419,16 @@ func apply_stream_result(data: Dictionary) -> void:
 	if data.has("npcs_here"):
 		npcs_here = data.npcs_here
 	if data.has("flags"):
-		flags = data.flags
+		player_flags = data.flags
 	if data.has("favor"):
-		favor = data.favor
+		player_favor = data.favor
 	if data.has("delta"):
 		var d = data.delta
 		if d.has("coins") and d.coins != 0:
-			coins += int(d.coins)
+			player_coins += int(d.coins)
 		if d.has("vigor") and d.vigor != 0:
-			vigor = clampi(vigor + int(d.vigor), 0, vigor_max)
+			player_vigor = clampi(player_vigor + int(d.vigor), 0, player_vigor_max)
 		if d.has("spirit") and d.spirit != 0:
-			spirit = clampi(spirit + int(d.spirit), 0, spirit_max)
+			player_spirit = clampi(player_spirit + int(d.spirit), 0, player_spirit_max)
 	if data.has("player") or data.has("npcs_here"):
 		state_updated.emit()

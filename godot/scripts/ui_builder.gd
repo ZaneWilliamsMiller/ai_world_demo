@@ -158,7 +158,7 @@ const GAME_UI_KEYS := [
 	"vigor_bar", "vigor_label", "spirit_bar", "spirit_label",
 	"coins_label", "time_label", "weather_label", "map_name_label", "map_title_label",
 	"inventory_flow", "favor_vbox", "npc_list_container", "portal_list_container",
-	"api_mode_indicator",
+	"atmosphere_label", "danger_label", "bounty_container", "rest_btn", "finale_btn",
 ]
 
 ## 构建游戏主界面（两栏布局）
@@ -200,13 +200,15 @@ func build_game_ui(parent: Control, on_tile_click: Callable, on_npc_map_click: C
 	top_hb.add_child(lbl("🏮 活纸 · 江湖行纪", 15, GameColors.ACCENT_YELLOW))
 	top_hb.add_child(Control.new())
 
-	refs["api_mode_indicator"] = lbl("后端模式", 11, GameColors.DIM)
-	refs["api_mode_indicator"].add_theme_color_override("font_color", GameColors.BORDER_GOLD)
-	top_hb.add_child(refs["api_mode_indicator"])
-
 	var config_btn := btn("⚙", GameColors.BORDER_SILVER)
 	config_btn.pressed.connect(on_config)
 	top_hb.add_child(config_btn)
+
+	refs["rest_btn"] = btn("🛏 休息", GameColors.BORDER_SILVER)
+	top_hb.add_child(refs["rest_btn"])
+
+	refs["finale_btn"] = btn("📜 终局", GameColors.ACCENT_PURPLE)
+	top_hb.add_child(refs["finale_btn"])
 
 	var save_btn := btn("💾 存档", GameColors.ACCENT_GREEN)
 	save_btn.pressed.connect(func(): on_save.call())
@@ -322,6 +324,13 @@ func build_game_ui(parent: Control, on_tile_click: Callable, on_npc_map_click: C
 	refs["weather_label"] = lbl("🌤 --", 11, GameColors.TEXT); info_grid.add_child(refs["weather_label"])
 	refs["map_name_label"] = lbl("📍 --", 11, GameColors.DIM); info_grid.add_child(refs["map_name_label"])
 
+	refs["atmosphere_label"] = lbl("", 11, GameColors.ACCENT_YELLOW)
+	refs["atmosphere_label"].visible = false
+	stat_vb.add_child(refs["atmosphere_label"])
+	refs["danger_label"] = lbl("", 11, GameColors.ACCENT_RED)
+	refs["danger_label"].visible = false
+	stat_vb.add_child(refs["danger_label"])
+
 	# Card 2: Inventory
 	var inv_card := make_card("🎒 行囊")
 	side_panel.add_child(inv_card)
@@ -366,7 +375,19 @@ func build_game_ui(parent: Control, on_tile_click: Callable, on_npc_map_click: C
 	refs["portal_list_container"].size_flags_horizontal = SIZE_EXPAND
 	portal_inner.add_child(refs["portal_list_container"])
 
-	# Card 6: Dialogue (bottom ~240px)
+	# Card 6: Bounty
+	var bounty_card := make_card("📜 悬赏榜")
+	side_panel.add_child(bounty_card)
+	var bounty_inner := VBoxContainer.new()
+	bounty_inner.set_anchors_preset(PRESET_FULL_RECT)
+	bounty_card.add_child(bounty_inner)
+
+	refs["bounty_container"] = VBoxContainer.new()
+	refs["bounty_container"].add_theme_constant_override("separation", 3)
+	refs["bounty_container"].size_flags_horizontal = SIZE_EXPAND
+	bounty_inner.add_child(refs["bounty_container"])
+
+	# Card 7: Dialogue (bottom ~240px)
 	var dlg_card := Panel.new()
 	dlg_card.custom_minimum_size = Vector2(0, 240)
 	dlg_card.size_flags_vertical = SIZE_SHRINK_END

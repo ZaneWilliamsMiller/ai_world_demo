@@ -94,7 +94,7 @@ func add_system_msg_ex(text: String, is_error: bool = false) -> void:
 	_scroll_to_bottom()
 
 	if is_error or _error_style_applied:
-		label.modulate = Color(1.2, 0.9, 0.9)
+		label.modulate = Color(1.0, 0.85, 0.85)
 		await get_tree().create_timer(0.3).timeout
 		label.modulate = Color.WHITE
 
