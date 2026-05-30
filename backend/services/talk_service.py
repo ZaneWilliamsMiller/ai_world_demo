@@ -352,9 +352,9 @@ def _apply_parsed_effects(
     spirit_applied += int(survival.get("spirit", 0) or 0)
     for g in survival.get("items_gain", []):
         items_added.append(g)
-    for l in survival.get("items_lose", []):
-        if l not in items_lost:
-            items_lost.append(l)
+    for lost_item in survival.get("items_lose", []):
+        if lost_item not in items_lost:
+            items_lost.append(lost_item)
 
     actor_tag = f"{NPCS[npc_id]['short']}@{MAPS.get(p.map_id, {}).get('name', '未知之地')}"
     for ev in parsed.events:

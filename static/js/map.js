@@ -348,14 +348,14 @@ window.App = window.App || {};
   //  摄像机逻辑
   // ═══════════════════════════════════════════
   function updateCameraTarget(px, py) {
-    var halfCols = viewCols / 2;
-    var halfRows = viewRows / 2;
+    var halfViewW = viewW / (2 * TILE);
+    var halfViewH = viewH / (2 * TILE);
 
-    var idealX = px - halfCols;
-    var idealY = py - halfRows;
+    var idealX = px + 0.5 - halfViewW;
+    var idealY = py + 0.5 - halfViewH;
 
-    var maxX = Math.max(0, mapState.cols - viewCols);
-    var maxY = Math.max(0, mapState.rows.length - viewRows);
+    var maxX = Math.max(0, mapState.cols - viewW / TILE);
+    var maxY = Math.max(0, mapState.rows.length - viewH / TILE);
 
     cam.targetX = Math.max(0, Math.min(idealX, maxX));
     cam.targetY = Math.max(0, Math.min(idealY, maxY));
@@ -658,8 +658,8 @@ window.App = window.App || {};
     ctx.strokeRect(
       cam.x * MINI_TILE, 
       cam.y * MINI_TILE,
-      viewCols * MINI_TILE, 
-      viewRows * MINI_TILE
+      (viewW / TILE) * MINI_TILE, 
+      (viewH / TILE) * MINI_TILE
     );
 
     // 玩家点

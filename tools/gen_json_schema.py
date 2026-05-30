@@ -41,14 +41,14 @@ if args.check:
     if existing_combined != generated_combined:
         print(f"CHECK FAILED: {combined_path} is out of date. Run: python tools/gen_json_schema.py", file=sys.stderr)
         sys.exit(1)
-    for name in per_model_schemas:
+    for name, schema in per_model_schemas.items():
         model_path = output_dir / f"{name}.json"
         if not model_path.is_file():
             print(f"CHECK FAILED: {model_path} does not exist", file=sys.stderr)
             sys.exit(1)
         with model_path.open(encoding="utf-8") as f:
             existing_model = json.load(f)
-        generated_model = json.loads(json.dumps(per_model_schemas[name], indent=2, ensure_ascii=False))
+        generated_model = json.loads(json.dumps(schema, indent=2, ensure_ascii=False))
         if existing_model != generated_model:
             print(f"CHECK FAILED: {model_path} is out of date. Run: python tools/gen_json_schema.py", file=sys.stderr)
             sys.exit(1)
@@ -57,7 +57,7 @@ else:
     output_dir.mkdir(parents=True, exist_ok=True)
     with (output_dir / "api-schema.json").open("w", encoding="utf-8") as f:
         json.dump(combined, f, indent=2, ensure_ascii=False)
-    for name in per_model_schemas:
+    for name, schema in per_model_schemas.items():
         with (output_dir / f"{name}.json").open("w", encoding="utf-8") as f:
-            json.dump(per_model_schemas[name], f, indent=2, ensure_ascii=False)
+            json.dump(schema, f, indent=2, ensure_ascii=False)
     print(f"Generated {len(response_models)} JSON Schema files in {output_dir}")

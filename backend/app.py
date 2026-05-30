@@ -40,7 +40,15 @@ def _cors_allow_origins() -> tuple[list[str], bool]:
 
 _origins, _creds = _cors_allow_origins()
 
-_auto_save_task = None
+
+class _AppState:
+    __slots__ = ("auto_save_task", "shutdown_requested")
+    def __init__(self) -> None:
+        self.auto_save_task: asyncio.Task | None = None
+        self.shutdown_requested: bool = False
+
+_app_state = _AppState()
+
 
 async def _auto_save_loop():
     """每 5 分钟自动存档所有活跃玩家。"""
@@ -64,24 +72,20 @@ async def _auto_save_loop():
         except Exception as e:
             _save_log.error("auto-save loop error: %s", e, exc_info=True)
 
-_shutdown_requested = False
-
 def mark_shutdown_requested():
-    global _shutdown_requested
-    _shutdown_requested = True
+    _app_state.shutdown_requested = True
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _auto_save_task
-    _auto_save_task = asyncio.create_task(_auto_save_loop())
+    _app_state.auto_save_task = asyncio.create_task(_auto_save_loop())
     from backend.memory import init_entity_keywords
     init_entity_keywords()
     yield
-    if _auto_save_task and not _auto_save_task.done():
-        _auto_save_task.cancel()
+    if _app_state.auto_save_task and not _app_state.auto_save_task.done():
+        _app_state.auto_save_task.cancel()
         with suppress(asyncio.CancelledError):
-            await _auto_save_task
-    if _shutdown_requested:
+            await _app_state.auto_save_task
+    if _app_state.shutdown_requested:
         _log.info("shutdown already saved by shutdown endpoint, skipping lifespan save")
     else:
         saved = 0

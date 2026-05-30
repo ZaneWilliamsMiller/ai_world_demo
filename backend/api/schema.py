@@ -553,6 +553,12 @@ class InteractiveModulesResponse(BaseModel):
     modules: list[InteractiveModuleInfoResponse]
 
 
+class ShutdownResponse(BaseModel):
+    status: str = "shutting_down"
+    message: str = ""
+    hint: str = ""
+
+
 class ResetCircuitBreakerResponse(BaseModel):
     status: str = "ok"
     state: str = "closed"

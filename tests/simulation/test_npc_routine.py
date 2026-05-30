@@ -120,8 +120,8 @@ class TestNpcRoutine:
         for shichen in range(12):
             p.world_shichen = shichen
             update_npc_states_from_habits(p)
-            for nid in state_history:
-                state_history[nid].append(p.npc_states.get(nid, "idle"))
+            for nid, hist in state_history.items():
+                hist.append(p.npc_states.get(nid, "idle"))
         has_transition = False
         for nid, states in state_history.items():
             if len(set(states)) > 1:

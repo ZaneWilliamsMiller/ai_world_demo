@@ -5,6 +5,15 @@ window.App = window.App || {};
 
   var _defaultTimeout = 30000;
 
+  async function _handleErrorResponse(r, url) {
+    var errorMsg = url + " " + r.status;
+    try {
+      var errorJson = await r.json();
+      errorMsg = errorJson.detail || errorJson.message || errorMsg;
+    } catch (_e) { /* ignore parse error */ }
+    throw new Error(errorMsg);
+  }
+
   async function backendPost(url, body, timeoutMs) {
     var path = url.startsWith("/api") ? url.substring(4) : url;
     var fullUrl = App.API + path;
@@ -19,17 +28,13 @@ window.App = window.App || {};
       });
       clearTimeout(timeoutId);
       if (!r.ok) {
-        var errorMsg = url + " " + r.status;
-        try {
-          var errorJson = await r.json();
-          errorMsg = errorJson.detail || errorJson.message || errorMsg;
-        } catch (_e) { /* ignore parse error */ }
-        throw new Error(errorMsg);
+        await _handleErrorResponse(r, url);
       }
       return await r.json();
     } catch (e) {
       clearTimeout(timeoutId);
       if (e.name === 'AbortError') throw new Error('请求超时');
+      if (e instanceof TypeError) throw new Error('网络连接中断，请检查后端服务');
       throw e;
     }
   }
@@ -43,17 +48,13 @@ window.App = window.App || {};
       var r = await fetch(fullUrl, { cache: 'no-store', signal: controller.signal });
       clearTimeout(timeoutId);
       if (!r.ok) {
-        var errorMsg = url + " " + r.status;
-        try {
-          var errorJson = await r.json();
-          errorMsg = errorJson.detail || errorJson.message || errorMsg;
-        } catch (_e) { /* ignore parse error */ }
-        throw new Error(errorMsg);
+        await _handleErrorResponse(r, url);
       }
       return await r.json();
     } catch (e) {
       clearTimeout(timeoutId);
       if (e.name === 'AbortError') throw new Error('请求超时');
+      if (e instanceof TypeError) throw new Error('网络连接中断，请检查后端服务');
       throw e;
     }
   }
@@ -93,9 +94,28 @@ window.App = window.App || {};
     }
   };
 
-  App.fetchState = async function() {
+  App.fetchState = async function(signal) {
     if (!App.playerId) return null;
-    return await backendGet("/api/state/" + App.playerId);
+    var path = "/api/state/" + App.playerId;
+    var fullUrl = App.API + path;
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function() { controller.abort(); }, _defaultTimeout);
+    if (signal) {
+      signal.addEventListener("abort", function() { controller.abort(); });
+    }
+    try {
+      var r = await fetch(fullUrl, { cache: 'no-store', signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (!r.ok) {
+        await _handleErrorResponse(r, path);
+      }
+      return await r.json();
+    } catch (e) {
+      clearTimeout(timeoutId);
+      if (e.name === 'AbortError') throw e;
+      if (e instanceof TypeError) throw new Error('网络连接中断，请检查后端服务');
+      throw e;
+    }
   };
 
   App.doSave = async function() {
@@ -166,12 +186,7 @@ window.App = window.App || {};
     }
     if (!res.ok) {
       App._streamAbortController = null;
-      var errorMsg = "talk_stream " + res.status;
-      try {
-        var errorJson = await res.json();
-        errorMsg = errorJson.detail || errorJson.message || errorMsg;
-      } catch (_e) { /* ignore parse error */ }
-      throw new Error(errorMsg);
+      await _handleErrorResponse(res, "talk_stream");
     }
     return res.body.getReader();
   };
@@ -212,12 +227,7 @@ window.App = window.App || {};
 
     if (!res.ok) {
       App._actLoopAbortController = null;
-      var errorMsg = "act_loop_stream " + res.status;
-      try {
-        var errorJson = await res.json();
-        errorMsg = errorJson.detail || errorJson.message || errorMsg;
-      } catch (_e) {}
-      throw new Error(errorMsg);
+      await _handleErrorResponse(res, "act_loop_stream");
     }
     return res.body.getReader();
   };

@@ -1236,24 +1236,31 @@
   border-bottom: 2px solid rgba(42, 42, 74, 0.6);
   background: var(--glass-bg);
   backdrop-filter: blur(8px);
-  max-height: 180px;
-  overflow-y: auto;
+  overflow: hidden;
 }
-.bounty-section h3 {
-  padding: 10px 20px;
-  font-size: 12px;
-  color: var(--accent-yellow);
-  letter-spacing: 3px;
-  position: sticky;
-  top: 0;
-  background: rgba(21, 21, 37, 0.95);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(42, 42, 74, 0.6);
-  z-index: 1;
-  font-weight: 900;
+.bounty-summary {
+  padding: 8px 20px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  transition: background 0.12s ease;
+}
+.bounty-summary:hover {
+  background: rgba(234, 179, 8, 0.04);
+}
+.bounty-summary-icon {
+  font-size: 13px;
+}
+.bounty-summary-text {
+  flex: 1;
+  color: var(--accent-yellow);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .bounty-expand-btn {
   font-size: 10px;
@@ -1269,86 +1276,6 @@
   color: var(--accent-yellow);
   border-color: var(--accent-yellow);
 }
-.bounty-item {
-  padding: 8px 12px;
-  margin-bottom: 6px;
-  border: 1px solid var(--glass-border);
-  border-radius: 6px;
-  font-size: 11px;
-  cursor: pointer;
-  transition: all 0.12s ease;
-  font-weight: 700;
-  line-height: 1.5;
-}
-.bounty-item:hover {
-  border-color: var(--accent-yellow);
-  background: rgba(234, 179, 8, 0.06);
-}
-.bounty-item.active {
-  border-color: var(--accent-green);
-  background: rgba(34, 197, 94, 0.06);
-  cursor: default;
-}
-.bounty-item-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.bounty-item .bounty-title {
-  color: var(--accent-yellow);
-  font-weight: 900;
-  margin-bottom: 2px;
-  flex: 1;
-}
-.bounty-toggle {
-  color: var(--text-muted);
-  font-size: 10px;
-  cursor: pointer;
-  padding: 2px 8px;
-  border: 1px solid var(--glass-border);
-  border-radius: 3px;
-  margin-left: 8px;
-  flex-shrink: 0;
-  transition: all 0.12s ease;
-}
-.bounty-toggle:hover {
-  color: var(--accent-yellow);
-  border-color: var(--accent-yellow);
-}
-.bounty-detail {
-  margin-top: 4px;
-}
-.bounty-item .bounty-desc {
-  color: var(--text-muted);
-  font-size: 10px;
-}
-.bounty-item .bounty-reward {
-  color: var(--accent-green);
-  font-size: 10px;
-  margin-top: 2px;
-}
-.bounty-actions {
-  display: flex;
-  gap: 6px;
-  padding: 6px 20px 10px;
-}
-.bounty-actions button {
-  flex: 1;
-  padding: 5px 10px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 800;
-  cursor: pointer;
-  border: 1px solid var(--glass-border);
-  background: rgba(26, 26, 46, 0.8);
-  color: var(--text-main);
-  transition: all 0.12s ease;
-}
-.bounty-actions button:hover {
-  border-color: var(--accent-yellow);
-  background: rgba(42, 42, 74, 0.8);
-}
-
 .bounty-overlay {
   position: absolute;
   top: 0;
@@ -1361,7 +1288,7 @@
   z-index: 10;
   display: none;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
 }
 .bounty-overlay.visible {
   display: flex;
@@ -1407,10 +1334,34 @@
   border-radius: 6px;
   font-size: 12px;
   line-height: 1.6;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
 }
 .bounty-overlay-item.active {
   border-color: var(--accent-green);
   background: rgba(34, 197, 94, 0.06);
+}
+.bounty-overlay-item .bounty-accept-btn {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  border: 1px solid var(--accent-yellow);
+  background: rgba(234, 179, 8, 0.1);
+  color: var(--accent-yellow);
+  transition: all 0.12s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.bounty-overlay-item .bounty-accept-btn:hover {
+  background: rgba(234, 179, 8, 0.2);
+}
+.bounty-overlay-item .bounty-info {
+  flex: 1;
+  min-width: 0;
 }
 .bounty-overlay-item .bounty-title {
   color: var(--accent-yellow);
@@ -1425,21 +1376,30 @@
 .bounty-overlay-item .bounty-reward {
   color: var(--accent-green);
   font-size: 11px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
-.bounty-overlay-item .bounty-accept-btn {
-  padding: 4px 12px;
+.bounty-overlay-actions {
+  display: flex;
+  gap: 6px;
+  padding: 10px 16px;
+  border-top: 1px solid rgba(42, 42, 74, 0.6);
+  flex-shrink: 0;
+}
+.bounty-overlay-actions button {
+  flex: 1;
+  padding: 6px 10px;
   border-radius: 4px;
   font-size: 11px;
   font-weight: 800;
   cursor: pointer;
-  border: 1px solid var(--accent-yellow);
-  background: rgba(234, 179, 8, 0.1);
-  color: var(--accent-yellow);
+  border: 1px solid var(--glass-border);
+  background: rgba(26, 26, 46, 0.8);
+  color: var(--text-main);
   transition: all 0.12s ease;
 }
-.bounty-overlay-item .bounty-accept-btn:hover {
-  background: rgba(234, 179, 8, 0.2);
+.bounty-overlay-actions button:hover {
+  border-color: var(--accent-yellow);
+  background: rgba(42, 42, 74, 0.8);
 }
 
 /* ═══════════════════════════════════════════════════════════════════

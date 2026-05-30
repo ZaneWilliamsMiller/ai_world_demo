@@ -137,43 +137,53 @@ async def _close_client() -> None:
     await manager.close_client()
 
 
+def _sync_close_all_clients() -> None:
+    """同步上下文中关闭所有 httpx 客户端的统一入口。
+
+    合并原 _close_client_sync 和 _cleanup 的逻辑，
+    统一处理共享 client 和自定义 client 的关闭。
+    """
+    inst = LLMClientManager._instance
+    if inst is None:
+        return
+
+    all_clients: list[httpx.AsyncClient] = []
+    if inst._client and not inst._client.is_closed:
+        all_clients.append(inst._client)
+    for client in list(inst._custom_clients.values()):
+        if not client.is_closed:
+            all_clients.append(client)
+
+    if not all_clients:
+        inst._client = None
+        inst._custom_clients.clear()
+        return
+
+    async def _close_all():
+        for c in all_clients:
+            try:
+                await c.aclose()
+            except Exception:
+                log.debug("close client failed", exc_info=True)
+
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                pool.submit(lambda: asyncio.run(_close_all())).result(5)
+        else:
+            loop.run_until_complete(_close_all())
+    except Exception:
+        log.debug("_sync_close_all_clients failed", exc_info=True)
+    finally:
+        inst._client = None
+        inst._custom_clients.clear()
+
+
 def _close_client_sync() -> None:
     """同步关闭共享 client（用于 shutdown 线程中调用）。"""
-    try:
-        inst = LLMClientManager._instance
-        if inst is None:
-            return
-        cli = inst._client
-        if cli and not cli.is_closed:
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    import concurrent.futures
-                    with concurrent.futures.ThreadPoolExecutor() as pool:
-                        pool.submit(lambda: asyncio.run(cli.aclose())).result(5)
-                    inst._client = None
-                    for _key, client in list(inst._custom_clients.items()):
-                        if not client.is_closed:
-                            try:
-                                with concurrent.futures.ThreadPoolExecutor() as pool:
-                                    pool.submit(lambda c=client: asyncio.run(c.aclose())).result(5)
-                            except Exception:
-                                log.debug("close custom client failed in sync", exc_info=True)
-                    inst._custom_clients.clear()
-                    return
-            except RuntimeError:
-                pass
-            asyncio.run(cli.aclose())
-        inst._client = None
-        for _key, client in list(inst._custom_clients.items()):
-            if not client.is_closed:
-                try:
-                    asyncio.run(client.aclose())
-                except Exception:
-                    log.debug("close custom client failed", exc_info=True)
-        inst._custom_clients.clear()
-    except Exception:
-        log.debug("close_client_sync failed", exc_info=True)
+    _sync_close_all_clients()
 
 
 async def _get_semaphore() -> asyncio.Semaphore:
@@ -418,118 +428,58 @@ async def chat_completion(
 
     如果提供了 llm_base_url/llm_api_key/llm_model，则使用自定义配置，否则使用全局配置。
     """
-    use_custom = llm_base_url or llm_api_key or llm_model
-
-    if use_custom:
-        cache = get_llm_cache()
-        cb = get_circuit_breaker()
-        sem = await _get_semaphore()
-
-        if settings.llm_cache_enabled:
-            cached = await cache.get(messages, temperature=temperature, model=llm_model or settings.llm_model, max_tokens=max_tokens, response_format=response_format, base_url=llm_base_url or settings.llm_base_url)
-            if cached is not None:
-                return cached
-
-        if not await cb.allow():
-            raise RuntimeError(
-                f"LLM API circuit breaker OPEN (state={cb.state.value}); "
-                "requests blocked to prevent cascading failures"
-            )
-        url = f"{(llm_base_url or settings.llm_base_url).rstrip('/')}/chat/completions"
-        body = _build_request_body(
-            messages, temperature, max_tokens,
-            llm_model or settings.llm_model,
-            response_format=response_format,
-        )
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {llm_api_key or settings.llm_api_key}",
-        }
-
-        manager = await LLMClientManager.get_instance()
-        client = await manager.get_custom_client(
-            llm_base_url or settings.llm_base_url,
-            llm_api_key or settings.llm_api_key,
-        )
-        _start = time.time()
-        max_retries = 2
-        base_delay = getattr(settings, 'llm_retry_base_delay_s', 1.5)
-        last_exc: Exception = RuntimeError("unreachable")
-        async with sem:
-            for attempt in range(max_retries + 1):
-                r = None
-                try:
-                    r = await client.post(url, json=body, headers=headers)
-                    r.raise_for_status()
-                    data = r.json()
-                    choices = data.get("choices") or []
-                    content = ""
-                    if choices:
-                        msg = choices[0].get("message", {})
-                        content = msg.get("content") or ""
-                    content = content or ""
-
-                    if settings.llm_cache_enabled:
-                        await cache.set(messages, content, temperature=temperature, model=llm_model or settings.llm_model, max_tokens=max_tokens, response_format=response_format, base_url=llm_base_url or settings.llm_base_url)
-                    await cb.success()
-
-                    tracker = get_tracker()
-                    latency_ms = (time.time() - _start) * 1000
-                    tracker.record(CallRecord(
-                        timestamp=time.time(), operation="chat_completion_custom", model=llm_model or settings.llm_model,
-                        latency_ms=round(latency_ms, 2), status="success",
-                    ))
-                    return content
-                except Exception as exc:
-                    last_exc = exc
-                    status = getattr(r, "status_code", 0) if r else 0
-                    if status not in RETRYABLE_HTTP_STATUSES or attempt == max_retries:
-                        await cb.failure()
-                        raise
-                    backoff = base_delay * (2 ** attempt) + random.uniform(0, RETRY_BACKOFF_JITTER_MAX)
-                    log.warning("custom LLM retry %d/%d after %.1fs: %s", attempt + 1, max_retries, backoff, exc)
-                    await asyncio.sleep(backoff)
-        raise last_exc
+    use_custom = bool(llm_base_url or llm_api_key or llm_model)
+    base_url = (llm_base_url or settings.llm_base_url) if use_custom else settings.llm_base_url
+    api_key = (llm_api_key or settings.llm_api_key) if use_custom else settings.llm_api_key
+    model = (llm_model or settings.llm_model) if use_custom else settings.llm_model
 
     cache = get_llm_cache()
     cb = get_circuit_breaker()
     sem = await _get_semaphore()
 
-    # ── 1. 检查缓存 ──
     if settings.llm_cache_enabled:
-        cached = await cache.get(messages, temperature=temperature, model=settings.llm_model, max_tokens=max_tokens, response_format=response_format, base_url=settings.llm_base_url)
+        cached = await cache.get(messages, temperature=temperature, model=model,
+                                  max_tokens=max_tokens, response_format=response_format,
+                                  base_url=base_url)
         if cached is not None:
             return cached
 
-    # ── 2. 熔断器检查 ──
     if not await cb.allow():
         raise RuntimeError(
             f"LLM API circuit breaker OPEN (state={cb.state.value}); "
             "requests blocked to prevent cascading failures"
         )
 
-    # ── 3. 限速 + 请求 ──
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    body = _build_request_body(messages, temperature, max_tokens, model,
+                                response_format=response_format)
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}",
+    }
+
+    manager = await LLMClientManager.get_instance()
+    client = await (manager.get_custom_client(base_url, api_key)
+                    if use_custom else manager.get_client())
+
+    max_retries = settings.llm_max_retries
+    base_delay = settings.llm_retry_base_delay_s
+    _start = time.time()
+    operation = "chat_completion_custom" if use_custom else "chat_completion"
+
     async with sem:
-        url = f"{settings.llm_base_url.rstrip('/')}/chat/completions"
-        body = _build_request_body(
-            messages, temperature, max_tokens,
-            settings.llm_model,
-            response_format=response_format,
-        )
-
-        max_retries = settings.llm_max_retries
-        base_delay = settings.llm_retry_base_delay_s
-        _start = time.time()
-
         async def _do_request():
-            client = await _get_client()
-            r = await client.post(url, json=body)
+            r = await client.post(url, json=body, headers=headers)
             r.raise_for_status()
             data = r.json()
-            return await _handle_llm_response(data, cache, cb, messages, temperature=temperature, model=settings.llm_model, max_tokens=max_tokens, response_format=response_format, start_time=_start, operation="chat_completion", base_url=settings.llm_base_url)
+            return await _handle_llm_response(
+                data, cache, cb, messages,
+                temperature=temperature, model=model,
+                max_tokens=max_tokens, response_format=response_format,
+                start_time=_start, operation=operation, base_url=base_url,
+            )
 
-        result = await _execute_with_retry(_do_request, max_retries, base_delay, cb, "LLM")
-        return result
+        return await _execute_with_retry(_do_request, max_retries, base_delay, cb, "LLM")
 
 
 async def stream_chat_completion(
@@ -544,129 +494,87 @@ async def stream_chat_completion(
 
     如果提供了 llm_base_url/llm_api_key/llm_model，则使用自定义配置，否则使用全局配置。
     """
-    use_custom = llm_base_url or llm_api_key or llm_model
+    use_custom = bool(llm_base_url or llm_api_key or llm_model)
+    base_url = (llm_base_url or settings.llm_base_url) if use_custom else settings.llm_base_url
+    api_key = (llm_api_key or settings.llm_api_key) if use_custom else settings.llm_api_key
+    model = (llm_model or settings.llm_model) if use_custom else settings.llm_model
 
-    if use_custom:
-        cb = get_circuit_breaker()
-        sem = await _get_semaphore()
-        _start = time.time()
+    cb = get_circuit_breaker()
+    sem = await _get_semaphore()
+    _start = time.time()
 
-        if not await cb.allow():
-            raise RuntimeError(
-                f"LLM API circuit breaker OPEN (state={cb.state.value}); "
-                "requests blocked to prevent cascading failures"
-            )
-        url = f"{(llm_base_url or settings.llm_base_url).rstrip('/')}/chat/completions"
-        body = _build_request_body(
-            messages, temperature, max_tokens,
-            llm_model or settings.llm_model,
-            stream=True,
+    if not await cb.allow():
+        raise RuntimeError(
+            f"LLM API circuit breaker OPEN (state={cb.state.value}); "
+            "streaming request blocked"
         )
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {llm_api_key or settings.llm_api_key}",
-        }
 
-        manager = await LLMClientManager.get_instance()
-        client = await manager.get_custom_client(
-            llm_base_url or settings.llm_base_url,
-            llm_api_key or settings.llm_api_key,
-        )
-        async with sem, client.stream("POST", url, json=body, headers=headers) as r:
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    body = _build_request_body(messages, temperature, max_tokens, model, stream=True)
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}",
+    }
+
+    manager = await LLMClientManager.get_instance()
+    client = await (manager.get_custom_client(base_url, api_key)
+                    if use_custom else manager.get_client())
+    operation = "stream_custom" if use_custom else "stream_chat_completion"
+
+    async with sem:
+        max_retries = settings.llm_max_retries
+        base_delay = settings.llm_retry_base_delay_s
+
+        for attempt in range(max_retries):
             try:
-                r.raise_for_status()
-                async for line in r.aiter_lines():
-                    piece = _parse_stream_line(line)
-                    if piece:
-                        yield piece
+                async with client.stream("POST", url, json=body, headers=headers) as r:
+                    try:
+                        r.raise_for_status()
+                        async for line in r.aiter_lines():
+                            piece = _parse_stream_line(line)
+                            if piece:
+                                yield piece
+                    except Exception as stream_err:
+                        log.error(f"Stream processing error (attempt {attempt + 1}): {stream_err}")
+                        raise
+
                 await cb.success()
                 tracker = get_tracker()
                 latency_ms = (time.time() - _start) * 1000
                 tracker.record(CallRecord(
-                    timestamp=time.time(), operation="stream_custom", model=llm_model or settings.llm_model,
+                    timestamp=time.time(), operation=operation, model=model,
                     latency_ms=round(latency_ms, 2), status="success",
                 ))
-            except Exception as stream_err:
+                return
+
+            except httpx.HTTPStatusError as e:
+                status = e.response.status_code
+                if status in RETRYABLE_HTTP_STATUSES and attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt) + random.uniform(0, RETRY_JITTER_MAX)
+                    log.warning(
+                        f"LLM Stream {status} error (attempt {attempt + 1}/{max_retries}), "
+                        f"retrying in {delay:.1f}s"
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+
                 await cb.failure()
-                log.error(f"Custom config stream error: {stream_err}")
+                log.error(f"LLM Stream API Error: {e.response.text[:512]}")
                 raise
-        return
 
-    else:
-        cb = get_circuit_breaker()
-        sem = await _get_semaphore()
-        _start = time.time()
+            except Exception as e:
+                if _is_retryable_error(e) and attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt) + random.uniform(0, RETRY_BACKOFF_JITTER_MAX)
+                    log.warning(
+                        f"LLM stream failed (attempt {attempt + 1}/{max_retries}), "
+                        f"retrying in {delay:.1f}s: {e}"
+                    )
+                    await asyncio.sleep(delay)
+                    continue
 
-        if not await cb.allow():
-            raise RuntimeError(
-                f"LLM API circuit breaker OPEN (state={cb.state.value}); "
-                "streaming request blocked"
-            )
-
-        async with sem:
-            url = f"{settings.llm_base_url.rstrip('/')}/chat/completions"
-            body = _build_request_body(
-                messages, temperature, max_tokens,
-                settings.llm_model,
-                stream=True,
-            )
-
-            max_retries = settings.llm_max_retries
-            base_delay = settings.llm_retry_base_delay_s
-
-            for attempt in range(max_retries):
-                try:
-                    client = await _get_client()
-                    async with client.stream("POST", url, json=body) as r:
-                        try:
-                            r.raise_for_status()
-                            async for line in r.aiter_lines():
-                                piece = _parse_stream_line(line)
-                                if piece:
-                                    yield piece
-                        except Exception as stream_err:
-                            log.error(f"Stream processing error (attempt {attempt + 1}): {stream_err}")
-                            raise
-
-                    await cb.success()
-                    tracker = get_tracker()
-                    latency_ms = (time.time() - _start) * 1000
-                    tracker.record(CallRecord(
-                        timestamp=time.time(), operation="stream_chat_completion", model=settings.llm_model,
-                        latency_ms=round(latency_ms, 2), status="success",
-                    ))
-                    return
-
-                except httpx.HTTPStatusError as e:
-                    status = e.response.status_code
-                    is_retryable_status = status in RETRYABLE_HTTP_STATUSES
-
-                    if is_retryable_status and attempt < max_retries - 1:
-                        delay = base_delay * (2 ** attempt) + random.uniform(0, RETRY_JITTER_MAX)
-                        log.warning(
-                            f"LLM Stream {status} error (attempt {attempt + 1}/{max_retries}), "
-                            f"retrying in {delay:.1f}s"
-                        )
-                        await asyncio.sleep(delay)
-                        continue
-
-                    await cb.failure()
-                    log.error(f"LLM Stream API Error: {e.response.text[:512]}")
-                    raise
-
-                except Exception as e:
-                    if _is_retryable_error(e) and attempt < max_retries - 1:
-                        delay = base_delay * (2 ** attempt) + random.uniform(0, RETRY_BACKOFF_JITTER_MAX)
-                        log.warning(
-                            f"LLM stream failed (attempt {attempt + 1}/{max_retries}), "
-                            f"retrying in {delay:.1f}s: {e}"
-                        )
-                        await asyncio.sleep(delay)
-                        continue
-
-                    await cb.failure()
-                    log.error(f"LLM Stream Request Failed: {e}")
-                    raise
+                await cb.failure()
+                log.error(f"LLM Stream Request Failed: {e}")
+                raise
 
 
 def _extract_json(text: str) -> str | None:
@@ -736,35 +644,8 @@ def _cleanup() -> None:
     注意：如果进程是在事件循环运行中退出（如 uvicorn 正常关闭），
     _close_client() 已通过 FastAPI shutdown 事件调用，此处仅为
     非 FastAPI 上下文（如测试、脚本）的兜底。
-    在运行中的事件循环内调用 run_until_complete 会抛 RuntimeError，
-    此处直接同步关闭 client 即可。
     """
-    import asyncio
-    if LLMClientManager._instance is None:
-        return
-    mgr = LLMClientManager._instance
-    if mgr._client and not mgr._client.is_closed:
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as pool:
-                    pool.submit(lambda: asyncio.run(mgr._client.aclose())).result(5)
-            else:
-                loop.run_until_complete(mgr._client.aclose())
-        except Exception:
-            log.debug("_cleanup close client failed", exc_info=True)
-        finally:
-            mgr._client = None
-    for _key, client in list(mgr._custom_clients.items()):
-        if not client.is_closed:
-            try:
-                loop = asyncio.get_event_loop()
-                if not loop.is_running():
-                    loop.run_until_complete(client.aclose())
-            except Exception:
-                log.debug("_cleanup close custom client failed", exc_info=True)
-    mgr._custom_clients.clear()
+    _sync_close_all_clients()
 
 
 atexit.register(_cleanup)

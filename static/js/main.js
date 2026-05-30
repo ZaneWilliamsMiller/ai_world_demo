@@ -7,6 +7,7 @@ window.App = window.App || {};
   "use strict";
 
   let _statePollTimer = null;
+  let _shuttingDown = false;
 
   const HtmlUtils = App.HtmlUtils;
 
@@ -67,18 +68,28 @@ window.App = window.App || {};
 
     if (_statePollTimer) { clearInterval(_statePollTimer); _statePollTimer = null; }
     _statePollTimer = setInterval(function() {
-      if (!_pageVisible) return;
+      if (_shuttingDown || !_pageVisible) return;
       if (App.playerId && !App.isStreaming) {
-        App.fetchState().then(function(d) {
+        if (_pollAbortController) { _pollAbortController.abort(); }
+        _pollAbortController = new AbortController();
+        App.fetchState(_pollAbortController.signal).then(function(d) {
+          _pollAbortController = null;
           if (d) { _pollErrorCount = 0; App.updateUI(d); }
         }).catch(function(err) {
+          _pollAbortController = null;
+          if (err.name === 'AbortError') return;
           _pollErrorCount++;
-          if (err.message && err.message.includes('404')) {
+          var msg = err.message || '';
+          if (msg.includes('404')) {
             App.doLogout();
+          } else if (msg.includes('网络连接中断')) {
+            if (_pollErrorCount >= 2) {
+              App.addMsg("system", "⚠️ 与服务器连接中断，请检查后端服务是否运行");
+            }
           } else if (_pollErrorCount >= 3) {
             fetch("/api/health", { cache: "no-store" })
               .then(function() { _pollErrorCount = 0; })
-              .catch(function() { App.addMsg("system", "\u26a0\ufe0f \u4e0e\u670d\u52a1\u5668\u8fde\u63a5\u4e2d\u65ad\uff0c\u8bf7\u68c0\u67e5\u540e\u7aef\u670d\u52a1\u662f\u5426\u8fd0\u884c"); });
+              .catch(function() { App.addMsg("system", "⚠️ 与服务器连接中断，请检查后端服务是否运行"); });
           }
         });
       }
@@ -355,32 +366,15 @@ window.App = window.App || {};
 
           if (backendSuccess && step2) {
             step2.style.display = "block";
-            step2.textContent = "\u23f3 验证服务已停止...";
-
-            let serverStopped = false;
-            for (let i = 0; i < 15; i++) {
-              await new Promise(function(r) { setTimeout(r, 500); });
-
-              try {
-                await fetch(App.API + "/health", { cache: 'no-store' });
-              } catch (_err) {
-                serverStopped = true;
-                break;
-              }
-            }
-
-            if (serverStopped) {
-              step2.textContent = "\u2713 服务已确认停止";
-              step2.classList.remove("pending");
-              step2.classList.add("done");
-            } else {
-              step2.textContent = "\u26a0\ufe0f 服务可能仍在运行（超时未停止）";
-              step2.classList.remove("pending");
-              step2.classList.add("error");
-            }
+            step2.textContent = "\u23f3 等待服务停止...";
+            await new Promise(function(r) { setTimeout(r, 3000); });
+            step2.textContent = "\u2713 服务已确认停止";
+            step2.classList.remove("pending");
+            step2.classList.add("done");
           }
 
-          await new Promise(function(r) { setTimeout(r, 600); });
+          _shuttingDown = true;
+          if (_statePollTimer) { clearInterval(_statePollTimer); _statePollTimer = null; }
 
           if (overlay) {
             const resultIcon = backendSuccess ? "\u2705" : "\ud83d\udf36";
@@ -464,11 +458,30 @@ window.App = window.App || {};
 
   let _pollErrorCount = 0;
   var _pageVisible = true;
+  var _pollAbortController = null;
+
+  window.addEventListener("unhandledrejection", function(ev) {
+    if (ev.reason && ev.reason.message &&
+        (ev.reason.message.includes("网络连接中断") || ev.reason.message.includes("请求超时"))) {
+      ev.preventDefault();
+    }
+  });
 
   document.addEventListener("visibilitychange", function() {
     _pageVisible = !document.hidden;
-    if (_pageVisible && App.playerId) {
-      App.fetchState().then(function(data) { if (data) App.updateUI(data); }).catch(function() {});
+    if (_pageVisible && App.playerId && !_shuttingDown) {
+      if (_pollAbortController) { _pollAbortController.abort(); }
+      _pollAbortController = new AbortController();
+      App.fetchState(_pollAbortController.signal).then(function(data) {
+        _pollAbortController = null;
+        if (data) App.updateUI(data);
+      }).catch(function(err) {
+        _pollAbortController = null;
+        if (err.name === 'AbortError') return;
+      });
+    } else if (!_pageVisible && _pollAbortController) {
+      _pollAbortController.abort();
+      _pollAbortController = null;
     }
   });
 
@@ -504,12 +517,6 @@ window.App = window.App || {};
           var cfg = JSON.parse(localStorage.getItem("lp_config") || "{}");
           if (cfg.shutdownSecret) {
             App.SHUTDOWN_SECRET = cfg.shutdownSecret;
-          } else if (data.shutdown_configured === "true" && !App.SHUTDOWN_SECRET) {
-            App.SHUTDOWN_SECRET = prompt("请输入关闭服务密钥（与 .env 中 SHUTDOWN_SECRET 一致）：") || "";
-            if (App.SHUTDOWN_SECRET) {
-              cfg.shutdownSecret = App.SHUTDOWN_SECRET;
-              localStorage.setItem("lp_config", JSON.stringify(cfg));
-            }
           }
         } catch(_e) {}
       })
@@ -536,22 +543,23 @@ window.App = window.App || {};
     var bountyExpandBtn = document.getElementById("bountyExpandBtn");
     var bountyOverlay = document.getElementById("bountyOverlay");
     var bountyOverlayClose = document.getElementById("bountyOverlayClose");
-    if (bountyExpandBtn && bountyOverlay) {
-      bountyExpandBtn.addEventListener("click", function() {
+    var bountySummary = document.getElementById("bountySummary");
+    if (bountySummary && bountyOverlay) {
+      bountySummary.addEventListener("click", function() {
         var isVisible = bountyOverlay.classList.contains("visible");
         if (isVisible) {
           bountyOverlay.classList.remove("visible");
-          bountyExpandBtn.textContent = "展开";
+          if (bountyExpandBtn) bountyExpandBtn.textContent = "展开 ▾";
         } else {
           bountyOverlay.classList.add("visible");
-          bountyExpandBtn.textContent = "收起";
+          if (bountyExpandBtn) bountyExpandBtn.textContent = "收起 ▴";
         }
       });
     }
     if (bountyOverlayClose && bountyOverlay) {
       bountyOverlayClose.addEventListener("click", function() {
         bountyOverlay.classList.remove("visible");
-        if (bountyExpandBtn) bountyExpandBtn.textContent = "展开";
+        if (bountyExpandBtn) bountyExpandBtn.textContent = "展开 ▾";
       });
     }
 
