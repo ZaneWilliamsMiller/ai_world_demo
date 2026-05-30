@@ -1,0 +1,21 @@
+{
+  "properties": {
+    "status": {
+      "default": "shutting_down",
+      "title": "Status",
+      "type": "string"
+    },
+    "message": {
+      "default": "",
+      "title": "Message",
+      "type": "string"
+    },
+    "hint": {
+      "default": "",
+      "title": "Hint",
+      "type": "string"
+    }
+  },
+  "title": "ShutdownResponse",
+  "type": "object"
+}
