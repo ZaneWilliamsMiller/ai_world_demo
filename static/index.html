@@ -78,11 +78,6 @@
     <h1>🏮 活纸 · 江湖行纪</h1>
     <span class="subtitle" id="topbarInfo"></span>
     <span class="spacer"></span>
-    <span id="apiModeIndicator" class="api-mode-badge backend">服务器模式</span>
-    <select id="apiModeQuickToggle" class="mode-select" title="切换 API 模式">
-      <option value="backend">服务器</option>
-      <option value="standalone">独立</option>
-    </select>
     <button onclick="App.toggleConfigPanel()">⚙</button>
     <button onclick="App.doRest()">🛌 休息</button>
     <button onclick="App.doSaveFlow()">💾 存档</button>
@@ -192,14 +187,6 @@
 <div class="config-overlay" id="configOverlay">
   <div class="config-panel" id="configPanel" style="display:none;">
     <h3>⚙ API 配置</h3>
-
-    <div class="cfg-group">
-      <label>运行模式</label>
-      <select id="cfgApiMode">
-        <option value="backend">服务器模式（连接后端 API）</option>
-        <option value="standalone">独立模式（直接 LLM API）</option>
-      </select>
-    </div>
 
     <div class="cfg-group">
       <label>后端 API 地址</label>

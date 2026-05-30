@@ -20,7 +20,6 @@ window.App = window.App || {};
     topbar: null,
     mainUI: null,
     introMsg: null,
-    apiModeIndicator: null,
     confirmOverlay: null,
     confirmTitle: null,
     confirmMessage: null,
@@ -39,7 +38,6 @@ window.App = window.App || {};
       this.topbar = document.getElementById("topbar");
       this.mainUI = document.getElementById("mainUI");
       this.introMsg = document.getElementById("introMsg");
-      this.apiModeIndicator = document.getElementById("apiModeIndicator");
       this.confirmOverlay = document.getElementById("confirmOverlay");
       this.confirmTitle = document.getElementById("confirmTitle");
       this.confirmMessage = document.getElementById("confirmMessage");
@@ -71,12 +69,10 @@ window.App = window.App || {};
   };
 
   App.fillConfigValues = function() {
-    const modeSelect = document.getElementById("cfgApiMode");
     const backendUrl = document.getElementById("cfgBackendUrl");
     const llmUrl = document.getElementById("cfgLlmUrl");
     const llmKey = document.getElementById("cfgLlmKey");
     const llmModel = document.getElementById("cfgLlmModel");
-    if (modeSelect) modeSelect.value = App.apiMode;
     if (backendUrl) backendUrl.value = App.BACKEND_URL;
     if (llmUrl) llmUrl.value = App.LLM_API_URL;
     if (llmKey) llmKey.value = App.LLM_API_KEY;
@@ -84,22 +80,15 @@ window.App = window.App || {};
   };
 
   App.applyConfig = function() {
-    const modeSelect = document.getElementById("cfgApiMode");
     const backendUrl = document.getElementById("cfgBackendUrl");
     const llmUrl = document.getElementById("cfgLlmUrl");
     const llmKey = document.getElementById("cfgLlmKey");
     const llmModel = document.getElementById("cfgLlmModel");
-    if (modeSelect) App.apiMode = modeSelect.value;
     if (backendUrl) App.BACKEND_URL = backendUrl.value.trim();
     if (llmUrl) App.LLM_API_URL = llmUrl.value.trim();
     if (llmKey) App.LLM_API_KEY = llmKey.value.trim();
     if (llmModel) App.LLM_MODEL = llmModel.value.trim();
     App.saveConfig();
-    const modeIndicator = DOM.apiModeIndicator || document.getElementById("apiModeIndicator");
-    if (modeIndicator) {
-      modeIndicator.textContent = App.apiMode === "backend" ? "后端模式" : "独立模式";
-      modeIndicator.className = "api-mode-badge " + App.apiMode;
-    }
     App.toggleConfigPanel();
   };
 
@@ -616,14 +605,14 @@ window.App = window.App || {};
 
   document.addEventListener("visibilitychange", function() {
     _pageVisible = !document.hidden;
-    if (_pageVisible && App.playerId && App.apiMode === "backend") {
+    if (_pageVisible && App.playerId) {
       App.fetchState().then(function(data) { if (data) App.updateUI(data); }).catch(function() {});
     }
   });
 
   _statePollTimer = setInterval(function() {
     if (!_pageVisible) return;
-    if (App.playerId && !App.isStreaming && App.apiMode === "backend") {
+    if (App.playerId && !App.isStreaming) {
       App.fetchState().then(function(data) {
         if (data) {
           _pollErrorCount = 0;
@@ -657,16 +646,6 @@ window.App = window.App || {};
       })
       .catch(function() {});
 
-    const modeIndicator = DOM.apiModeIndicator;
-    if (modeIndicator) {
-      modeIndicator.textContent = App.apiMode === "backend" ? "后端模式" : "独立模式";
-    }
-    const modeSelect = document.getElementById("apiModeQuickToggle");
-    if (modeSelect) {
-      modeSelect.addEventListener("change", function() {
-        App.setApiMode(modeSelect.value);
-      });
-    }
     const sel = DOM.npcSelect;
     if (sel) {
       sel.addEventListener("change", function() {

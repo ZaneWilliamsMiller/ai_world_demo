@@ -93,22 +93,14 @@ window.App = window.App || {};
   App.backendGet = backendGet;
 
   App.createPlayer = async function(name, gender, permadeath) {
-    if (App.apiMode === "backend") {
-      const pid = "web_" + Date.now();
-      const data = await backendPost("/api/hello", {
-        player_id: pid,
-        display_name: name,
-        gender: gender,
-        permadeath: permadeath
-      });
-      return { data: data, pid: pid };
-    } else {
-      const pid = "standalone_" + Date.now();
-      return {
-        data: { player_id: pid, display_name: name, intro: "独立模式 — 仅 LLM 对话" },
-        pid: pid
-      };
-    }
+    const pid = "web_" + Date.now();
+    const data = await backendPost("/api/hello", {
+      player_id: pid,
+      display_name: name,
+      gender: gender,
+      permadeath: permadeath
+    });
+    return { data: data, pid: pid };
   };
 
   App.loadPlayer = async function(playerId) {
@@ -116,12 +108,10 @@ window.App = window.App || {};
   };
 
   App.fetchSaves = async function() {
-    if (App.apiMode !== "backend") return [];
     return (await backendGet("/api/saves")).saves || [];
   };
 
   App.doMove = async function(tx, ty) {
-    if (App.apiMode !== "backend") return null;
     App.setLoading(true, "行走中...");
     try {
       return await backendPost("/api/move", {
@@ -135,59 +125,47 @@ window.App = window.App || {};
   };
 
   App.fetchState = async function() {
-    if (!App.playerId || App.apiMode !== "backend") return null;
+    if (!App.playerId) return null;
     return await backendGet("/api/state/" + App.playerId);
   };
 
   App.doSave = async function() {
-    if (App.apiMode !== "backend") return { ok: true };
     return await backendPost("/api/save", { player_id: App.playerId });
   };
 
   App.rest = async function() {
-    if (App.apiMode !== "backend") return null;
     return await backendPost("/api/rest", { player_id: App.playerId });
   };
 
   App.useItem = async function(itemName) {
-    if (App.apiMode !== "backend") return null;
     return await backendPost("/api/item/use", { player_id: App.playerId, item: itemName });
   };
 
   App.finale = async function() {
-    if (App.apiMode !== "backend") return null;
     return await backendPost("/api/finale", { player_id: App.playerId });
   };
 
   App.bountyRefresh = async function() {
-    if (App.apiMode !== "backend") return null;
     return await backendPost("/api/bounty/refresh", { player_id: App.playerId });
   };
 
   App.bountyAccept = async function(bountyId) {
-    if (App.apiMode !== "backend") return null;
     return await backendPost("/api/bounty/accept", { player_id: App.playerId, bounty_id: bountyId });
   };
 
   App.bountyCheck = async function() {
-    if (App.apiMode !== "backend") return null;
     return await backendPost("/api/bounty/check", { player_id: App.playerId });
   };
 
   App.bountyComplete = async function() {
-    if (App.apiMode !== "backend") return null;
     return await backendPost("/api/bounty/complete", { player_id: App.playerId });
   };
 
   App.bountyAbandon = async function() {
-    if (App.apiMode !== "backend") return null;
     return await backendPost("/api/bounty/abandon", { player_id: App.playerId });
   };
 
   App.talkStream = async function(npcId, message) {
-    if (App.apiMode !== "backend") {
-      throw new Error("流式对话仅支持服务器模式");
-    }
     var requestBody = {
       player_id: App.playerId,
       npc_id: npcId,
@@ -245,7 +223,7 @@ window.App = window.App || {};
 
   App.testLLM = async function() {
     try {
-      if (!App.LLM_API_URL && App.apiMode === "standalone") {
+      if (!App.LLM_API_URL) {
         return { ok: false, detail: "请先在配置面板中填写 LLM API 地址" };
       }
       const data = await llmChat([{ role: "user", content: "你好" }], { maxTokens: 20 });

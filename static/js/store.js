@@ -26,17 +26,8 @@ window.App = window.App || {};
   App.LLM_API_KEY = "";
   App.LLM_MODEL = "";
 
-  // 当前模式: "backend" | "standalone"
-  App.apiMode = "backend";
-
-  // 便捷属性：当前 API 基地址（同源部署，使用相对路径）
   Object.defineProperty(App, "API", {
-    get: function() {
-      if (App.apiMode === "backend") {
-        return "/api";
-      }
-      return App.LLM_API_URL;
-    }
+    get: function() { return "/api"; }
   });
 
   // ── 玩家身份 ──
@@ -58,17 +49,6 @@ window.App = window.App || {};
   // ── Shutdown 认证密钥 ──
   App.SHUTDOWN_SECRET = "";
 
-  // ── API 模式切换 ──
-  App.setApiMode = function(mode) {
-    App.apiMode = mode;
-    const indicator = document.getElementById("apiModeIndicator");
-    if (indicator) {
-      indicator.textContent = mode === "backend" ? "后端模式" : "独立模式";
-      indicator.className = "api-mode-badge " + mode;
-    }
-    console.log("[App] API mode →", mode);
-  };
-
   App.getState = function() {
     return {
       playerId: App.playerId,
@@ -77,8 +57,7 @@ window.App = window.App || {};
       currentMapId: App.currentMapId,
       npcsHere: App.npcsHere,
       selectedNpcId: App.selectedNpcId,
-      isStreaming: App.isStreaming,
-      apiMode: App.apiMode
+      isStreaming: App.isStreaming
     };
   };
 
@@ -100,7 +79,6 @@ window.App = window.App || {};
   App.saveConfig = function() {
     try {
       var cfg = {
-        apiMode: App.apiMode,
         backendUrl: App.BACKEND_URL,
         llmModel: App.LLM_MODEL
       };
@@ -118,8 +96,6 @@ window.App = window.App || {};
   App.loadConfig = function() {
     try {
       const cfg = JSON.parse(localStorage.getItem("lp_config") || "{}");
-      if (cfg.apiMode && typeof App.setApiMode === "function") App.setApiMode(cfg.apiMode);
-      else if (cfg.apiMode) App.apiMode = cfg.apiMode;
       if (cfg.backendUrl) App.BACKEND_URL = cfg.backendUrl;
 
       // ════════════════════════════════════
@@ -133,7 +109,6 @@ window.App = window.App || {};
         );
 
         const safeCfg = {
-          apiMode: cfg.apiMode || App.apiMode,
           backendUrl: cfg.backendUrl || App.BACKEND_URL,
           llmModel: cfg.llmModel || ""
         };

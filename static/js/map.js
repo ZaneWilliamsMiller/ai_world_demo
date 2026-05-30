@@ -65,7 +65,7 @@ window.App = window.App || {};
   // ═══════════════════════════════════════════
   //  摄像机状态 - 优化平滑度
   // ═══════════════════════════════════════════
-  var cam = { x: 0, y: 0, targetX: 0, targetY: 0, lerp: 0.35, snap: false };
+  var cam = { x: 0, y: 0, targetX: 0, targetY: 0, lerp: 0.5, snap: false };
   var mapState = { rows: [], cols: 0, id: "" };
 
   // ═══════════════════════════════════════════
@@ -219,8 +219,12 @@ window.App = window.App || {};
       cam.y = cam.targetY;
       cam.snap = false;
     } else {
-      cam.x += (cam.targetX - cam.x) * cam.lerp;
-      cam.y += (cam.targetY - cam.y) * cam.lerp;
+      var dx = cam.targetX - cam.x;
+      var dy = cam.targetY - cam.y;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      var factor = dist > 3 ? 0.8 : dist > 1.5 ? 0.6 : cam.lerp;
+      cam.x += dx * factor;
+      cam.y += dy * factor;
     }
   }
 
@@ -641,10 +645,7 @@ window.App = window.App || {};
   App.moveTo = async function(tx, ty) {
     if (App._isMoving) return;
     App._isMoving = true;
-    
-    _hoverX = -1;
-    _hoverY = -1;
-    
+
     clearPath();
 
     try {
@@ -672,8 +673,6 @@ window.App = window.App || {};
 
         _animIdx = i;
         updateCameraTarget(step[0], step[1]);
-        cam.x = cam.targetX;
-        cam.y = cam.targetY;
         markDirty();
 
         await new Promise(function(r) { setTimeout(r, 50); });
