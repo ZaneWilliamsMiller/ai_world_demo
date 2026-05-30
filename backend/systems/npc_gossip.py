@@ -16,16 +16,14 @@
 """
 from __future__ import annotations
 
+import logging
 import random
 import time
-import logging
-from typing import Any
 
+from backend import memory as mem
+from backend.agents.game_state import get_or_init_mind
 from backend.data.npcs_data import NPCS
 from backend.data.relationships import NPC_RELATIONSHIPS
-from backend.data.maps_data import MAPS
-from backend.game_state import get_or_init_mind
-from backend import memory as mem
 from backend.systems.time_weather import shichen_name
 
 log = logging.getLogger("npc_gossip")
@@ -52,20 +50,29 @@ ATTITUDE_MULT = {
 }
 
 # ─── 内部状态 ──────────────────────────────────────────
-_last_gossip: dict[str, float] = {}  # "npc_a+npc_b" → epoch 秒
+_last_gossip: dict[str, float] = {}
+_GOSSIP_CACHE_MAX = 256
 
 
-def _gossip_key(npc_a: str, npc_b: str) -> str:
+def _prune_gossip_cache() -> None:
+    if len(_last_gossip) <= _GOSSIP_CACHE_MAX:
+        return
+    sorted_keys = sorted(_last_gossip, key=lambda k: _last_gossip.get(k, 0.0), reverse=True)
+    for k in sorted_keys[_GOSSIP_CACHE_MAX:]:
+        del _last_gossip[k]
+
+
+def _gossip_key(player_id: str, npc_a: str, npc_b: str) -> str:
     """生成两个 NPC 间的唯一闲聊键（字典序，保证 a+b == b+a）。"""
     pair = sorted([npc_a, npc_b])
-    return f"{pair[0]}+{pair[1]}"
+    return f"{player_id}:{pair[0]}+{pair[1]}"
 
 
 def _get_attitude(npc_id: str, target_id: str) -> tuple[str, float]:
     """查找 npc_id 对 target_id 的态度和概率倍率。"""
     rels = NPC_RELATIONSHIPS.get(npc_id, [])
     for r in rels:
-        if r["target"] == target_id:
+        if r.get("target") == target_id:
             att = r.get("attitude", "互不招惹")
             mult = ATTITUDE_MULT.get(att, 0.5)
             return att, mult
@@ -158,7 +165,6 @@ def maybe_npc_gossip(p, *, ticks: int = 1) -> int:
     同一地图格子上的有关系的 NPC 小概率闲聊，
     闲聊内容基于各自最近的观察记忆 + 关系数据。
     """
-    from backend.models.player import PlayerState
     from backend.systems.core import init_npc_positions
 
     if ticks <= 0:
@@ -177,6 +183,7 @@ def maybe_npc_gossip(p, *, ticks: int = 1) -> int:
 
     gossip_count = 0
     now = time.time()
+    _prune_gossip_cache()
 
     for cell, nids in cell_npcs.items():
         if len(nids) < 2:
@@ -200,13 +207,13 @@ def maybe_npc_gossip(p, *, ticks: int = 1) -> int:
                 # 必须有至少一方有关系记录
                 rels_a = NPC_RELATIONSHIPS.get(npc_a, [])
                 rels_b = NPC_RELATIONSHIPS.get(npc_b, [])
-                has_rel = any(r["target"] == npc_b for r in rels_a) or \
-                          any(r["target"] == npc_a for r in rels_b)
+                has_rel = any(r.get("target") == npc_b for r in rels_a) or \
+                          any(r.get("target") == npc_a for r in rels_b)
                 if not has_rel:
                     continue
 
                 # 冷却检查
-                gk = _gossip_key(npc_a, npc_b)
+                gk = _gossip_key(p.player_id, npc_a, npc_b)
                 last = _last_gossip.get(gk, 0)
                 if (now - last) < GOSSIP_COOLDOWN_S:
                     continue
@@ -216,7 +223,7 @@ def maybe_npc_gossip(p, *, ticks: int = 1) -> int:
                 _, mult_b = _get_attitude(npc_b, npc_a)
                 best_mult = max(mult_a, mult_b)
 
-                prob = GOSSIP_PROB_BASE * best_mult * ticks
+                prob = min(1.0, GOSSIP_PROB_BASE * best_mult * ticks)
                 if random.random() > prob:
                     continue
 

@@ -1,0 +1,26 @@
+{
+  "properties": {
+    "status": {
+      "default": "ok",
+      "title": "Status",
+      "type": "string"
+    },
+    "llm_configured": {
+      "default": "false",
+      "title": "Llm Configured",
+      "type": "string"
+    },
+    "shutdown_configured": {
+      "default": "false",
+      "title": "Shutdown Configured",
+      "type": "string"
+    },
+    "world": {
+      "default": "",
+      "title": "World",
+      "type": "string"
+    }
+  },
+  "title": "HealthResponse",
+  "type": "object"
+}

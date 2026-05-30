@@ -1,0 +1,51 @@
+{
+  "$defs": {
+    "JournalNpcHistory": {
+      "properties": {
+        "npc_id": {
+          "title": "Npc Id",
+          "type": "string"
+        },
+        "npc_name": {
+          "title": "Npc Name",
+          "type": "string"
+        },
+        "turns": {
+          "items": {},
+          "title": "Turns",
+          "type": "array"
+        }
+      },
+      "required": [
+        "npc_id",
+        "npc_name"
+      ],
+      "title": "JournalNpcHistory",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "history": {
+      "items": {
+        "$ref": "#/$defs/JournalNpcHistory"
+      },
+      "title": "History",
+      "type": "array"
+    },
+    "events": {
+      "items": {},
+      "title": "Events",
+      "type": "array"
+    },
+    "rumors": {
+      "items": {},
+      "title": "Rumors",
+      "type": "array"
+    }
+  },
+  "required": [
+    "history"
+  ],
+  "title": "JournalResponse",
+  "type": "object"
+}

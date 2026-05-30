@@ -1,0 +1,21 @@
+{
+  "additionalProperties": true,
+  "properties": {
+    "parse_success_rate": {
+      "default": 0.0,
+      "title": "Parse Success Rate",
+      "type": "number"
+    },
+    "common_violations": {
+      "items": {},
+      "title": "Common Violations",
+      "type": "array"
+    },
+    "by_npc": {
+      "title": "By Npc",
+      "type": "object"
+    }
+  },
+  "title": "AdminEvalResponse",
+  "type": "object"
+}

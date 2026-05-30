@@ -1,0 +1,11 @@
+{
+  "properties": {
+    "saves": {
+      "items": {},
+      "title": "Saves",
+      "type": "array"
+    }
+  },
+  "title": "SavesListResponse",
+  "type": "object"
+}

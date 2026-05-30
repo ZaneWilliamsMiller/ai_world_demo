@@ -1,0 +1,55 @@
+{
+  "properties": {
+    "test_name": {
+      "title": "Test Name",
+      "type": "string"
+    },
+    "success": {
+      "title": "Success",
+      "type": "boolean"
+    },
+    "output": {
+      "title": "Output",
+      "type": "string"
+    },
+    "exit_code": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Exit Code"
+    },
+    "elapsed": {
+      "default": 0.0,
+      "title": "Elapsed",
+      "type": "number"
+    },
+    "cases_passed": {
+      "default": 0,
+      "title": "Cases Passed",
+      "type": "integer"
+    },
+    "cases_failed": {
+      "default": 0,
+      "title": "Cases Failed",
+      "type": "integer"
+    },
+    "cases_skipped": {
+      "default": 0,
+      "title": "Cases Skipped",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "test_name",
+    "success",
+    "output"
+  ],
+  "title": "TestResultResponse",
+  "type": "object"
+}

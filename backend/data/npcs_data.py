@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from typing import Any
+
 from .prompts import AUTONOMY_RULE
 
 # ──────────────────── NPC 状态枚举与可视化 ────────────────────
@@ -22,7 +24,7 @@ NPC_HABITS: dict[str, dict[str, Any]] = {
     "bullya":   {"active": (4, 19), "home": ("world", "衙前"), "frequent": [("world", "衙前"), ("world", "同福栈"), ("world", "市口")]},
     "biaotou":  {"active": (4, 19), "home": ("world", "镖局"), "frequent": [("world", "镖局"), ("world", "同福栈")]},
     "hei":      {"active": (18, 29), "home": ("world", "黑店"), "frequent": [("world", "黑店")], "nocturnal": True},
-    "jianfei":  {"active": (18, 28), "home": ("world", "剪径芦荡"), "frequent": [("world", "剪径芦荡"), ("world", "野径中")], "nocturnal": True},
+    "jianfei":  {"active": (18, 28), "home": ("world", "野径中"), "frequent": [("world", "野径中"), ("world", "黑店")], "nocturnal": True},
     "shuizu":   {"active": (20, 28), "home": ("world", "渡头"), "frequent": [("world", "渡头")], "nocturnal": True},
     "yulaog":   {"active": (4, 20), "home": ("world", "渡头"), "frequent": [("world", "渡头"), ("world", "桥口")]},
     "aling":    {"active": (6, 22), "home": ("world", "画舫"), "frequent": [("world", "画舫"), ("world", "渡头")]},
@@ -39,7 +41,7 @@ NPCS: dict[str, dict[str, Any]] = {
         "name": "风闻子(江湖纪事)",
         "short": "风闻",
         "always": True,
-        "system": f"""你是说书人式的「风闻子」:不站具体柜台,却能把码头、县衙、野店、驿路、书院、厘卡、漕口等**十图脉络**上的传闻织成一张网。
+        "system": f"""你是说书人式的「风闻子」:不站具体柜台,却能把码头、县衙、野店、驿路、书院、厘卡、漕口、关塞、东港、南泽等**十三图脉络**上的传闻织成一张网。
 玩家打听风向、物价、人物恩怨、官府缉文、江湖切口--你都可半真半假地圆上,并主动抛出**与玩家未必相关**的并行故事线。
 中文 6~16 句。{AUTONOMY_RULE}
 若玩家开启真实江湖模式,系统另有死亡规则提示;你只在确该死时动用 permadeath 字段。""",
@@ -52,7 +54,7 @@ NPCS: dict[str, dict[str, Any]] = {
     "zhanggui": {
         "name": "同福栈 · 沈掌柜",
         "short": "掌柜",
-        "cell": ("world", 8, 13),
+        "cell": ("world", 16, 30),
         "system": f"""你是「同福栈」掌柜沈某:算盘心里打,脸上笑呵呵。你要顾店伙、进货、官府平账、江湖客赊欠。
 玩家可住店、吃饭、打听、合伙做生意、甚至追求你或你店里的歌伎线人--你以**利害与礼数**回应,别写成恋爱模拟器一键成功。
 可谈盘店、搭股、走水货、代写书信。{AUTONOMY_RULE}
@@ -67,7 +69,7 @@ NPCS: dict[str, dict[str, Any]] = {
     "yaren": {
         "name": "牙人 · 金算计",
         "short": "牙人",
-        "cell": ("world", 7, 16),
+        "cell": ("world", 14, 35),
         "wander_anchor_radius": 6,
         "wander_maps_whitelist": ("world", "world", "world", "world"),
         "character": {
@@ -82,7 +84,7 @@ NPCS: dict[str, dict[str, Any]] = {
     "bullya": {
         "name": "皂隶 · 雷三",
         "short": "皂隶",
-        "cell": ("world", 11, 15),
+        "cell": ("world", 22, 33),
         "character": {
             "声口": "嗓粗话硬不转弯。爱把「按例」「凡事」「你晓得罢」挂在嘴边;急了甩唾沫星子骂街、拍腿;公事公办时特意拖长「我说了算」。对乡绅反而话短。",
             "所图": "把衙门口的「规费」吃稳,攒够银子到乡下置地",
@@ -96,7 +98,7 @@ NPCS: dict[str, dict[str, Any]] = {
     "biaotou": {
         "name": "威远镖局 · 赵铁鹰",
         "short": "镖头",
-        "cell": ("world", 10, 16),
+        "cell": ("world", 30, 36),
         "character": {
             "声口": "话少句短、不拖泥带水。爱用「压镖」「亮青」「平趟」等镖行切口;敬重的用「大驾」,不入眼的只用「那厮」。对女客不自称「爷」,称「大姐/姑娘」。",
             "所图": "把这趟红货平趟过去,镖局的旗不能倒",
@@ -110,7 +112,7 @@ NPCS: dict[str, dict[str, Any]] = {
         "name": "黑店 · 柳无眉",
         "short": "黑店",
         "hidden": True,
-        "cell": ("world", 11, 22),
+        "cell": ("world", 18, 45),
         "triggers_on_tile": "I",
         "encounter_blurb": "门板后有人吹灯",
         "encounter_user": (
@@ -133,7 +135,7 @@ NPCS: dict[str, dict[str, Any]] = {
         "name": "剪径匪(芦荡)",
         "short": "匪首",
         "hidden": True,
-        "cell": ("world", 9, 24),
+        "cell": ("world", 15, 48),
         "triggers_on_tile": "&",
         "encounter_blurb": "芦荡里有人拽绊索",
         "encounter_user": (
@@ -162,7 +164,7 @@ NPCS: dict[str, dict[str, Any]] = {
         "name": "暗流(水祟)",
         "short": "渊",
         "hidden": True,
-        "cell": ("world", 25, 26),
+        "cell": ("world", 52, 15),
         "triggers_on_tile": "~",
         "encounter_blurb": "水纹里多出一圈不属于桨的影",
         "encounter_user": (
@@ -183,7 +185,7 @@ NPCS: dict[str, dict[str, Any]] = {
     "yulaog": {
         "name": "渡头 · 渔老七",
         "short": "船家",
-        "cell": ("world", 35, 23),
+        "cell": ("world", 78, 50),
         "wander_anchor_radius": 7,
         "wander_maps_whitelist": ("world", "world", "world"),
         "character": {
@@ -199,7 +201,7 @@ NPCS: dict[str, dict[str, Any]] = {
     "aling": {
         "name": "清音舫 · 阿泠",
         "short": "阿泠",
-        "cell": ("world", 39, 25),
+        "cell": ("world", 85, 53),
         "system": f"""你是画舫歌姬阿泠:嗓子是本钱,眼神是钩子。你在还赎身钱、躲恶少、也想寻个真心人--但**不会轻易从良**。
 玩家可点曲、打赏、替人赎身、追求、吃醋、谈生意走票;写细**情与利的拉扯**。
 {AUTONOMY_RULE}""",
@@ -212,7 +214,7 @@ NPCS: dict[str, dict[str, Any]] = {
     "lizheng": {
         "name": "芦花墟 · 周里正",
         "short": "里正",
-        "cell": ("world", 14, 38),
+        "cell": ("world", 20, 74),
         "system": f"""你是芦花墟里正周某:掌鱼鳞册与乡约,嘴上讲「息讼」,心里算丁口与徭役。
 玩家可问路引、借粮、躲壮丁、合伙瞒册;你要扯上**县衙牙行、漕口帮、书院清议**三头线,别写成单村小品。
 {AUTONOMY_RULE}""",
@@ -225,7 +227,7 @@ NPCS: dict[str, dict[str, Any]] = {
     "yizu": {
         "name": "青骡驿 · 薛驿卒",
         "short": "驿卒",
-        "cell": ("world", 37, 34),
+        "cell": ("world", 90, 62),
         "wander_anchor_radius": 6,
         "wander_maps_whitelist": ("world", "world", "world", "world", "world"),
         "system": f"""你是青骡驿老驿卒薛某:拆封火漆、抄单押时辰,也倒卖「过站耳朵」。
@@ -239,7 +241,7 @@ NPCS: dict[str, dict[str, Any]] = {
     "seng": {
         "name": "卧佛寺 · 慧尘知客",
         "short": "知客",
-        "cell": ("world", 25, 7),
+        "cell": ("world", 50, 14),
         "system": f"""你是卧佛寺外廊知客僧慧尘:香积厨、放生池、伤号寮都归你一张嘴调度。
 玩家可施舍、问签、躲债、托「佛面」递条子;僧俗之间**钱与香火**要写得脏净相间。
 {AUTONOMY_RULE}""",
@@ -252,7 +254,7 @@ NPCS: dict[str, dict[str, Any]] = {
     "bangzhang": {
         "name": "漕口帮 · 沙掌盘",
         "short": "帮掌",
-        "cell": ("world", 60, 10),
+        "cell": ("world", 120, 20),
         "wander_anchor_radius": 5,
         "wander_maps_whitelist": ("world", "world", "world"),
         "system": f"""你是漕口帮坞掌盘沙某:护漕是面子,抽头是里子,赌档与窝家也要你点头。
@@ -267,7 +269,7 @@ NPCS: dict[str, dict[str, Any]] = {
     "shusheng": {
         "name": "竹林书院外 · 陆文潜",
         "short": "书生",
-        "cell": ("world", 58, 21),
+        "cell": ("world", 118, 42),
         "system": f"""你是赴考未第的书生陆文潜:借书院外廊抄书换宿,却把县里折狱当功课写。
 玩家可论理、借抄、联名、递密札;清议要能**搅动实权**(衙、帮、牙行),别空口道德。
 {AUTONOMY_RULE}""",
@@ -279,7 +281,7 @@ NPCS: dict[str, dict[str, Any]] = {
     "lika": {
         "name": "厘卡哨 · 钱卡吏",
         "short": "卡吏",
-        "cell": ("world", 56, 36),
+        "cell": ("world", 118, 68),
         "wander_anchor_radius": 4,
         "wander_maps_whitelist": ("world", "world", "world"),
         "system": f"""你是厘卡哨当值吏员钱某:验引、抽分、留难船货,嘴上全是「例」。
@@ -381,13 +383,13 @@ NPC_SEEDS: dict[str, list[str]] = {
 # 猎户 · 铁彀：野径与竹林出没，可卖兽皮、教追踪术
 # 赌徒 · 金满堂：渡口与黑店之间游走，开设赌局
 NPC_HABITS["xuanzhen"] = {"active": (5, 22), "home": ("world", "书院廊"), "frequent": [("world", "书院廊"), ("world", "寺廊"), ("world", "竹径")]}
-NPC_HABITS["tiegu"] = {"active": (4, 20), "home": ("world", "野径中"), "frequent": [("world", "野径中"), ("world", "竹林"), ("world", "桥口")], "wander_anchor_radius": 10}
+NPC_HABITS["tiegu"] = {"active": (4, 20), "home": ("world", "野径中"), "frequent": [("world", "野径中"), ("world", "竹径"), ("world", "桥口")], "wander_anchor_radius": 10}
 NPC_HABITS["jintang"] = {"active": (16, 28), "home": ("world", "黑店"), "frequent": [("world", "黑店"), ("world", "渡头")], "nocturnal": True}
 
 NPCS["xuanzhen"] = {
     "name": "玄真子（炼丹术士）",
     "short": "玄真",
-    "cell": ("world", 20, 8),
+    "cell": ("world", 48, 13),
     "wander_anchor_radius": 6,
     "wander_maps_whitelist": ("world", "world"),
     "system": f"""你是云游炼丹术士玄真子：背负药囊，行走州县。你卖三种东西——药剂（回体力/心气）、卷轴（临时buff）、假丹（坑人）。
@@ -403,7 +405,7 @@ NPCS["xuanzhen"] = {
 NPCS["tiegu"] = {
     "name": "猎户 · 铁彀",
     "short": "铁彀",
-    "cell": ("world", 3, 18),
+    "cell": ("world", 8, 52),
     "wander_anchor_radius": 10,
     "wander_maps_whitelist": ("world", "world", "world"),
     "system": f"""你是山中猎户铁彀：铁胎弓背上一张、兽皮囊腰里一袋。你识鸟迹、辨草痕、分风里的气味。
@@ -419,10 +421,13 @@ NPCS["tiegu"] = {
 NPCS["jintang"] = {
     "name": "赌徒 · 金满堂",
     "short": "金满",
-    "cell": ("world", 12, 5),
+    "cell": ("world", 70, 6),
     "wander_anchor_radius": 5,
     "wander_maps_whitelist": ("world", "world"),
-    "hidden": True,  # 默认不显示，需触发「赌局」事件才出现
+    "hidden": True,
+    "triggers_on_tile": "I",
+    "encounter_blurb": "赌局",
+    "encounter_user": "<user_input>[际遇·系统指令] 过路客推门入黑店，却见角落里骰子声声——赌徒金满堂正等着下一只肥羊。请以第三方旁观口吻描写此刻场景，暗示玩家可赌钱、赌情报。中文 4~8 句</user_input>",
     "system": f"""你是江湖赌徒金满堂：骰子、牌九、马吊、猜拳——你样样通，也样样能出千。你在黑店与渡口之间讨生活，哪家的桌上都有你的影子。
 玩家可赌钱、赌情报、赌信物——赌注越大，你越不肯松手。
 你输了嘴上说「这一局不算」，心里却在盘算下一把怎么赢回来。

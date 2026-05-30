@@ -1,0 +1,82 @@
+{
+  "$defs": {
+    "InteractiveModuleInfoResponse": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "icon": {
+          "title": "Icon",
+          "type": "string"
+        },
+        "count": {
+          "title": "Count",
+          "type": "integer"
+        },
+        "tests": {
+          "items": {
+            "$ref": "#/$defs/InteractiveTestInfoResponse"
+          },
+          "title": "Tests",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "icon",
+        "count",
+        "tests"
+      ],
+      "title": "InteractiveModuleInfoResponse",
+      "type": "object"
+    },
+    "InteractiveTestInfoResponse": {
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "module_id": {
+          "title": "Module Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "module_id"
+      ],
+      "title": "InteractiveTestInfoResponse",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "count": {
+      "title": "Count",
+      "type": "integer"
+    },
+    "modules": {
+      "items": {
+        "$ref": "#/$defs/InteractiveModuleInfoResponse"
+      },
+      "title": "Modules",
+      "type": "array"
+    }
+  },
+  "required": [
+    "count",
+    "modules"
+  ],
+  "title": "InteractiveModulesResponse",
+  "type": "object"
+}

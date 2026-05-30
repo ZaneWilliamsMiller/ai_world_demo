@@ -1,29 +1,28 @@
 from __future__ import annotations
+
 from typing import Any
+
 from backend.data.maps_data import MAPS
 
-# ──── 地貌 / 移动 cost ────
-# cost 越大走得越慢（折算时辰更多）；不写在表里默认 1。
-# 所有地形默认可踏入（不再拦截），险地 cost 高且有受伤概率。
 TILE_COST: dict[str, int] = {
-    "#": 99,    # 墙（极难通行，高 cost 模拟不可通行）
-    "^": 99,    # 悬崖（鬼见愁，极高 cost，模拟不可通行）
-    "=": 2,     # 河道主脉（可涉水过河）
-    "~": 4,     # 险水/支流（可勉强涉水，慢且险）
-    "!": 8,     # 裂隙/深渊（极度危险，极高 cost）
-    "@": 5,     # 废墟（危险，高 cost）
-    ";": 3,     # 泥地
-    "m": 4,     # 山岭
-    "/": 2,     # 山道
-    "F": 2,     # 林子
-    "&": 2,     # 草丛（伏击点；外观同林）
-    ",": 1,     # 草地
-    ".": 1,     # 土路
-    "T": 1,     # 客栈
-    "M": 1,     # 市集
-    "Y": 1,     # 衙
-    "B": 1,     # 桥
-    "I": 1,     # 黑店（外观同客栈）
+    "#": 99,
+    "^": 99,
+    "=": 2,
+    "~": 4,
+    "!": 8,
+    "@": 5,
+    ";": 3,
+    "m": 4,
+    "/": 2,
+    "F": 2,
+    "&": 2,
+    ",": 1,
+    ".": 1,
+    "T": 1,
+    "M": 1,
+    "Y": 1,
+    "B": 1,
+    "I": 1,
 }
 
 TILE_ELEVATION: dict[str, int] = {
@@ -31,8 +30,8 @@ TILE_ELEVATION: dict[str, int] = {
     "^": 9,
     "=": 1,
     "~": 1,
-    "!": 99,   # 裂隙——视作不可攀越
-    "@": 5,     # 废墟——中度高低差
+    "!": 99,
+    "@": 5,
     "m": 7,
     "/": 6,
     "F": 4,
@@ -47,29 +46,37 @@ TILE_ELEVATION: dict[str, int] = {
     "I": 2,
 }
 
-# 危险地形：踏入有概率受伤/触发际遇
 DANGEROUS: frozenset[str] = frozenset({"~", "!", "@", "^"})
 
-# 受伤概率：地形 → 基础概率 (0.0~1.0)
 DANGER_INJURY_CHANCE: dict[str, float] = {
-    "~": 0.25,   # 险水：25% 概率受伤/触发水祟
-    "!": 0.50,   # 裂隙：50% 概率坠落受伤
-    "@": 0.20,   # 废墟：20% 概率被埋/触发伏击
-    "^": 0.35,   # 悬崖：35% 概率坠落（可强行翻越）
+    "~": 0.25,
+    "!": 0.50,
+    "@": 0.20,
+    "^": 0.35,
 }
 
 MAX_ELEVATION_STEP = 2
 
-IMPASSABLE: frozenset[str] = frozenset()   # 不再设不可通行；靠 cost 和 injury 模拟
+_PATH_CACHE_MAX = 128
+_path_cache: dict[tuple[str, int, int, int, int, bool], list[tuple[int, int]] | None] = {}
+
+
+def invalidate_path_cache() -> None:
+    _path_cache.clear()
+
 
 def grid_size(rows: list[str]) -> tuple[int, int]:
     h = len(rows)
     w = len(rows[0]) if h else 0
     return w, h
 
+IMPASSABLE: frozenset[str] = frozenset({"#", "!"})
+
+def is_passable(ch: str) -> bool:
+    return ch not in IMPASSABLE
+
 def walkable(ch: str) -> bool:
-    """所有地形默认可踏入；墙和悬崖仅 cost 极高。"""
-    return True
+    return is_passable(ch)
 
 def tile_cost(ch: str) -> int:
     return int(TILE_COST.get(ch, 1))
@@ -84,7 +91,6 @@ def danger_injury_chance(ch: str) -> float:
     return DANGER_INJURY_CHANCE.get(ch, 0.0)
 
 def can_step_between(a: str, b: str, allow_steep: bool = False) -> bool:
-    """允许所有地形通行；allow_steep 放宽 elevation 限制。"""
     if allow_steep:
         return True
     return abs(tile_elevation(a) - tile_elevation(b)) <= MAX_ELEVATION_STEP
@@ -100,7 +106,6 @@ def tile_at(map_id: str, x: int, y: int) -> str | None:
     return rows[y][x]
 
 def apply_portal(map_id: str, x: int, y: int) -> tuple[str, int, int] | None:
-    """大地图无界门；保留接口以防上游调用。"""
     return None
 
 def find_path(
@@ -111,8 +116,30 @@ def find_path(
     ty: int,
     allow_steep: bool = False,
 ) -> list[tuple[int, int]] | None:
-    """Dijkstra：按地貌 cost 找最便宜可行路径（支持所有地形）。"""
-    rows = MAPS[map_id]["rows"]
+    cache_key = (map_id, sx, sy, tx, ty, allow_steep)
+    if cache_key in _path_cache:
+        return _path_cache[cache_key]
+
+    result = _dijkstra(map_id, sx, sy, tx, ty, allow_steep)
+
+    if len(_path_cache) >= _PATH_CACHE_MAX:
+        oldest = next(iter(_path_cache))
+        del _path_cache[oldest]
+    _path_cache[cache_key] = result
+    return result
+
+
+def _dijkstra(
+    map_id: str,
+    sx: int,
+    sy: int,
+    tx: int,
+    ty: int,
+    allow_steep: bool = False,
+) -> list[tuple[int, int]] | None:
+    rows = MAPS.get(map_id, {}).get("rows")
+    if not rows:
+        return None
     w, h = grid_size(rows)
     if not (0 <= tx < w and 0 <= ty < h and 0 <= sx < w and 0 <= sy < h):
         return None
@@ -156,8 +183,9 @@ def find_path(
     return path
 
 def path_cost(map_id: str, path: list[tuple[int, int]]) -> int:
-    """累计行走 cost（含起点本身的 cost）。"""
-    rows = MAPS[map_id]["rows"]
+    rows = MAPS.get(map_id, {}).get("rows")
+    if not rows:
+        return 0
     total = 0
     for x, y in path:
         try:
@@ -167,7 +195,6 @@ def path_cost(map_id: str, path: list[tuple[int, int]]) -> int:
     return total
 
 def cost_to_ticks(cost: int) -> int:
-    """把行走 cost 折算成时辰推进数。"""
     if cost <= 2:
         return 0
     if cost <= 6:
@@ -181,10 +208,6 @@ def cost_to_ticks(cost: int) -> int:
 def check_danger_and_injure(
     ch: str, rng: Any | None = None
 ) -> tuple[bool, str | None]:
-    """
-    检查踏入地形 ch 是否受伤。
-    返回 (injured: bool, reason: str|None)。
-    """
     if not is_dangerous(ch):
         return False, None
     chance = danger_injury_chance(ch)

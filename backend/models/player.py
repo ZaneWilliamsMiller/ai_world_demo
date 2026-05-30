@@ -6,6 +6,23 @@ from typing import Any
 
 from backend.data.factions import FACTIONS
 from backend.memory import AgentMind
+from backend.systems.constants import (
+    INITIAL_COINS,
+    INITIAL_PX,
+    INITIAL_PY,
+    INITIAL_SPIRIT,
+    INITIAL_SPIRIT_MAX,
+    INITIAL_VIGOR,
+    INITIAL_VIGOR_MAX,
+)
+
+
+def _default_flags() -> dict[str, int]:
+    return {"order": 0, "truth": 0, "hope": 0, "chaos": 0}
+
+
+def _default_reputation() -> dict[str, int]:
+    return {k: 0 for k in FACTIONS}
 
 
 @dataclass
@@ -17,25 +34,24 @@ class PlayerState:
     dead: bool = False
     death_reason: str | None = None
     map_id: str = "world"
-    px: int = 10
-    py: int = 14
-    coins: int = 120
-    flags: dict[str, int] = field(
-        default_factory=lambda: {"order": 0, "truth": 0, "hope": 0, "chaos": 0}
-    )
-    history: dict[str, list[dict[str, str]]] = field(default_factory=dict)
+    px: int = INITIAL_PX
+    py: int = INITIAL_PY
+    coins: int = INITIAL_COINS
+    flags: dict[str, int] = field(default_factory=_default_flags)
+    history: dict[str, list[dict[str, str | int]]] = field(default_factory=dict)
     favor: dict[str, int] = field(default_factory=dict)
     rumors: list[str] = field(default_factory=list)
     move_locked: bool = False
     move_lock_npc_id: str | None = None
     trap_reason: str | None = None
     trap_attempts: int = 0
+    trap_type: str | None = None
     enslaved: bool = False
     enslaved_reason: str | None = None
-    vigor: int = 80
-    vigor_max: int = 100
-    spirit: int = 80
-    spirit_max: int = 100
+    vigor: int = INITIAL_VIGOR
+    vigor_max: int = INITIAL_VIGOR_MAX
+    spirit: int = INITIAL_SPIRIT
+    spirit_max: int = INITIAL_SPIRIT_MAX
     sleep_debt: int = 0
     unconscious_ticks: int = 0
     rescue_needed: bool = False
@@ -51,7 +67,7 @@ class PlayerState:
     weather: str = "薄阴"
     # 库存、声望、事件流
     inventory: dict[str, int] = field(default_factory=dict)
-    reputation: dict[str, int] = field(default_factory=lambda: {k: 0 for k in FACTIONS.keys()})
+    reputation: dict[str, int] = field(default_factory=_default_reputation)
     events: list[dict[str, Any]] = field(default_factory=list)
     # 每个 NPC 在本玩家会话下的「心智」（记忆流 + 当日计划）
     minds: dict[str, AgentMind] = field(default_factory=dict)
@@ -70,6 +86,21 @@ class PlayerState:
     active_bounty: dict[str, Any] | None = None
     completed_bounties: list[str] = field(default_factory=list)
     last_bounty_refresh_day: int = 0
+    # 悬赏进度追踪：记录最近一次对话及行进信息（用于 check_bounty_progress）
+    last_talk_npc_id: str | None = None
+    last_talk_message: str | None = None
+    last_move_map_id: str | None = None
+    last_move_px: int = 0
+    last_move_py: int = 0
     # 物品每日用量追踪：{"_day": world_day, "干粮": 2, "金创药": 1}
     item_use_tracker: dict[str, int] = field(default_factory=dict)
-    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
+
+    def __getstate__(self) -> dict[str, Any]:
+        state = self.__dict__.copy()
+        state.pop("lock", None)
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        state["lock"] = asyncio.Lock()
+        self.__dict__.update(state)

@@ -1,0 +1,77 @@
+{
+  "$defs": {
+    "ModuleInfoResponse": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "count": {
+          "title": "Count",
+          "type": "integer"
+        },
+        "tests": {
+          "items": {
+            "$ref": "#/$defs/TestInfoResponse"
+          },
+          "title": "Tests",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "count",
+        "tests"
+      ],
+      "title": "ModuleInfoResponse",
+      "type": "object"
+    },
+    "TestInfoResponse": {
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "file_path": {
+          "title": "File Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "file_path"
+      ],
+      "title": "TestInfoResponse",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "count": {
+      "title": "Count",
+      "type": "integer"
+    },
+    "modules": {
+      "items": {
+        "$ref": "#/$defs/ModuleInfoResponse"
+      },
+      "title": "Modules",
+      "type": "array"
+    }
+  },
+  "required": [
+    "count",
+    "modules"
+  ],
+  "title": "TestModulesResponse",
+  "type": "object"
+}

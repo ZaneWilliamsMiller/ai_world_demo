@@ -1,0 +1,33 @@
+{
+  "properties": {
+    "bounty_id": {
+      "title": "Bounty Id",
+      "type": "string"
+    },
+    "state": {
+      "title": "State",
+      "type": "string"
+    },
+    "sub_steps": {
+      "items": {},
+      "title": "Sub Steps",
+      "type": "array"
+    },
+    "completed_steps": {
+      "items": {},
+      "title": "Completed Steps",
+      "type": "array"
+    },
+    "transition_log": {
+      "items": {},
+      "title": "Transition Log",
+      "type": "array"
+    }
+  },
+  "required": [
+    "bounty_id",
+    "state"
+  ],
+  "title": "BountyStateResponse",
+  "type": "object"
+}

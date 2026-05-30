@@ -1,0 +1,492 @@
+{
+  "$defs": {
+    "DangerSense": {
+      "properties": {
+        "alert": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alert"
+        },
+        "scan": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scan"
+        }
+      },
+      "title": "DangerSense",
+      "type": "object"
+    },
+    "ForcedEncounter": {
+      "properties": {
+        "npc_id": {
+          "title": "Npc Id",
+          "type": "string"
+        },
+        "user_line": {
+          "default": "",
+          "title": "User Line",
+          "type": "string"
+        },
+        "blurb": {
+          "default": "",
+          "title": "Blurb",
+          "type": "string"
+        }
+      },
+      "required": [
+        "npc_id"
+      ],
+      "title": "ForcedEncounter",
+      "type": "object"
+    },
+    "MoveDelta": {
+      "properties": {
+        "vigor": {
+          "default": 0,
+          "title": "Vigor",
+          "type": "integer"
+        },
+        "spirit": {
+          "default": 0,
+          "title": "Spirit",
+          "type": "integer"
+        }
+      },
+      "title": "MoveDelta",
+      "type": "object"
+    },
+    "NpcBrief": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "title": "NpcBrief",
+      "type": "object"
+    },
+    "PlayerPublic": {
+      "properties": {
+        "map_id": {
+          "default": "world",
+          "title": "Map Id",
+          "type": "string"
+        },
+        "px": {
+          "default": 0,
+          "title": "Px",
+          "type": "integer"
+        },
+        "py": {
+          "default": 0,
+          "title": "Py",
+          "type": "integer"
+        },
+        "coins": {
+          "default": 0,
+          "title": "Coins",
+          "type": "integer"
+        },
+        "gender": {
+          "default": "未言",
+          "title": "Gender",
+          "type": "string"
+        },
+        "permadeath": {
+          "default": false,
+          "title": "Permadeath",
+          "type": "boolean"
+        },
+        "dead": {
+          "default": false,
+          "title": "Dead",
+          "type": "boolean"
+        },
+        "death_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Death Reason"
+        },
+        "ended": {
+          "default": false,
+          "title": "Ended",
+          "type": "boolean"
+        },
+        "ending_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ending Label"
+        },
+        "move_locked": {
+          "default": false,
+          "title": "Move Locked",
+          "type": "boolean"
+        },
+        "move_lock_npc_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Move Lock Npc Id"
+        },
+        "trap_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trap Reason"
+        },
+        "trap_attempts": {
+          "default": 0,
+          "title": "Trap Attempts",
+          "type": "integer"
+        },
+        "trap_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trap Type"
+        },
+        "enslaved": {
+          "default": false,
+          "title": "Enslaved",
+          "type": "boolean"
+        },
+        "enslaved_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Enslaved Reason"
+        },
+        "vigor": {
+          "default": 0,
+          "title": "Vigor",
+          "type": "integer"
+        },
+        "vigor_max": {
+          "default": 100,
+          "title": "Vigor Max",
+          "type": "integer"
+        },
+        "spirit": {
+          "default": 0,
+          "title": "Spirit",
+          "type": "integer"
+        },
+        "spirit_max": {
+          "default": 100,
+          "title": "Spirit Max",
+          "type": "integer"
+        },
+        "sleep_debt": {
+          "default": 0,
+          "title": "Sleep Debt",
+          "type": "integer"
+        },
+        "unconscious_ticks": {
+          "default": 0,
+          "title": "Unconscious Ticks",
+          "type": "integer"
+        },
+        "rescue_needed": {
+          "default": false,
+          "title": "Rescue Needed",
+          "type": "boolean"
+        },
+        "life_burn_ticks": {
+          "default": 0,
+          "title": "Life Burn Ticks",
+          "type": "integer"
+        },
+        "life_burn_max": {
+          "default": 0,
+          "title": "Life Burn Max",
+          "type": "integer"
+        },
+        "world_day": {
+          "default": 1,
+          "title": "World Day",
+          "type": "integer"
+        },
+        "world_shichen_idx": {
+          "default": 0,
+          "title": "World Shichen Idx",
+          "type": "integer"
+        },
+        "world_shichen": {
+          "default": "子时",
+          "title": "World Shichen",
+          "type": "string"
+        },
+        "world_phase": {
+          "default": "夜",
+          "title": "World Phase",
+          "type": "string"
+        },
+        "world_is_night": {
+          "default": true,
+          "title": "World Is Night",
+          "type": "boolean"
+        },
+        "weather": {
+          "default": "晴",
+          "title": "Weather",
+          "type": "string"
+        },
+        "inventory": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Inventory",
+          "type": "object"
+        },
+        "reputation": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Reputation",
+          "type": "object"
+        },
+        "npc_states": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Npc States",
+          "type": "object"
+        },
+        "bounties": {
+          "items": {},
+          "title": "Bounties",
+          "type": "array"
+        },
+        "active_bounty": {
+          "default": null,
+          "title": "Active Bounty"
+        },
+        "completed_bounties": {
+          "items": {},
+          "title": "Completed Bounties",
+          "type": "array"
+        },
+        "flags": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Flags",
+          "type": "object"
+        },
+        "favor": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Favor",
+          "type": "object"
+        }
+      },
+      "title": "PlayerPublic",
+      "type": "object"
+    },
+    "TrapStatePublic": {
+      "properties": {
+        "active": {
+          "default": false,
+          "title": "Active",
+          "type": "boolean"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "attempts": {
+          "default": 0,
+          "title": "Attempts",
+          "type": "integer"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Type"
+        }
+      },
+      "title": "TrapStatePublic",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "player": {
+      "$ref": "#/$defs/PlayerPublic"
+    },
+    "npcs_here": {
+      "items": {
+        "$ref": "#/$defs/NpcBrief"
+      },
+      "title": "Npcs Here",
+      "type": "array"
+    },
+    "danger_sense": {
+      "$ref": "#/$defs/DangerSense"
+    },
+    "path_map_id": {
+      "title": "Path Map Id",
+      "type": "string"
+    },
+    "path": {
+      "items": {
+        "items": {
+          "type": "integer"
+        },
+        "type": "array"
+      },
+      "title": "Path",
+      "type": "array"
+    },
+    "forced_encounter": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ForcedEncounter"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "trap_state": {
+      "$ref": "#/$defs/TrapStatePublic"
+    },
+    "delta": {
+      "$ref": "#/$defs/MoveDelta"
+    },
+    "injuries": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Injuries",
+      "type": "array"
+    },
+    "atmosphere": {
+      "default": "",
+      "title": "Atmosphere",
+      "type": "string"
+    },
+    "events": {
+      "items": {},
+      "title": "Events",
+      "type": "array"
+    },
+    "npc_catalog": {
+      "items": {},
+      "title": "Npc Catalog",
+      "type": "array"
+    },
+    "map_locations": {
+      "additionalProperties": {
+        "additionalProperties": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "type": "object"
+      },
+      "title": "Map Locations",
+      "type": "object"
+    },
+    "respawn_msg": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Respawn Msg"
+    }
+  },
+  "required": [
+    "player",
+    "npcs_here",
+    "danger_sense",
+    "path_map_id",
+    "path",
+    "trap_state",
+    "delta"
+  ],
+  "title": "MoveResponse",
+  "type": "object"
+}

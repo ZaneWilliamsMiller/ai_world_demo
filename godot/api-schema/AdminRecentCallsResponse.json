@@ -1,0 +1,11 @@
+{
+  "properties": {
+    "calls": {
+      "items": {},
+      "title": "Calls",
+      "type": "array"
+    }
+  },
+  "title": "AdminRecentCallsResponse",
+  "type": "object"
+}
