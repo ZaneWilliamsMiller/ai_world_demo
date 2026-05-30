@@ -381,8 +381,8 @@ async def cross_reflect(
             if hit:
                 target_obs.setdefault(tid, []).append(m)
 
-    for tid in target_obs:
-        target_obs[tid] = list({m.id: m for m in target_obs[tid]}.values())
+    for tid, tobs in target_obs.items():
+        target_obs[tid] = list({m.id: m for m in tobs}.values())
 
     candidates = sorted(
         [(tid, tobs) for tid, tobs in target_obs.items()
@@ -561,8 +561,8 @@ async def plan_day(
 
 def import_seeds(mind: mem.AgentMind, seeds: list[str], *, world_day: int, world_shichen: str) -> None:
     """把 NPC 个人世界观切片植入为 seed 记忆（去中心化的「圣经」）。"""
-    for s in seeds:
-        s = (s or "").strip()
+    for raw_seed in seeds:
+        s = (raw_seed or "").strip()
         if not s:
             continue
         mind.add(

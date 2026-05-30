@@ -168,8 +168,8 @@ async def list_modules():
 
 def _parse_pytest_counts(output: str) -> tuple[int, int, int]:
     passed = failed = skipped = 0
-    for line in output.strip().splitlines():
-        line = line.strip()
+    for raw_line in output.strip().splitlines():
+        line = raw_line.strip()
         if not line:
             continue
         if " passed" in line or " failed" in line or " skipped" in line:

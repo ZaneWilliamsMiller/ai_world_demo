@@ -5,6 +5,15 @@ window.App = window.App || {};
 
   var _defaultTimeout = 30000;
 
+  async function _handleErrorResponse(r, url) {
+    var errorMsg = url + " " + r.status;
+    try {
+      var errorJson = await r.json();
+      errorMsg = errorJson.detail || errorJson.message || errorMsg;
+    } catch (_e) { /* ignore parse error */ }
+    throw new Error(errorMsg);
+  }
+
   async function backendPost(url, body, timeoutMs) {
     var path = url.startsWith("/api") ? url.substring(4) : url;
     var fullUrl = App.API + path;
@@ -19,12 +28,7 @@ window.App = window.App || {};
       });
       clearTimeout(timeoutId);
       if (!r.ok) {
-        var errorMsg = url + " " + r.status;
-        try {
-          var errorJson = await r.json();
-          errorMsg = errorJson.detail || errorJson.message || errorMsg;
-        } catch (_e) { /* ignore parse error */ }
-        throw new Error(errorMsg);
+        await _handleErrorResponse(r, url);
       }
       return await r.json();
     } catch (e) {
@@ -43,12 +47,7 @@ window.App = window.App || {};
       var r = await fetch(fullUrl, { cache: 'no-store', signal: controller.signal });
       clearTimeout(timeoutId);
       if (!r.ok) {
-        var errorMsg = url + " " + r.status;
-        try {
-          var errorJson = await r.json();
-          errorMsg = errorJson.detail || errorJson.message || errorMsg;
-        } catch (_e) { /* ignore parse error */ }
-        throw new Error(errorMsg);
+        await _handleErrorResponse(r, url);
       }
       return await r.json();
     } catch (e) {
@@ -166,12 +165,7 @@ window.App = window.App || {};
     }
     if (!res.ok) {
       App._streamAbortController = null;
-      var errorMsg = "talk_stream " + res.status;
-      try {
-        var errorJson = await res.json();
-        errorMsg = errorJson.detail || errorJson.message || errorMsg;
-      } catch (_e) { /* ignore parse error */ }
-      throw new Error(errorMsg);
+      await _handleErrorResponse(res, "talk_stream");
     }
     return res.body.getReader();
   };
@@ -212,12 +206,7 @@ window.App = window.App || {};
 
     if (!res.ok) {
       App._actLoopAbortController = null;
-      var errorMsg = "act_loop_stream " + res.status;
-      try {
-        var errorJson = await res.json();
-        errorMsg = errorJson.detail || errorJson.message || errorMsg;
-      } catch (_e) {}
-      throw new Error(errorMsg);
+      await _handleErrorResponse(res, "act_loop_stream");
     }
     return res.body.getReader();
   };

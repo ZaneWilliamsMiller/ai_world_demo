@@ -46,9 +46,6 @@ ignore = [
     "E701",   # multiple statements on one line
     "E402",   # module import not at top
     "B005",   # strip with multi-characters
-    "PLC0206",# dict-index-missing-items
-    "PLW2901",# redefined-loop-name
-    "E741",   # ambiguous variable name
 ]
 
 [tool.ruff.lint.per-file-ignores]

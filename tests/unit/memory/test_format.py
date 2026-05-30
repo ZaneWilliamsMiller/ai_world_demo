@@ -136,7 +136,7 @@ class TestFormatPlanForPrompt:
         plan = {f"{s}时": f"做{s}事" for s in ["子", "丑", "寅", "卯"]}
         mind = _mind(plan_summary="", plan_by_shichen=plan)
         result = format_plan_for_prompt(mind, "亥时")
-        lines = [l for l in result.split("\n") if l.startswith("· ") and "时:" in l]
+        lines = [ln for ln in result.split("\n") if ln.startswith("· ") and "时:" in ln]
         assert len(lines) <= 2
 
 
@@ -253,7 +253,7 @@ class TestFormatPlanForReflection:
             plan[s] = f"做{s}事"
         mind = _mind(plan_summary="", plan_by_shichen=plan)
         result = format_plan_for_reflection(mind, "子时")
-        remaining_lines = [l for l in result.split("\n") if l.startswith("· ") and "时" in l and "总" not in l]
+        remaining_lines = [ln for ln in result.split("\n") if ln.startswith("· ") and "时" in ln and "总" not in ln]
         assert len(remaining_lines) <= 4
 
     def test_reflection_hint(self):
@@ -367,7 +367,7 @@ class TestFormatProactiveCallbacks:
         ]
         mind = _mind(items=anchors)
         result = format_proactive_callbacks(mind, "张三")
-        anchor_lines = [l for l in result.split("\n") if l.startswith("· [第")]
+        anchor_lines = [ln for ln in result.split("\n") if ln.startswith("· [第")]
         assert len(anchor_lines) <= 3
 
     def test_unattended_observations(self):
@@ -411,7 +411,7 @@ class TestFormatProactiveCallbacks:
         ]
         mind = _mind(items=obs)
         result = format_proactive_callbacks(mind, "张三")
-        unattended_lines = [l for l in result.split("\n") if "下次" in l and not l.startswith("【")]
+        unattended_lines = [ln for ln in result.split("\n") if "下次" in ln and not ln.startswith("【")]
         assert len(unattended_lines) <= 3
 
     def test_both_anchors_and_unattended(self):
@@ -503,7 +503,7 @@ class TestFormatTopicThread:
             {"user": "路引信物帖子信函药地图船马镖银钱毒死杀逃救帮找见等", "npc": "嗯"},
         ]
         result = format_topic_thread(hist)
-        kw_line = [l for l in result.split("\n") if "你们正在谈论" in l]
+        kw_line = [ln for ln in result.split("\n") if "你们正在谈论" in ln]
         assert kw_line
         kws = kw_line[0].split(":", 1)[1].split("--")[0]
         assert len(kws.split("、")) <= 5
@@ -517,7 +517,7 @@ class TestFormatTopicThread:
             {"user": "还有多少钱？", "npc": "嗯"},
         ]
         result = format_topic_thread(hist)
-        signal_lines = [l for l in result.split("\n") if "待答之问" in l or "待定买卖" in l]
+        signal_lines = [ln for ln in result.split("\n") if "待答之问" in ln or "待定买卖" in ln]
         assert len(signal_lines) <= 3
 
     def test_coherence_instruction(self):
@@ -575,7 +575,7 @@ class TestFormatInsightBlock:
         mind = _mind(insights=lambda: [m1, m2])
         result = format_insight_block(mind)
         lines = result.split("\n")
-        insight_lines = [l for l in lines if "顿悟" in l and l.startswith("· ")]
+        insight_lines = [ln for ln in lines if "顿悟" in ln and ln.startswith("· ")]
         assert "新的顿悟" in insight_lines[0]
 
     def test_at_most_two_insights(self):
@@ -585,7 +585,7 @@ class TestFormatInsightBlock:
         ]
         mind = _mind(insights=lambda: insights)
         result = format_insight_block(mind)
-        insight_lines = [l for l in result.split("\n") if l.startswith("· ") and "顿悟" in l and "点到为止" not in l]
+        insight_lines = [ln for ln in result.split("\n") if ln.startswith("· ") and "顿悟" in ln and "点到为止" not in ln]
         assert len(insight_lines) <= 2
 
     def test_text_truncated(self):

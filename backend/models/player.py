@@ -104,3 +104,22 @@ class PlayerState:
     def __setstate__(self, state: dict[str, Any]) -> None:
         state["lock"] = asyncio.Lock()
         self.__dict__.update(state)
+        self._ensure_defaults()
+
+    def _ensure_defaults(self) -> None:
+        """确保旧版存档反序列化后缺失的字段被补全。"""
+        for attr in ("bounties", "completed_bounties", "rumors", "events"):
+            if getattr(self, attr, None) is None:
+                setattr(self, attr, [])
+        for attr in ("favor", "inventory", "minds", "npc_positions",
+                     "npc_inventories", "npc_inventory_restock_day",
+                     "npc_states", "item_use_tracker"):
+            if getattr(self, attr, None) is None:
+                setattr(self, attr, {})
+        if not isinstance(getattr(self, "reputation", None), dict):
+            self.reputation = {k: 0 for k in FACTIONS}
+        else:
+            for k in FACTIONS:
+                self.reputation.setdefault(k, 0)
+        self.vigor = max(self.vigor, 0)
+        self.spirit = max(self.spirit, 0)
