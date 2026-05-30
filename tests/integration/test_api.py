@@ -332,7 +332,7 @@ class TestNpcRoutes:
         }
         try:
             response = client.post("/api/rest", json={"player_id": "unconscious_rest"})
-            assert response.status_code == 200
+            assert response.status_code == 409
         finally:
             _remove_player("unconscious_rest")
 

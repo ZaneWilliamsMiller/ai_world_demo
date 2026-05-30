@@ -31,7 +31,7 @@ jobs:
       - name: Pyright
         run: pyright backend tests tools start.py
       - name: Tests
-        run: python -m pytest tests/ -v --tb=short
+        run: python -m pytest tests/ -v --tb=short -m "not interactive" --cov=backend --cov-report=term-missing
       - name: Verify TypeScript types are up-to-date
         run: python tools/gen_ts_schema.py --check
       - name: Verify JSON Schema files are up-to-date

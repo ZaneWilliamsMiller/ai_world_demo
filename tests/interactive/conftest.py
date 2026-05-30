@@ -18,6 +18,15 @@ from backend.data.npcs_data import NPCS
 
 _BASE_URL = os.environ.get("BACKEND_URL", "http://127.0.0.1:8765")
 
+
+_INTERACTIVE_DIR = str(Path(__file__).resolve().parent)
+
+
+def pytest_collection_modifyitems(items):
+    for item in items:
+        if _INTERACTIVE_DIR in str(item.fspath):
+            item.add_marker(pytest.mark.interactive)
+
 _LOCK_FILE = None
 
 

@@ -78,4 +78,13 @@ filterwarnings = [
 markers = [
     "slow: marks tests as slow",
     "e2e: marks end-to-end tests requiring server",
+    "interactive: marks tests requiring running backend + LLM API",
 ]
+
+[tool.coverage.run]
+source = ["backend"]
+omit = ["backend/__init__.py", "backend/api/dev.py"]
+
+[tool.coverage.report]
+fail_under = 70
+show_missing = true
