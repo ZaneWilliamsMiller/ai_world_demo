@@ -65,11 +65,8 @@ window.App = window.App || {};
   // ═══════════════════════════════════════════
   //  摄像机状态 - 优化平滑度
   // ═══════════════════════════════════════════
-  var cam = { x: 0, y: 0, targetX: 0, targetY: 0, lerp: 0.25 };
+  var cam = { x: 0, y: 0, targetX: 0, targetY: 0, lerp: 0.35, snap: false };
   var mapState = { rows: [], cols: 0, id: "" };
-
-  // 玩家屏幕位置（带插值）- 解决玩家标记与地形割裂问题
-  var playerScreen = { x: -9999, y: -9999, initialized: false };
 
   // ═══════════════════════════════════════════
   //  Canvas 引用
@@ -159,7 +156,7 @@ window.App = window.App || {};
     miniCanvas.style.cssText =
       "position:absolute;left:12px;top:12px;border:" + MINI_BORDER +
       "px solid rgba(80,100,140,0.9);border-radius:8px;cursor:pointer;z-index:5;" +
-      "box-shadow: 0 6px 20px rgba(0,0,0,0.45);";
+      "box-shadow: 0 6px 20px rgba(0,0,0,0.45);background:rgba(10,10,20,0.7);";
     container.appendChild(miniCanvas);
     
     // 获取小地图 context
@@ -181,14 +178,15 @@ window.App = window.App || {};
   function resizeCanvas() {
     var container = document.getElementById("mapContainer");
     if (!container || !mainCanvas) return;
+    var dpr = window.devicePixelRatio || 1;
     viewW = container.clientWidth;
     viewH = container.clientHeight;
-    mainCanvas.width = viewW;
-    mainCanvas.height = viewH;
+    mainCanvas.width = Math.round(viewW * dpr);
+    mainCanvas.height = Math.round(viewH * dpr);
+    mainCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     viewCols = Math.ceil(viewW / TILE) + 2;
     viewRows = Math.ceil(viewH / TILE) + 2;
 
-    // 小地图尺寸
     var miniW = mapState.cols * MINI_TILE;
     var miniH = mapState.rows.length * MINI_TILE;
     miniCanvas.width = miniW;
@@ -200,23 +198,28 @@ window.App = window.App || {};
   //  摄像机逻辑
   // ═══════════════════════════════════════════
   function updateCameraTarget(px, py) {
-    // 玩家居中，同时确保不超出地图边界
     var halfCols = viewCols / 2;
     var halfRows = viewRows / 2;
-    
+
     var idealX = px - halfCols;
     var idealY = py - halfRows;
-    
+
     var maxX = Math.max(0, mapState.cols - viewCols);
     var maxY = Math.max(0, mapState.rows.length - viewRows);
-    
+
     cam.targetX = Math.max(0, Math.min(idealX, maxX));
     cam.targetY = Math.max(0, Math.min(idealY, maxY));
   }
 
   function lerpCamera() {
-    cam.x += (cam.targetX - cam.x) * cam.lerp;
-    cam.y += (cam.targetY - cam.y) * cam.lerp;
+    if (cam.snap) {
+      cam.x = cam.targetX;
+      cam.y = cam.targetY;
+      cam.snap = false;
+    } else {
+      cam.x += (cam.targetX - cam.x) * cam.lerp;
+      cam.y += (cam.targetY - cam.y) * cam.lerp;
+    }
   }
 
   // ═══════════════════════════════════════════
@@ -373,24 +376,9 @@ window.App = window.App || {};
       ctx.fillText(loc.name, lx, ly + 2);
     }
 
-    // ─── 玩家标记 - 使用插值同步摄像机 ───
-    // 目标屏幕位置
-    var targetPlayerSX = (px - cam.x) * TILE + TILE / 2;
-    var targetPlayerSY = (py - cam.y) * TILE + TILE / 2;
-
-    // 首次渲染时直接跳到目标位置，避免从 (0,0) 滑入的视觉跳跃
-    if (!playerScreen.initialized) {
-      playerScreen.x = targetPlayerSX;
-      playerScreen.y = targetPlayerSY;
-      playerScreen.initialized = true;
-    } else {
-      // 平滑插值（与摄像机相同的速度），解决玩家飘在地形上的问题
-      playerScreen.x += (targetPlayerSX - playerScreen.x) * cam.lerp;
-      playerScreen.y += (targetPlayerSY - playerScreen.y) * cam.lerp;
-    }
-
-    var playerScreenX = playerScreen.x;
-    var playerScreenY = playerScreen.y;
+    // ─── 玩家标记 - 直接计算位置 ───
+    var playerScreenX = (px - cam.x) * TILE + TILE / 2;
+    var playerScreenY = (py - cam.y) * TILE + TILE / 2;
 
     // 玩家主体 - 更精致
     var playerFill = App._playerMarkerState === "locked" ? "#ff4444" : "#ffffff";
@@ -457,7 +445,7 @@ window.App = window.App || {};
     ctx.font = "13px 'Courier New',monospace";
     ctx.fillStyle = "rgba(160,160,190,0.8)";
     ctx.textAlign = "left";
-    ctx.fillText("(" + px + ", " + py + ")", 16, viewH - 16);
+    ctx.fillText("(" + px + ", " + py + ")", viewW - 80, viewH - 16);
   }
 
   // ═══════════════════════════════════════════
@@ -518,11 +506,10 @@ window.App = window.App || {};
   //  鼠标交互
   // ═══════════════════════════════════════════
   function onMapClick(e) {
+    if (App._isMoving) return;
     var rect = mainCanvas.getBoundingClientRect();
-    var scaleX = mainCanvas.width / rect.width;
-    var scaleY = mainCanvas.height / rect.height;
-    var mx = (e.clientX - rect.left) * scaleX;
-    var my = (e.clientY - rect.top) * scaleY;
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
     var tileX = Math.floor((mx / TILE) + cam.x);
     var tileY = Math.floor((my / TILE) + cam.y);
     if (tileX < 0 || tileX >= mapState.cols || tileY < 0 || tileY >= mapState.rows.length) return;
@@ -531,11 +518,10 @@ window.App = window.App || {};
   }
 
   function onMapHover(e) {
+    if (App._isMoving) return;
     var rect = mainCanvas.getBoundingClientRect();
-    var scaleX = mainCanvas.width / rect.width;
-    var scaleY = mainCanvas.height / rect.height;
-    var mx = (e.clientX - rect.left) * scaleX;
-    var my = (e.clientY - rect.top) * scaleY;
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
     var newX = Math.floor((mx / TILE) + cam.x);
     var newY = Math.floor((my / TILE) + cam.y);
     if (newX !== _hoverX || newY !== _hoverY) {
@@ -636,10 +622,8 @@ window.App = window.App || {};
 
     updateCameraTarget(p.px, p.py);
     if (isNewMap) {
-      cam.x = cam.targetX;
-      cam.y = cam.targetY;
+      cam.snap = true;
     }
-    playerScreen.initialized = false;
     markDirty();
   };
 
@@ -678,6 +662,8 @@ window.App = window.App || {};
 
         _animIdx = i;
         updateCameraTarget(step[0], step[1]);
+        cam.x = cam.targetX;
+        cam.y = cam.targetY;
         markDirty();
 
         await new Promise(function(r) { setTimeout(r, 50); });
