@@ -15,6 +15,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from backend.agents import brain as agent_brain
+from backend.agents.actor import act_loop, execute_plan_step_async
 from backend.agents.game_state import get_or_init_mind
 from backend.api.views import player_public as _player_public
 from backend.data.factions import FACTIONS
@@ -29,6 +30,7 @@ from backend.llm.params import (
     TALK_TEMPERATURE,
 )
 from backend.models.player import PlayerState
+from backend.observability.tracker import CallRecord, get_tracker
 from backend.services.agent_service import bg_reflect
 from backend.services.talk_service import apply_npc_reply, build_graceful_fallback, build_npc_messages
 from backend.systems.core import danger_sense_narrative, npc_ids_for_player, perception_scan, update_npc_state_dynamic
@@ -97,6 +99,11 @@ class FinaleBody(BaseModel):
 class AgentActBody(BaseModel):
     player_id: str = _PID
     npc_id: str = Field(..., min_length=1, max_length=32)
+
+class AgentActLoopBody(BaseModel):
+    player_id: str = _PID
+    npc_id: str = Field(..., min_length=1, max_length=32)
+    max_steps: int = Field(3, ge=1, le=10)
 
 
 def _sse(obj: dict[str, Any]) -> str:
@@ -288,6 +295,19 @@ async def npc_talk(body: TalkBody, bg: BackgroundTasks) -> dict[str, Any]:
                 body.npc_id, body.player_id, str(e)[:120]
             )
 
+        # eval 埋点
+        await get_tracker().record(CallRecord(
+            timestamp=time.time(),
+            operation="npc_talk",
+            model="",
+            player_id=body.player_id,
+            npc_id=body.npc_id,
+            parse_success=not is_fallback,
+            schema_violations=["parse_error"] if is_fallback else [],
+            latency_ms=int((time.perf_counter() - t0) * 1000),
+            status="error" if is_fallback else "success",
+        ))
+
         async with p.lock:
             out, needs_reflect = apply_npc_reply(p, body.npc_id, body.message, parsed, is_fallback=is_fallback)
             p.last_talk_npc_id = body.npc_id
@@ -347,7 +367,7 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
             parsed = parse_npc_reply_json(raw)
         except asyncio.CancelledError:
             logging.getLogger("api.routes").info("SSE stream cancelled for npc=%s player=%s", body.npc_id, body.player_id)
-            yield _sse({"done": True, "cancelled": True})
+            yield _sse({"done": True, "interrupted": True})
             return
         except TimeoutError:
             is_fallback = True
@@ -365,6 +385,21 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
                 "LLM fallback (stream) for npc=%s player=%s: %s",
                 body.npc_id, body.player_id, str(e)[:120]
             )
+            yield _sse({"done": True, "interrupted": True, "error": str(e)[:100]})
+            return
+
+        # eval 埋点
+        await get_tracker().record(CallRecord(
+            timestamp=time.time(),
+            operation="npc_talk",
+            model="",
+            player_id=body.player_id,
+            npc_id=body.npc_id,
+            parse_success=not is_fallback,
+            schema_violations=["parse_error"] if is_fallback else [],
+            latency_ms=int((time.perf_counter() - t0) * 1000),
+            status="error" if is_fallback else "success",
+        ))
 
         out = {}
         needs_reflect = False
@@ -375,7 +410,7 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
                 p.last_talk_message = body.message
         except asyncio.CancelledError:
             logging.getLogger("api.routes").info("SSE stream cancelled during state write for npc=%s player=%s", body.npc_id, body.player_id)
-            yield _sse({"done": True, "cancelled": True})
+            yield _sse({"done": True, "interrupted": True})
             return
         except Exception:
             out = {"error": "状态写入失败，请重试"}
@@ -399,7 +434,7 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
             yield _sse({"done": True, **out})
         except asyncio.CancelledError:
             logging.getLogger("api.routes").info("SSE stream cancelled during output for npc=%s player=%s", body.npc_id, body.player_id)
-            yield _sse({"done": True, "cancelled": True})
+            yield _sse({"done": True, "interrupted": True})
             return
 
     return StreamingResponse(
@@ -516,6 +551,60 @@ async def agent_plan(body: AgentActBody) -> dict[str, Any]:
         "plan_day": mind.plan_day,
         "plan_summary": mind.plan_summary,
         "plan_by_shichen": dict(mind.plan_by_shichen),
+        "player": _player_public(p),
+    }
+
+
+@router.post("/api/agent/act")
+async def agent_act(body: AgentActBody) -> dict[str, Any]:
+    from backend.session.store import room
+    p = room.players.get(body.player_id)
+    if not p:
+        raise HTTPException(404, "未知 player_id")
+    if p.dead:
+        raise HTTPException(400, "角色已故，无法行动")
+    if p.ended:
+        raise HTTPException(400, "本局已收束，无法操作")
+    npc = NPCS.get(body.npc_id)
+    if not npc:
+        raise HTTPException(404, "未知 npc_id")
+    async with p.lock:
+        mind = get_or_init_mind(p, body.npc_id)
+        result = await execute_plan_step_async(p, body.npc_id, mind)
+    return {
+        "action": result.action_type.value,
+        "description": result.description,
+        "success": result.success,
+        "mind_summary": mind.plan_summary,
+        "player": _player_public(p),
+    }
+
+
+@router.post("/api/agent/act_loop")
+async def agent_act_loop(body: AgentActLoopBody) -> dict[str, Any]:
+    from backend.session.store import room
+    p = room.players.get(body.player_id)
+    if not p:
+        raise HTTPException(404, "未知 player_id")
+    if p.dead:
+        raise HTTPException(400, "角色已故，无法行动")
+    if p.ended:
+        raise HTTPException(400, "本局已收束，无法操作")
+    npc = NPCS.get(body.npc_id)
+    if not npc:
+        raise HTTPException(404, "未知 npc_id")
+    async with p.lock:
+        mind = get_or_init_mind(p, body.npc_id)
+        before_reflect_at = mind.last_reflect_at
+        results = await act_loop(p, body.npc_id, mind, max_steps=body.max_steps)
+        reflected = mind.last_reflect_at != before_reflect_at
+    return {
+        "steps": [
+            {"action": r.action_type.value, "description": r.description, "success": r.success}
+            for r in results
+        ],
+        "total_steps": len(results),
+        "reflected": reflected,
         "player": _player_public(p),
     }
 
@@ -644,6 +733,7 @@ from backend.systems.bounty_board import (
     refresh_bounties,
 )
 from backend.systems.constants import BOUNTY_COUNT_RANGE
+from backend.systems.task_fsm import TaskFSM
 
 
 class RefreshBountyBody(BaseModel):
@@ -703,3 +793,31 @@ async def bounty_abandon(body: AbandonBountyBody) -> dict[str, Any]:
     async with p.lock:
         ok, msg = abandon_bounty(p)
         return {"ok": ok, "message": msg, "player": _player_public(p)}
+
+
+@router.get("/api/bounty/{player_id}/{bounty_id}/state")
+async def bounty_state(
+    player_id: str = Path(..., min_length=1, max_length=64),
+    bounty_id: str = Path(..., min_length=1, max_length=64),
+) -> dict[str, Any]:
+    p = _get_active_player(player_id)
+    bounty = None
+    if p.active_bounty and p.active_bounty.get("id") == bounty_id:
+        bounty = p.active_bounty
+    if not bounty:
+        bounty = next((b for b in (p.bounties or []) if b["id"] == bounty_id), None)
+    if not bounty:
+        raise HTTPException(404, "悬赏不存在")
+
+    fsm_data = bounty.get("task_fsm")
+    if not fsm_data:
+        raise HTTPException(400, "该悬赏无 FSM 状态")
+
+    fsm = TaskFSM.from_dict(fsm_data)
+    return {
+        "bounty_id": bounty_id,
+        "state": fsm.current_state.value,
+        "sub_steps": fsm.sub_steps,
+        "completed_steps": fsm.completed_steps,
+        "transition_log": fsm.transition_log,
+    }

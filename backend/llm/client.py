@@ -14,6 +14,7 @@ from backend.config import settings
 from backend.llm.cache import get_llm_cache
 from backend.llm.circuit_breaker import get_circuit_breaker
 from backend.models.llm_schema import NpcResponseSchema
+from backend.observability.tracker import CallRecord, get_tracker
 from backend.systems.constants import RETRY_BACKOFF_JITTER_MAX, RETRY_JITTER_MAX, RETRYABLE_HTTP_STATUSES
 
 log = logging.getLogger("llm_client")
@@ -254,10 +255,14 @@ async def _execute_with_retry(
 
             await circuit_breaker.failure()
             log.error(f"{operation_name} API Error: {e.response.text[:512]}")
+            tracker = get_tracker()
+            await tracker.record(CallRecord(
+                timestamp=time.time(), operation=operation_name, model="",
+                status="failed", error_msg=f"HTTP {status}: {e.response.text[:128]}",
+            ))
             raise
 
         except Exception as e:
-            # 修复 Major #5：区分可重试和不可重试异常
             if _is_retryable_error(e) and attempt < max_retries - 1:
                 delay = base_delay * (2 ** attempt) + (time.time() % 1.0) * RETRY_BACKOFF_JITTER_MAX
                 log.warning(
@@ -269,18 +274,30 @@ async def _execute_with_retry(
 
             await circuit_breaker.failure()
             log.error(f"{operation_name} Request Failed: {e}")
+            tracker = get_tracker()
+            await tracker.record(CallRecord(
+                timestamp=time.time(), operation=operation_name, model="",
+                status="failed", error_msg=str(e)[:128],
+            ))
             raise
 
+    tracker = get_tracker()
+    await tracker.record(CallRecord(
+        timestamp=time.time(), operation=operation_name, model="",
+        status="failed", error_msg=f"all {max_retries} retries exhausted",
+    ))
     raise RuntimeError(f"{operation_name}: all {max_retries} retries exhausted")
 
 
-async def _handle_llm_response(response_data: dict[str, Any], cache, circuit_breaker, messages, *, temperature: float = 0.0, model: str = "", max_tokens: int = 0) -> str:
+async def _handle_llm_response(response_data: dict[str, Any], cache, circuit_breaker, messages, *, temperature: float = 0.0, model: str = "", max_tokens: int = 0, start_time: float = 0.0, operation: str = "chat_completion") -> str:
     """处理 LLM 响应并写入缓存（修复 Major #7：提取公共响应解析逻辑）。
 
     Returns:
         解析后的文本内容
     """
     usage = response_data.get("usage", {})
+    prompt_tokens = 0
+    completion_tokens = 0
     if isinstance(usage, dict):
         prompt_tokens = usage.get("prompt_tokens", 0)
         completion_tokens = usage.get("completion_tokens", 0)
@@ -301,6 +318,14 @@ async def _handle_llm_response(response_data: dict[str, Any], cache, circuit_bre
     if settings.llm_cache_enabled:
         await cache.set(messages, content, temperature=temperature, model=model, max_tokens=max_tokens)
     await circuit_breaker.success()
+
+    tracker = get_tracker()
+    latency_ms = (time.time() - start_time) * 1000 if start_time else 0.0
+    await tracker.record(CallRecord(
+        timestamp=time.time(), operation=operation, model=model,
+        tokens_in=prompt_tokens, tokens_out=completion_tokens,
+        latency_ms=round(latency_ms, 2), status="success",
+    ))
 
     return content
 
@@ -458,13 +483,14 @@ async def chat_completion(
 
         max_retries = settings.llm_max_retries
         base_delay = settings.llm_retry_base_delay_s
+        _start = time.time()
 
         async def _do_request():
             client = await _get_client()
             r = await client.post(url, json=body)
             r.raise_for_status()
             data = r.json()
-            return await _handle_llm_response(data, cache, cb, messages, temperature=temperature, model=settings.llm_model, max_tokens=max_tokens)
+            return await _handle_llm_response(data, cache, cb, messages, temperature=temperature, model=settings.llm_model, max_tokens=max_tokens, start_time=_start, operation="chat_completion")
 
         result = await _execute_with_retry(_do_request, max_retries, base_delay, cb, "LLM")
         return result

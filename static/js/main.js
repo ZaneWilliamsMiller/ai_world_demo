@@ -589,6 +589,10 @@ window.App = window.App || {};
     );
   };
 
+  App.openAdminPanel = function() {
+    window.open('/admin.html', '_blank');
+  };
+
   App.setLoading = function(active, text) {
     var overlay = document.getElementById("loadingOverlay");
     if (!overlay) return;

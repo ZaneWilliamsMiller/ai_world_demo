@@ -95,6 +95,9 @@ window.App = window.App || {};
             }
             if (d.done) {
               receivedDone = true;
+              if (d.interrupted) {
+                App.addMsg("system", "⚠️ 对话中断，请重试");
+              }
               if (d.player) {
                 var stateData = { player: d.player };
                 if (d.npcs_here) stateData.npcs_here = d.npcs_here;

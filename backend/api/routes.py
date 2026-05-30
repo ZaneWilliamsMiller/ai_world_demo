@@ -17,11 +17,13 @@ router = APIRouter()
 from backend.api.npc_routes import router as npc_router
 from backend.api.player_routes import router as player_router
 from backend.api.save_routes import router as save_router
+from backend.api.admin_routes import router as admin_router
 from backend.config import settings
 
 router.include_router(player_router)
 router.include_router(npc_router)
 router.include_router(save_router)
+router.include_router(admin_router)
 
 if settings.enable_test_routes:
     from backend.api.dev import router as test_router

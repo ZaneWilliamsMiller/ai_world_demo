@@ -96,6 +96,23 @@ def advance_clock(p: PlayerState, ticks: int = 1) -> None:
                 pool = WEATHER_DAY
             choices = [w for w in pool if w != cur] or list(pool)
             p.weather = random.choice(choices)
+        # NPC 自主行动（同步，不消耗 LLM）
+        try:
+            from backend.agents.actor import execute_plan_step
+            from backend.agents.game_state import get_or_init_mind
+            from backend.data.npcs_data import NPCS as _NPCS
+            for _nid, _npos in list(getattr(p, "npc_positions", {}).items()):
+                _meta = _NPCS.get(_nid, {})
+                if _meta.get("always") or _meta.get("hidden"):
+                    continue
+                if not isinstance(_npos, (list, tuple)) or len(_npos) < 3:
+                    continue
+                if str(_npos[0]) != p.map_id:
+                    continue
+                _mind = get_or_init_mind(p, _nid)
+                execute_plan_step(p, _nid, _mind)
+        except Exception:
+            pass
     # ── NPC 货柜自然补货：世界日翻篇时检测 ──
     if int(p.world_day) > old_day:
         import logging

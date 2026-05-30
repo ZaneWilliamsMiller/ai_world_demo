@@ -53,6 +53,8 @@ signal chat_message(speaker: String, message: String, npc_id: String)
 signal system_message(text: String)
 signal logged_in()
 signal logged_out()
+signal agent_act_completed(result: Dictionary)
+signal agent_act_loop_completed(result: Dictionary)
 
 # ── Config ──
 @export var backend_url: String = ""
@@ -443,3 +445,29 @@ func apply_stream_result(data: Dictionary) -> void:
 			player_spirit = clampi(player_spirit + int(d.spirit), 0, player_spirit_max)
 	if data.has("player") or data.has("npcs_here"):
 		state_updated.emit()
+
+
+func agent_act(npc_id: String) -> void:
+	var res: Dictionary = await ApiClient.agent_act(player_id, npc_id)
+	if res.has("error"):
+		system_message.emit("Agent行动失败: %s" % res.get("error", "?"))
+	else:
+		if res.has("player"):
+			_apply_player(res.player)
+		if res.has("npcs_here"):
+			npcs_here = res.npcs_here
+		state_updated.emit()
+	agent_act_completed.emit(res)
+
+
+func agent_act_loop(npc_id: String, max_steps: int = 3) -> void:
+	var res: Dictionary = await ApiClient.agent_act_loop(player_id, npc_id, max_steps)
+	if res.has("error"):
+		system_message.emit("Agent循环行动失败: %s" % res.get("error", "?"))
+	else:
+		if res.has("player"):
+			_apply_player(res.player)
+		if res.has("npcs_here"):
+			npcs_here = res.npcs_here
+		state_updated.emit()
+	agent_act_loop_completed.emit(res)

@@ -24,6 +24,7 @@ from backend.llm.params import (
     REFLECT_MAX_TOKENS,
     REFLECT_TEMPERATURE,
 )
+from backend.observability.tracker import CallRecord, get_tracker
 
 log = logging.getLogger("agent_brain")
 
@@ -182,6 +183,7 @@ async def reflect(
         '{"insights": ["洞察1", "洞察2", "洞察3"]}'
     )
     user = f"近期见闻：\n{bullets}"
+    _reflect_violations = []
     try:
         raw = await chat_completion(
             [{"role": "system", "content": sys}, {"role": "user", "content": user}],
@@ -193,10 +195,31 @@ async def reflect(
         insights = data.get("insights", [])
         if not isinstance(insights, list):
             insights = []
+            _reflect_violations.append("insights_not_list")
     except Exception as e:
         log.warning("reflect LLM failed for %s: %s", npc_id, e)
+        await get_tracker().record(CallRecord(
+            timestamp=time.time(),
+            operation="reflect",
+            model="",
+            npc_id=npc_id,
+            parse_success=False,
+            schema_violations=["parse_error"],
+            status="error",
+        ))
         mind.importance_since_reflect *= 0.5
         return []
+
+    # eval 埋点
+    await get_tracker().record(CallRecord(
+        timestamp=time.time(),
+        operation="reflect",
+        model="",
+        npc_id=npc_id,
+        parse_success=True,
+        schema_violations=_reflect_violations,
+        status="success",
+    ))
 
     insights = [i for i in (s.strip().strip("「」『』\"'") for s in insights) if i]
     insights = insights[:5]
@@ -469,6 +492,7 @@ async def plan_day(
         f"你的本心（角色设定切片）：\n{seed_lines}\n"
     )
 
+    _plan_violations = []
     try:
         raw = await chat_completion(
             [{"role": "system", "content": sys}, {"role": "user", "content": user}],
@@ -481,11 +505,34 @@ async def plan_day(
         by_shichen = data.get("schedule", {})
         if not isinstance(by_shichen, dict):
             by_shichen = {}
+            _plan_violations.append("schedule_not_dict")
+        if not summary:
+            _plan_violations.append("summary_missing")
     except Exception as e:
         log.warning("plan_day LLM failed for %s: %s", npc_id, e)
+        await get_tracker().record(CallRecord(
+            timestamp=time.time(),
+            operation="plan_day",
+            model="",
+            npc_id=npc_id,
+            parse_success=False,
+            schema_violations=["parse_error"],
+            status="error",
+        ))
         mind.plan_day = int(world_day)
         mind.plan_summary = "（计划未定，随遇而安）"
         return False
+
+    # eval 埋点
+    await get_tracker().record(CallRecord(
+        timestamp=time.time(),
+        operation="plan_day",
+        model="",
+        npc_id=npc_id,
+        parse_success=True,
+        schema_violations=_plan_violations,
+        status="success",
+    ))
 
     valid_shichen = {}
     for sh, txt in by_shichen.items():

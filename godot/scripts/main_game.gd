@@ -429,7 +429,71 @@ func _refresh() -> void:
 						_msg_input.grab_focus()
 				)
 				entry.name = node_name
+				var plan_summary: String = n.get("plan_summary", "")
+				var affect_mood: String = n.get("affect_mood", "")
+				if not plan_summary.is_empty() or not affect_mood.is_empty():
+					var hb = entry.get_child(0)
+					entry.remove_child(hb)
+					var vbox := VBoxContainer.new()
+					vbox.name = "NpcVBox"
+					vbox.set_anchors_preset(PRESET_FULL_RECT)
+					vbox.add_child(hb)
+					if not plan_summary.is_empty():
+						var plan_lbl := UIBuilder.lbl("今日计划：%s" % plan_summary, 10, GameColors.DIM)
+						plan_lbl.name = "PlanSummary"
+						vbox.add_child(plan_lbl)
+					if not affect_mood.is_empty():
+						var mood_lbl := UIBuilder.lbl("心境：%s" % affect_mood, 10, GameColors.DIM)
+						mood_lbl.name = "AffectMood"
+						vbox.add_child(mood_lbl)
+					entry.add_child(vbox)
 				_npc_list_container.add_child(entry)
+			else:
+				var existing_entry = existing_names[node_name]
+				var plan_summary: String = n.get("plan_summary", "")
+				var affect_mood: String = n.get("affect_mood", "")
+				var has_extra := not plan_summary.is_empty() or not affect_mood.is_empty()
+				var vbox_node = existing_entry.find_child("NpcVBox", false, false)
+				if has_extra:
+					if not vbox_node:
+						var hb = existing_entry.get_child(0)
+						existing_entry.remove_child(hb)
+						vbox_node = VBoxContainer.new()
+						vbox_node.name = "NpcVBox"
+						vbox_node.set_anchors_preset(PRESET_FULL_RECT)
+						vbox_node.add_child(hb)
+						existing_entry.add_child(vbox_node)
+					var plan_lbl: Label = vbox_node.find_child("PlanSummary", false, false) as Label
+					if not plan_summary.is_empty():
+						if not plan_lbl:
+							plan_lbl = UIBuilder.lbl("今日计划：%s" % plan_summary, 10, GameColors.DIM)
+							plan_lbl.name = "PlanSummary"
+							vbox_node.add_child(plan_lbl)
+						else:
+							plan_lbl.text = "今日计划：%s" % plan_summary
+							plan_lbl.visible = true
+					else:
+						if plan_lbl:
+							plan_lbl.visible = false
+					var mood_lbl: Label = vbox_node.find_child("AffectMood", false, false) as Label
+					if not affect_mood.is_empty():
+						if not mood_lbl:
+							mood_lbl = UIBuilder.lbl("心境：%s" % affect_mood, 10, GameColors.DIM)
+							mood_lbl.name = "AffectMood"
+							vbox_node.add_child(mood_lbl)
+						else:
+							mood_lbl.text = "心境：%s" % affect_mood
+							mood_lbl.visible = true
+					else:
+						if mood_lbl:
+							mood_lbl.visible = false
+				else:
+					if vbox_node:
+						var hb = vbox_node.get_child(0)
+						vbox_node.remove_child(hb)
+						existing_entry.remove_child(vbox_node)
+						existing_entry.add_child(hb)
+						vbox_node.queue_free()
 			npc_idx += 1
 		for node_name in existing_names:
 			if not desired_names.has(node_name):

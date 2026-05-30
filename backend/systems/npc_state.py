@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 from backend.data.factions import FACTIONS
-from backend.data.maps_data import MAPS
+from backend.data.maps_data import LOCATION_KEYWORDS, MAP_LOCATIONS, MAPS
 from backend.data.npcs_data import LONG_DISTANCE_WANDERERS, NPC_FACTION, NPC_HABITS, NPC_STATE, NPCS
 from backend.models.player import PlayerState
 from backend.systems.constants import (
@@ -107,6 +107,68 @@ def maybe_wander_npcs(p: PlayerState, ticks: int = 1) -> None:
             p.npc_positions[nid] = random.choice(shelter_cands)
         elif cands:
             p.npc_positions[nid] = random.choice(cands)
+
+
+def _parse_plan_target(plan_text: str) -> tuple[str, int, int] | None:
+    """从计划文本中解析目标地点坐标（长关键词优先匹配）。"""
+    sorted_kw = sorted(LOCATION_KEYWORDS.keys(), key=len, reverse=True)
+    for kw in sorted_kw:
+        if kw in plan_text:
+            map_id, loc_name = LOCATION_KEYWORDS[kw]
+            coords = MAP_LOCATIONS.get(map_id, {}).get(loc_name)
+            if coords:
+                return (map_id, coords[0], coords[1])
+    return None
+
+
+def plan_driven_step(p: PlayerState, npc_id: str, mind: object) -> tuple[str, int, int] | None:
+    """基于计划的定向移动一步。"""
+    pos = p.npc_positions.get(npc_id)
+    if not pos or not isinstance(pos, (list, tuple)) or len(pos) < 3:
+        return None
+
+    mid, x, y = str(pos[0]), int(pos[1]), int(pos[2])
+    sh_name = shichen_name(p.world_shichen)
+    plan = mind.plan_by_shichen.get(sh_name, "")
+    if not plan:
+        return None
+
+    target = _parse_plan_target(plan)
+    if target is None:
+        return None
+
+    target_mid, tx, ty = target
+    if target_mid != mid:
+        return None
+
+    if x == tx and y == ty:
+        return None
+
+    rows = MAPS.get(mid, {}).get("rows", [])
+    if not rows:
+        return None
+
+    if y < 0 or y >= len(rows) or x < 0 or x >= len(rows[y]):
+        return None
+
+    dirs = ((1, 0), (-1, 0), (0, 1), (0, -1))
+    best: tuple[str, int, int] | None = None
+    best_dist = abs(x - tx) + abs(y - ty)
+
+    for dx, dy in dirs:
+        nx, ny = x + dx, y + dy
+        if ny < 0 or ny >= len(rows) or nx < 0 or nx >= len(rows[ny]):
+            continue
+        a = rows[y][x]
+        b = rows[ny][nx]
+        if not can_step_between(a, b):
+            continue
+        dist = abs(nx - tx) + abs(ny - ty)
+        if dist < best_dist:
+            best = (mid, nx, ny)
+            best_dist = dist
+
+    return best
 
 
 def is_active_at(active_val: tuple | list, sh: int, *, nocturnal: bool = False) -> bool:

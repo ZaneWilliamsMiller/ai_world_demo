@@ -184,6 +184,10 @@ def _deserialize_player(data: dict[str, Any]) -> PlayerState:
 def save_game(p: PlayerState) -> str:
     _validate_player_id(p.player_id)
     _ensure_dir()
+    from backend.systems.consistency import clamp_player_state
+    fixes = clamp_player_state(p)
+    if fixes:
+        logging.getLogger("save_system").warning("auto-fixed %d issues for %s: %s", len(fixes), p.player_id, fixes)
     data = _serialize_player(p)
     fp = SAVE_DIR / f"{p.player_id}.json"
     try:

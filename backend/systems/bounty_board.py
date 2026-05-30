@@ -33,6 +33,7 @@ from backend.data.npcs_data import NPCS
 from backend.models.player import PlayerState
 from backend.systems.constants import BOUNTY_COUNT_RANGE, BOUNTY_REFRESH_INTERVAL_DAYS
 from backend.systems.core import apply_favor
+from backend.systems.task_fsm import TaskFSM, TaskState
 from backend.systems.time_weather import shichen_name
 
 log = logging.getLogger("bounty")
@@ -81,6 +82,22 @@ _BOUNTY_TEMPLATES = [
 #  p.bounties: list[dict] = []  玩家当前可接的悬赏
 #  p.active_bounty: dict | None  当前正在做的悬赏
 #  p.completed_bounties: list[str]  已完成的悬赏 ID
+
+
+def _requires_to_sub_steps(requires: dict[str, str]) -> list[dict]:
+    """将 requires 字典转为 sub_steps 列表。"""
+    label_map = {
+        "talk_to_npc": "与{v}交谈",
+        "ask_about": "打听{v}的消息",
+        "move_to": "前往{v}",
+        "with_npc": "护送{v}",
+        "have_item": "获得{v}",
+    }
+    steps = []
+    for k, v in requires.items():
+        label = label_map.get(k, "{v}").format(v=v)
+        steps.append({"key": f"{k}_{v}", "label": label, "completed": False})
+    return steps
 
 
 def _random_target_npc(p: PlayerState) -> str | None:
@@ -176,9 +193,13 @@ def generate_bounties(p: PlayerState, count: int = 3) -> list[dict[str, Any]]:
             "min_rep": tmpl.get("min_rep", {}),
             "issued_at_day": int(p.world_day),
             "issued_at_shichen": shichen_name(p.world_shichen),
-            # 押送/寻回类：预设目的地坐标，供 accept 时快照
             "_target_coords": (map_id, loc_px, loc_py),
         }
+
+        fsm = TaskFSM(initial_state=TaskState.AVAILABLE)
+        fsm.sub_steps = _requires_to_sub_steps(requires)
+        bounty["task_fsm"] = fsm.to_dict()
+
         result.append(bounty)
 
     return result
@@ -213,10 +234,13 @@ def accept_bounty(p: PlayerState, bounty_id: str) -> tuple[bool, str]:
     if not ok:
         return False, reason
 
-    # ── 押送类：快照目的地坐标（用于 check_bounty_progress 的精确判定）──
+    fsm = TaskFSM.from_dict(bounty["task_fsm"])
+    if not fsm.transition(TaskState.IN_PROGRESS):
+        return False, "无法接取此悬赏。"
+    bounty["task_fsm"] = fsm.to_dict()
+
     requires = bounty.get("requires", {})
     if "move_to" in requires:
-        # 使用生成时预设的坐标
         coords = bounty.get("_target_coords")
         if coords:
             bounty["_target_pos"] = coords
@@ -242,7 +266,8 @@ def check_bounty_progress(p: PlayerState) -> dict[str, Any] | None:
     requires = bounty.get("requires", {})
     progress: dict[str, Any] = {"done": False, "reason": ""}
 
-    # ── 缉拿/打探类：需要与目标 NPC 对话并问及关键词 ──
+    fsm = TaskFSM.from_dict(bounty.get("task_fsm", {}))
+
     if "talk_to_npc" in requires:
         target_npc = requires["talk_to_npc"]
         ask_about = requires.get("ask_about", "")
@@ -250,53 +275,63 @@ def check_bounty_progress(p: PlayerState) -> dict[str, Any] | None:
         last_msg = getattr(p, "last_talk_message", None) or ""
 
         if last_npc == target_npc:
-            # 检查对话内容是否包含关键话题词
             if ask_about and ask_about.lower() in last_msg.lower():
                 progress["done"] = True
                 npc_name = NPCS.get(target_npc, {}).get("name", target_npc)
                 progress["reason"] = f"已向{npc_name}打探「{ask_about}」。"
+                fsm.complete_step(f"talk_to_npc_{target_npc}")
+                fsm.complete_step(f"ask_about_{ask_about}")
             elif not ask_about:
-                # 无关键词限制：与目标 NPC 对话即算完成
                 progress["done"] = True
                 npc_name = NPCS.get(target_npc, {}).get("name", target_npc)
                 progress["reason"] = f"已与{npc_name}交谈。"
+                fsm.complete_step(f"talk_to_npc_{target_npc}")
             else:
                 npc_name = NPCS.get(target_npc, {}).get("name", target_npc)
                 progress["reason"] = f"已找到{npc_name}，但尚未问及「{ask_about}」。"
+                fsm.complete_step(f"talk_to_npc_{target_npc}")
         else:
             npc_name = NPCS.get(target_npc, {}).get("name", target_npc)
             progress["reason"] = f"尚未找到{npc_name}（目标：{target_npc}）。"
 
-    # ── 押送类：需要移动到目的地 ──
     elif "move_to" in requires:
         dest_map_id = requires.get("move_to", "")
-        # 使用 bounty 中存的目标坐标或 last_move 的坐标
         target_pos = bounty.get("_target_pos")
         if target_pos:
             t_map, t_px, t_py = target_pos
             if p.map_id == t_map and p.px == t_px and p.py == t_py:
                 progress["done"] = True
                 progress["reason"] = f"已抵达目的地坐标 ({t_px},{t_py})。"
+                fsm.complete_step(f"move_to_{dest_map_id}")
             else:
                 progress["reason"] = "尚在途中，未到目的地。"
         else:
-            # 兜底：检查最近的一次移动
             last_map = getattr(p, "last_move_map_id", None)
             if last_map and last_map == dest_map_id:
                 progress["done"] = True
                 progress["reason"] = f"已抵达{dest_map_id}。"
+                fsm.complete_step(f"move_to_{dest_map_id}")
             else:
                 progress["reason"] = "尚未到达目的地。"
 
-    # ── 寻回类：需要获得物品 ──
+        if "with_npc" in requires:
+            with_npc_id = requires["with_npc"]
+            if progress["done"]:
+                fsm.complete_step(f"with_npc_{with_npc_id}")
+
     elif "have_item" in requires:
         item = requires["have_item"]
         if (p.inventory or {}).get(item, 0) > 0:
             progress["done"] = True
             progress["reason"] = f"已找到{item}。"
+            fsm.complete_step(f"have_item_{item}")
         else:
             progress["reason"] = f"尚未获得{item}。"
 
+    if fsm.all_steps_completed() and fsm.can_transition(TaskState.COMPLETABLE):
+        fsm.transition(TaskState.COMPLETABLE)
+
+    bounty["task_fsm"] = fsm.to_dict()
     return progress
 
 
@@ -310,9 +345,16 @@ def complete_bounty(p: PlayerState) -> tuple[bool, str, dict[str, Any]]:
         p.active_bounty = None
         return False, "此悬赏已完成。", {}
 
-    progress = check_bounty_progress(p)
-    if not progress or not progress.get("done"):
-        return False, "悬赏尚未完成。", {}
+    fsm = TaskFSM.from_dict(bounty.get("task_fsm", {}))
+    if fsm.current_state != TaskState.COMPLETABLE:
+        progress = check_bounty_progress(p)
+        if not progress or not progress.get("done"):
+            return False, "悬赏尚未完成。", {}
+        fsm = TaskFSM.from_dict(bounty.get("task_fsm", {}))
+
+    if not fsm.transition(TaskState.COMPLETED):
+        return False, "无法完成此悬赏。", {}
+    bounty["task_fsm"] = fsm.to_dict()
 
     reward = bounty.get("reward", {})
 
@@ -367,6 +409,9 @@ def abandon_bounty(p: PlayerState) -> tuple[bool, str]:
     if not p.active_bounty:
         return False, "当前没有进行中的悬赏。"
     title = p.active_bounty["title"]
+    fsm = TaskFSM.from_dict(p.active_bounty.get("task_fsm", {}))
+    fsm.transition(TaskState.ABANDONED)
+    p.active_bounty["task_fsm"] = fsm.to_dict()
     p.active_bounty = None
     return True, f"已放弃悬赏：「{title}」。"
 

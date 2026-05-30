@@ -291,3 +291,23 @@ func run_test(test_name: String) -> Dictionary:
 		res.erase("_status")
 		return res
 	return {"success": false, "output": "请求失败: HTTP %d" % res.get("_status", 0)}
+
+
+## Agent 单步行动
+func agent_act(player_id: String, npc_id: String) -> Dictionary:
+	var body := {"player_id": player_id, "npc_id": npc_id}
+	var res: Dictionary = await request("/api/agent/act", "POST", body)
+	if res.get("_status", 0) == 200:
+		res.erase("_status")
+		return res
+	return {"ok": false, "error": res.get("error", "HTTP %d" % res.get("_status", 0))}
+
+
+## Agent 循环行动
+func agent_act_loop(player_id: String, npc_id: String, max_steps: int = 3) -> Dictionary:
+	var body := {"player_id": player_id, "npc_id": npc_id, "max_steps": max_steps}
+	var res: Dictionary = await request("/api/agent/act_loop", "POST", body)
+	if res.get("_status", 0) == 200:
+		res.erase("_status")
+		return res
+	return {"ok": false, "error": res.get("error", "HTTP %d" % res.get("_status", 0))}
