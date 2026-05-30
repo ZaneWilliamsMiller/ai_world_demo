@@ -147,7 +147,7 @@ window.App = window.App || {};
 
     var controller = new AbortController();
     App._streamAbortController = controller;
-    var connectTimeout = setTimeout(function() { controller.abort(); }, 15000);
+    var connectTimeout = setTimeout(function() { controller.abort(); }, 30000);
 
     var res;
     try {

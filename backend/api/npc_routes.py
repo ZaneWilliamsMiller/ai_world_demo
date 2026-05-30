@@ -362,19 +362,28 @@ async def npc_talk_stream(body: TalkBody, bg: BackgroundTasks) -> StreamingRespo
         raise HTTPException(429, "对话过于频繁，请稍后再试")
     p, _npc = _validate_talk_request(body)
 
-    async with p.lock:
-        update_npc_state_dynamic(p, body.npc_id)
-        hist = p.history.setdefault(body.npc_id, [])
-        hist_slice = list(hist[-14:])
-
-    import backend.llm.prompt_compress as _pc
-    if len(hist_slice) >= _pc.COMPRESS_THRESHOLD:
-        hist_slice = await _pc.compress_conversation_history(
-            hist_slice, npc_name=NPCS.get(body.npc_id, {}).get("name", ""))
-
-    messages = build_npc_messages(p, body.npc_id, body.message, hist_slice)
-
     async def event_gen():
+        try:
+            async with p.lock:
+                update_npc_state_dynamic(p, body.npc_id)
+                hist = p.history.setdefault(body.npc_id, [])
+                hist_slice = list(hist[-14:])
+
+            import backend.llm.prompt_compress as _pc
+            if len(hist_slice) >= _pc.COMPRESS_THRESHOLD:
+                hist_slice = await _pc.compress_conversation_history(
+                    hist_slice, npc_name=NPCS.get(body.npc_id, {}).get("name", ""))
+
+            messages = build_npc_messages(p, body.npc_id, body.message, hist_slice)
+        except asyncio.CancelledError:
+            logging.getLogger("api.routes").info("SSE stream cancelled during prep for npc=%s player=%s", body.npc_id, body.player_id)
+            yield _sse({"done": True, "interrupted": True})
+            return
+        except Exception as e:
+            logging.getLogger("api.routes").warning("Pre-processing error (stream) for npc=%s player=%s: %s", body.npc_id, body.player_id, str(e)[:120])
+            yield _sse({"done": True, "error": "预处理失败，请重试", "interrupted": True})
+            return
+
         t0 = time.perf_counter()
         is_fallback = False
         is_light_inquiry = False

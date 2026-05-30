@@ -383,7 +383,8 @@ window.App = window.App || {};
     try {
       const data = await App.bountyComplete();
       if (data.ok) {
-        App.addMsg("system", "悬赏完成！" + (data.reward ? " 获得奖励: " + data.reward : ""));
+        var rewardText = data.reward ? (typeof data.reward === "string" ? data.reward : JSON.stringify(data.reward)) : "";
+        App.addMsg("system", "悬赏完成！" + (rewardText ? " 获得奖励: " + rewardText : ""));
         App.doBountyRefresh();
       } else {
         App.addMsg("system", data.message || "无法完成悬赏");
@@ -673,6 +674,10 @@ window.App = window.App || {};
   };
 
   App._showOfflineScreen = function() {
+    var mainUI = DOM.mainUI || document.getElementById("mainUI");
+    if (mainUI) mainUI.style.display = "none";
+    var topbar = DOM.topbar || document.getElementById("topbar");
+    if (topbar) topbar.style.display = "none";
     var overlay = document.getElementById("loginOverlay");
     if (!overlay) return;
     overlay.textContent = "";
@@ -725,7 +730,7 @@ window.App = window.App || {};
         } else if (_pollErrorCount >= 3) {
           fetch("/api/health", { cache: "no-store" })
             .then(function() { _pollErrorCount = 0; })
-            .catch(function() { App.addMsg("system", "\u26a0\ufe0f \u4e0e\u670d\u52a1\u5668\u8fde\u63a5\u4e2d\u65ad\uff0c\u8bf7\u68c0\u67e5\u540e\u7aef\u670d\u52a1\u662f\u5426\u8fd0\u884c"); });
+            .catch(function() { App._showOfflineScreen(); });
         }
       });
     }
@@ -739,6 +744,10 @@ window.App = window.App || {};
         fetch("/api/health", { cache: "no-store" })
           .catch(function() { App._showOfflineScreen(); });
       }
+    });
+
+    window.addEventListener("offline", function() {
+      App._showOfflineScreen();
     });
 
     fetch("/api/health", { cache: "no-store" })
@@ -773,6 +782,28 @@ window.App = window.App || {};
     if (bountyCompleteBtn) bountyCompleteBtn.addEventListener("click", function() { App.doBountyComplete(); });
     var bountyAbandonBtn = document.getElementById("bountyAbandonBtn");
     if (bountyAbandonBtn) bountyAbandonBtn.addEventListener("click", function() { App.doBountyAbandon(); });
+
+    var bountyExpandBtn = document.getElementById("bountyExpandBtn");
+    var bountyOverlay = document.getElementById("bountyOverlay");
+    var bountyOverlayClose = document.getElementById("bountyOverlayClose");
+    if (bountyExpandBtn && bountyOverlay) {
+      bountyExpandBtn.addEventListener("click", function() {
+        var isVisible = bountyOverlay.classList.contains("visible");
+        if (isVisible) {
+          bountyOverlay.classList.remove("visible");
+          bountyExpandBtn.textContent = "展开";
+        } else {
+          bountyOverlay.classList.add("visible");
+          bountyExpandBtn.textContent = "收起";
+        }
+      });
+    }
+    if (bountyOverlayClose && bountyOverlay) {
+      bountyOverlayClose.addEventListener("click", function() {
+        bountyOverlay.classList.remove("visible");
+        if (bountyExpandBtn) bountyExpandBtn.textContent = "展开";
+      });
+    }
 
     var cancelStreamBtn = document.getElementById("cancelStreamBtn");
     if (cancelStreamBtn) {

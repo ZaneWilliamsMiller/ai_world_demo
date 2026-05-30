@@ -95,7 +95,10 @@ window.App = window.App || {};
   }
 
   function renderNpcBar(data) {
-    App.npcsHere = data.npcs_here || [];
+    var npcs = data.npcs_here;
+    if (npcs !== undefined) {
+      App.npcsHere = npcs;
+    }
 
     var ul = document.getElementById("npcList");
     if (!ul) return;
@@ -173,12 +176,162 @@ window.App = window.App || {};
     }
   }
 
+  function _formatReward(reward) {
+    if (!reward) return "";
+    if (typeof reward === "string") return reward;
+    var parts = [];
+    if (reward.coins) parts.push(reward.coins + "文");
+    if (reward.rep && typeof reward.rep === "object") {
+      var facNames = {"yamen": "衙门", "biaoju": "镖局", "caobang": "漕帮", "jianghu": "江湖"};
+      for (var k in reward.rep) {
+        parts.push((facNames[k] || k) + "声望+" + reward.rep[k]);
+      }
+    }
+    if (reward.favor && typeof reward.favor === "object") {
+      for (var f in reward.favor) {
+        var val = reward.favor[f];
+        parts.push((val > 0 ? "好感+" : "好感") + val);
+      }
+    }
+    if (reward.items_gain && Array.isArray(reward.items_gain)) {
+      reward.items_gain.forEach(function(it) { parts.push(it); });
+    }
+    return parts.join("，") || "无";
+  }
+
+  function _renderBountyOverlay(data) {
+    var p = data.player || {};
+    var bounties = p.bounties || [];
+    var activeBounty = p.active_bounty;
+    var contentEl = document.getElementById("bountyOverlayContent");
+    if (!contentEl) return;
+    contentEl.innerHTML = "";
+
+    if (activeBounty) {
+      var activeDiv = document.createElement("div");
+      activeDiv.className = "bounty-overlay-item active";
+      var activeTitle = document.createElement("div");
+      activeTitle.className = "bounty-title";
+      activeTitle.textContent = (activeBounty.title || "进行中") + " ✓";
+      activeDiv.appendChild(activeTitle);
+      if (activeBounty.desc) {
+        var activeDesc = document.createElement("div");
+        activeDesc.className = "bounty-desc";
+        activeDesc.textContent = activeBounty.desc;
+        activeDiv.appendChild(activeDesc);
+      }
+      var activeReward = document.createElement("div");
+      activeReward.className = "bounty-reward";
+      activeReward.textContent = "奖励: " + _formatReward(activeBounty.reward);
+      activeDiv.appendChild(activeReward);
+      var activeLabel = document.createElement("div");
+      activeLabel.style.cssText = "color:var(--accent-green);font-size:11px;margin-top:4px;";
+      activeLabel.textContent = "✓ 已接受 — 进行中";
+      activeDiv.appendChild(activeLabel);
+      contentEl.appendChild(activeDiv);
+    }
+
+    if (!bounties || bounties.length === 0) {
+      var emptyDiv = document.createElement("div");
+      emptyDiv.style.cssText = "color:var(--text-muted);padding:12px;font-size:12px;";
+      emptyDiv.textContent = "暂无悬赏，点击刷新查看";
+      contentEl.appendChild(emptyDiv);
+      return;
+    }
+
+    bounties.forEach(function(b) {
+      var isAccepted = b.status === "active" || b.accepted ||
+        (activeBounty && activeBounty.id === b.id);
+      var item = document.createElement("div");
+      item.className = isAccepted ? "bounty-overlay-item active" : "bounty-overlay-item";
+
+      var title = document.createElement("div");
+      title.className = "bounty-title";
+      title.textContent = b.title || b.name || "悬赏";
+      item.appendChild(title);
+
+      if (b.desc) {
+        var desc = document.createElement("div");
+        desc.className = "bounty-desc";
+        desc.textContent = b.desc;
+        item.appendChild(desc);
+      }
+      var rewardEl = document.createElement("div");
+      rewardEl.className = "bounty-reward";
+      rewardEl.textContent = "奖励: " + _formatReward(b.reward);
+      item.appendChild(rewardEl);
+
+      if (b.requires) {
+        var reqDiv = document.createElement("div");
+        reqDiv.style.cssText = "color:var(--text-muted);font-size:10px;margin-bottom:4px;";
+        var reqParts = [];
+        if (b.requires.talk_to_npc) reqParts.push("与NPC交谈");
+        if (b.requires.ask_about) reqParts.push("打听消息");
+        if (b.requires.move_to) reqParts.push("前往地点");
+        if (b.requires.with_npc) reqParts.push("护送NPC");
+        if (b.requires.have_item) reqParts.push("获取物品");
+        if (reqParts.length) reqDiv.textContent = "条件: " + reqParts.join("、");
+        item.appendChild(reqDiv);
+      }
+
+      if (isAccepted) {
+        var label = document.createElement("div");
+        label.style.cssText = "color:var(--accent-green);font-size:11px;margin-top:4px;";
+        label.textContent = "✓ 已接受";
+        item.appendChild(label);
+      } else {
+        var acceptBtn = document.createElement("button");
+        acceptBtn.className = "bounty-accept-btn";
+        acceptBtn.textContent = "接取悬赏";
+        acceptBtn.addEventListener("click", function(ev) {
+          ev.stopPropagation();
+          var bid = b.id;
+          if (!bid) return;
+          var rewardText = _formatReward(b.reward);
+          App.showConfirm(
+            "接取悬赏",
+            (b.title || "悬赏") + "<br><br>" +
+            (b.desc ? b.desc + "<br><br>" : "") +
+            "奖励: " + rewardText + "<br><br>确定要接取此悬赏吗？",
+            function() { App.doBountyAccept(bid); }
+          );
+        });
+        item.appendChild(acceptBtn);
+      }
+
+      contentEl.appendChild(item);
+    });
+  }
+
   function renderBounty(data) {
     var p = data.player || {};
     var bounties = p.bounties || data.bounties;
+    var activeBounty = p.active_bounty;
     var listEl = document.getElementById("bountyList");
     if (!listEl) return;
     listEl.innerHTML = "";
+
+    _renderBountyOverlay(data);
+
+    if (activeBounty) {
+      var activeDiv = document.createElement("div");
+      activeDiv.className = "bounty-item active";
+      var activeTitle = document.createElement("div");
+      activeTitle.className = "bounty-title";
+      activeTitle.textContent = (activeBounty.title || "进行中") + " ✓";
+      activeDiv.appendChild(activeTitle);
+      if (activeBounty.desc) {
+        var activeDesc = document.createElement("div");
+        activeDesc.className = "bounty-desc";
+        activeDesc.textContent = activeBounty.desc;
+        activeDiv.appendChild(activeDesc);
+      }
+      var activeReward = document.createElement("div");
+      activeReward.className = "bounty-reward";
+      activeReward.textContent = "奖励: " + _formatReward(activeBounty.reward);
+      activeDiv.appendChild(activeReward);
+      listEl.appendChild(activeDiv);
+    }
 
     if (!bounties || bounties.length === 0) {
       var emptyDiv = document.createElement("div");
@@ -189,39 +342,71 @@ window.App = window.App || {};
     }
 
     bounties.forEach(function(b) {
-      var isActive = b.status === "active" || b.accepted;
+      var isAccepted = b.status === "active" || b.accepted ||
+        (activeBounty && activeBounty.id === b.id);
       var item = document.createElement("div");
-      item.className = isActive ? "bounty-item active" : "bounty-item";
+      item.className = isAccepted ? "bounty-item active" : "bounty-item";
       item.setAttribute("data-bounty-id", b.id || "");
 
+      var header = document.createElement("div");
+      header.className = "bounty-item-header";
       var title = document.createElement("div");
       title.className = "bounty-title";
       title.textContent = b.title || b.name || "悬赏";
-      item.appendChild(title);
+      header.appendChild(title);
+      if (!isAccepted) {
+        var toggleBtn = document.createElement("span");
+        toggleBtn.className = "bounty-toggle";
+        toggleBtn.textContent = "展开";
+        header.appendChild(toggleBtn);
+      }
+      item.appendChild(header);
+
+      var detail = document.createElement("div");
+      detail.className = "bounty-detail";
+      detail.style.display = "none";
 
       if (b.desc) {
         var desc = document.createElement("div");
         desc.className = "bounty-desc";
-        desc.textContent = (b.desc || "").substring(0, 80);
-        item.appendChild(desc);
+        desc.textContent = b.desc;
+        detail.appendChild(desc);
       }
-      if (b.reward) {
-        var reward = document.createElement("div");
-        reward.className = "bounty-reward";
-        reward.textContent = "\u5956\u52b1: " + b.reward;
-        item.appendChild(reward);
-      }
-      if (isActive) {
+      var rewardEl = document.createElement("div");
+      rewardEl.className = "bounty-reward";
+      rewardEl.textContent = "奖励: " + _formatReward(b.reward);
+      detail.appendChild(rewardEl);
+
+      if (isAccepted) {
         var activeLabel = document.createElement("div");
         activeLabel.style.cssText = "color:var(--accent-green);font-size:10px;margin-top:2px;";
-        activeLabel.textContent = "\u2713 \u5df2\u63a5\u53d7";
-        item.appendChild(activeLabel);
+        activeLabel.textContent = "✓ 已接受";
+        detail.appendChild(activeLabel);
       }
 
-      if (!isActive) {
+      item.appendChild(detail);
+
+      if (!isAccepted) {
+        var toggleBtnEl = header.querySelector(".bounty-toggle");
+        if (toggleBtnEl) {
+          toggleBtnEl.addEventListener("click", function(ev) {
+            ev.stopPropagation();
+            var isOpen = detail.style.display !== "none";
+            detail.style.display = isOpen ? "none" : "block";
+            toggleBtnEl.textContent = isOpen ? "展开" : "收起";
+          });
+        }
         item.addEventListener("click", function() {
           var bid = b.id;
-          if (bid) App.doBountyAccept(bid);
+          if (!bid) return;
+          var rewardText = _formatReward(b.reward);
+          App.showConfirm(
+            "接取悬赏",
+            (b.title || "悬赏") + "<br><br>" +
+            (b.desc ? b.desc + "<br><br>" : "") +
+            "奖励: " + rewardText + "<br><br>确定要接取此悬赏吗？",
+            function() { App.doBountyAccept(bid); }
+          );
         });
       }
 
