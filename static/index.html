@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>活纸 · 江湖行纪</title>
-  <link rel="stylesheet" href="/static/css/game.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/game.css">
 </head>
 <body>
 <div id="app">
@@ -16,15 +17,15 @@
 
       <!-- 新建角色 -->
       <div id="loginForm">
-        <label>江湖名号</label>
+        <label for="inpName">江湖名号</label>
         <input type="text" id="inpName" placeholder="输入你的名号..." maxlength="24">
-        <label>性别</label>
+        <label for="inpGender">性别</label>
         <select id="inpGender">
           <option value="男">男</option>
           <option value="女">女</option>
           <option value="未言">不透露</option>
         </select>
-        <label>
+        <label for="inpPermadeath">
           <input type="checkbox" id="inpPermadeath"> 真实江湖（永久死亡）
         </label>
         <button onclick="App.startNewGame()">踏入江湖</button>
@@ -32,19 +33,39 @@
 
       <!-- 加载存档 -->
       <div id="loadForm" style="display:none;">
-        <label>选择存档</label>
+        <label for="savesList">选择存档</label>
         <div class="saves-list" id="savesList"></div>
         <button onclick="App.loadGame()">继续江湖</button>
+        <button onclick="App.deleteSave()"
+                class="btn-delete-save">
+          删除存档
+        </button>
         <button onclick="App.showLoginForm()"
-                style="background:transparent;color:var(--text-dim);margin-top:4px;">
+                style="background:transparent;color:var(--text-muted);margin-top:4px;">
           返回新建
         </button>
       </div>
 
       <div style="text-align:center;margin-top:12px;">
         <button onclick="App.showLoadForm()"
-                style="background:transparent;color:var(--accent);">
+                style="background:transparent;color:var(--accent-blue);">
           载入旧档 →
+        </button>
+        <span style="margin:0 8px;color:var(--border-silver);">|</span>
+        <button onclick="App.toggleConfigPanel()"
+                style="background:transparent;color:var(--accent-purple);">
+          ⚙ 配置
+        </button>
+        <span style="margin:0 8px;color:var(--border-silver);">|</span>
+        <button onclick="window.location.href='tests.html'"
+                style="background:transparent;color:#e94560;">
+          🧪 测试
+        </button>
+        <span style="margin:0 8px;color:var(--border-silver);">|</span>
+        <button onclick="App.shutdownAll()"
+                style="background:transparent;color:#ef4444;"
+                title="关闭前后端服务">
+          ⏻ 关闭服务
         </button>
       </div>
     </div>
@@ -57,7 +78,10 @@
     <h1>🏮 活纸 · 江湖行纪</h1>
     <span class="subtitle" id="topbarInfo"></span>
     <span class="spacer"></span>
+    <button onclick="App.toggleConfigPanel()">⚙</button>
+    <button onclick="App.doRest()">🛌 休息</button>
     <button onclick="App.doSaveFlow()">💾 存档</button>
+    <button onclick="App.doFinale()">📜 终局</button>
     <button onclick="App.doLogout()">🚪 退出</button>
   </div>
 
@@ -67,10 +91,14 @@
     <div class="map-panel">
       <div class="panel-title" id="mapTitle">🗺️ 地图</div>
       <div class="map-container" id="mapContainer"></div>
+      <div id="loadingOverlay" class="loading-overlay" style="display:none;" role="status" aria-label="加载中">
+        <div class="loading-spinner"></div>
+        <span class="loading-text">加载中...</span>
+      </div>
       <div class="map-legend">
-        <span style="color:#4fc3f7;">■</span> 你
-        <span style="color:#ff7043;">■</span> NPC
-        <span style="color:#ffd700;">↗</span> 界门
+        <span style="color:#4fc3f7;">●</span> 你
+        <span style="color:#ff7043;">●</span> NPC
+        <span style="color:var(--text-muted);">WASD/方向键 移动 | 点击地图/小地图 寻路</span>
       </div>
     </div>
 
@@ -101,6 +129,8 @@
         <div class="inv-row" id="statInv">
           <span style="color:#555;">身无长物</span>
         </div>
+        <div id="statAtmosphere" class="stat-atmosphere"></div>
+        <div id="statDanger" class="stat-danger"></div>
       </div>
 
       <!-- NPC 列表 + 界门 -->
@@ -110,9 +140,20 @@
         <div class="portal-list" id="portalList"></div>
       </div>
 
+      <!-- 悬赏榜 -->
+      <div class="bounty-section">
+        <h3>📜 悬赏榜</h3>
+        <div id="bountyList"></div>
+        <div class="bounty-actions">
+          <button id="bountyRefreshBtn">刷新悬赏</button>
+          <button id="bountyCompleteBtn">完成悬赏</button>
+          <button id="bountyAbandonBtn">放弃悬赏</button>
+        </div>
+      </div>
+
       <!-- 对话框 -->
       <div class="dialogue-section">
-        <div class="dialogue-area" id="dialogueArea">
+        <div class="dialogue-area" id="dialogueArea" role="log" aria-live="polite">
           <div class="msg system" id="introMsg"></div>
         </div>
         <div class="input-bar">
@@ -120,8 +161,8 @@
           <input type="text" id="msgInput" placeholder="对 TA 说些什么..."
                  onkeydown="if(event.key==='Enter')App.doTalk()">
           <button onclick="App.doTalk()" id="talkBtn">发送</button>
+          <button id="cancelStreamBtn" onclick="App.cancelTalkStream()">取消</button>
         </div>
-        <div id="moveStatus" style="display:none;padding:2px 8px;font-size:11px;color:var(--text-dim);"></div>
       </div>
 
     </div>
@@ -129,13 +170,75 @@
   </div>
 </div>
 
-<!-- 脚本 -->
-<script src="/static/js/store.js"></script>
-<script src="/static/js/api.js"></script>
-<script src="/static/js/map.js"></script>
-<script src="/static/js/ui.js"></script>
-<script src="/static/js/dialogue.js"></script>
-<script src="/static/js/main.js"></script>
+<!-- ========== 确认对话框 ========== -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-dialog" id="confirmDialog" role="dialog" aria-modal="true">
+    <div class="confirm-icon">⚠️</div>
+    <h3 id="confirmTitle">确认操作</h3>
+    <p id="confirmMessage">确定要执行此操作吗？</p>
+    <div class="confirm-actions">
+      <button class="btn-confirm btn-confirm-cancel" id="confirmCancel">取消</button>
+      <button class="btn-confirm btn-confirm-ok" id="confirmOk">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== API 配置面板 ========== -->
+<div class="config-overlay" id="configOverlay">
+  <div class="config-panel" id="configPanel" style="display:none;">
+    <h3>⚙ API 配置</h3>
+
+    <div class="cfg-group">
+      <label>后端 API 地址</label>
+      <input type="text" id="cfgBackendUrl" placeholder="http://localhost:8765">
+    </div>
+
+    <div class="cfg-group">
+      <label>LLM API 地址</label>
+      <input type="text" id="cfgLlmUrl" placeholder="https://api.example.com/v1">
+    </div>
+
+    <div class="cfg-group">
+      <label>LLM API Key</label>
+      <input type="password" id="cfgLlmKey" placeholder="sk-...">
+    </div>
+
+    <div class="cfg-group">
+      <label>LLM 模型</label>
+      <input type="text" id="cfgLlmModel" placeholder="your-model-name">
+    </div>
+
+    <div class="cfg-group">
+      <label>关闭服务密钥</label>
+      <input type="password" id="cfgShutdownSecret" placeholder="与 .env 中 SHUTDOWN_SECRET 一致">
+    </div>
+
+    <!-- 连接测试 -->
+    <div class="test-section">
+      <h4>🔌 连接测试</h4>
+      <div class="test-btn-row">
+        <button class="test-btn" onclick="App.testBackendConnection()">测试后端</button>
+        <button class="test-btn" onclick="App.testLlmConnection()">测试 LLM</button>
+      </div>
+      <div id="backendTestResult" class="test-result" style="display:block;"></div>
+      <div id="llmTestResult" class="test-result" style="display:block;"></div>
+    </div>
+
+    <div class="cfg-actions">
+      <button class="btn-primary" onclick="App.applyConfig()">保存配置</button>
+      <button class="btn-secondary" onclick="App.toggleConfigPanel()">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 脚本（defer: 按顺序执行，不阻塞渲染） -->
+<script src="js/store.js" defer></script>
+<script src="js/html-utils.js" defer></script>
+<script src="js/api.js" defer></script>
+<script src="js/ui.js" defer></script>
+<script src="js/map.js" defer></script>
+<script src="js/dialogue.js" defer></script>
+<script src="js/main.js" defer></script>
 
 </body>
 </html>

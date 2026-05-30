@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════
-//  map.js — 地图渲染 + 寻路动画 + 人物模型
+//  map.js — Canvas 视口地图渲染 + 摄像机跟随 + 小地图
 // ═══════════════════════════════════════════════════════
 window.App = window.App || {};
 
@@ -7,114 +7,653 @@ window.App = window.App || {};
   "use strict";
 
   App._isMoving = false;
+  App._playerMarkerState = "normal";
 
-  // ─── 地形字符 → emoji ───
-  function terrainChar(ch) {
-    var map = {
-      "#": "\u2b1b", ".": "\u00b7", "~": "\u303c", "=": "\uff1d",
-      "F": "\ud83c\udf32", "m": "\u25b2", ";": "\u2726", "/": "\u2571",
-      "T": "\ud83c\udfe0", "Y": "\ud83d\udcee", "I": "\ud83c\udfda",
-      "M": "\ud83c\udfea", "B": "\u2694", "C": "\ud83c\udfef",
-      "G": "\u26e9", "f": "\ud83d\udc1f", "w": "\ud83d\udea2",
-      "s": "\u26f5", "E": "\ud83c\udfdb", "*": "\ud83d\udcb0"
+  // ═══════════════════════════════════════════
+  //  常量 & 颜色 - 全新美观配色
+  // ═══════════════════════════════════════════
+  var TILE = 28;                          // 主视口瓦片像素 - 更大更舒适
+  var MINI_TILE = 2;                     // 小地图瓦片像素 - 缩小
+  var _MINI_PAD = 8;                      // 小地图内边距
+  var MINI_BORDER = 2;                   // 小地图边框宽
+
+  // 游戏风格配色 - 肉鸽风格
+  var TERRAIN = {
+    "#": { fill: "#2a2a4a", border: "#4a4a8a", label: "城墙" },
+    ".": { fill: "#3a3a2a", border: "#4a4a3a", label: "平地" },
+    ",": { fill: "#3a4a2a", border: "#4a5a3a", label: "草地" },
+    "~": { fill: "#2a4a6a", border: "#3a5a7a", label: "险水" },
+    "=": { fill: "#3a5a7a", border: "#4a6a8a", label: "河道" },
+    "F": { fill: "#2a4a3a", border: "#3a5a4a", label: "密林" },
+    "m": { fill: "#5a4a3a", border: "#6a5a4a", label: "山岭" },
+    "/": { fill: "#4a3a2a", border: "#5a4a3a", label: "山道" },
+    ";": { fill: "#5a3a2a", border: "#6a4a3a", label: "泥沼" },
+    "T": { fill: "#6a5a3a", border: "#8a7a4a", label: "客栈" },
+    "Y": { fill: "#4a5a6a", border: "#5a6a7a", label: "塔楼" },
+    "I": { fill: "#5a3a5a", border: "#6a4a6a", label: "废墟" },
+    "M": { fill: "#5a5a3a", border: "#6a6a4a", label: "集市" },
+    "B": { fill: "#5a3a3a", border: "#6a4a4a", label: "桥梁" },
+    "@": { fill: "#4a2a3a", border: "#5a3a4a", label: "危险" },
+    "!": { fill: "#6a2a2a", border: "#8a3a3a", label: "深渊" },
+    "^": { fill: "#4a4a5a", border: "#6a6a7a", label: "悬崖" },
+    "&": { fill: "#2a3a3a", border: "#3a4a4a", label: "伏击点" },
+    " ": { fill: "#0a0a12", label: "虚空" },
+  };
+
+  function terrainColor(ch) {
+    return (TERRAIN[ch] || TERRAIN[" "]).fill;
+  }
+
+  if (typeof CanvasRenderingContext2D !== "undefined" && !CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+      if (typeof r === "number") r = [r, r, r, r];
+      var tl = r[0] || 0, tr = r[1] || r[0] || 0, br = r[2] || r[0] || 0, bl = r[3] || r[0] || 0;
+      this.moveTo(x + tl, y);
+      this.lineTo(x + w - tr, y);
+      this.quadraticCurveTo(x + w, y, x + w, y + tr);
+      this.lineTo(x + w, y + h - br);
+      this.quadraticCurveTo(x + w, y + h, x + w - br, y + h);
+      this.lineTo(x + bl, y + h);
+      this.quadraticCurveTo(x, y + h, x, y + h - bl);
+      this.lineTo(x, y + tl);
+      this.quadraticCurveTo(x, y, x + tl, y);
+      this.closePath();
+      return this;
     };
-    return map[ch] || (ch === " " ? "&nbsp;" : ch);
   }
 
-  // ─── 辅助：按坐标找格子 ───
-  function cellAt(x, y) {
-    return document.querySelector(
-      ".map-cell[data-x='" + x + "'][data-y='" + y + "']");
+  // ═══════════════════════════════════════════
+  //  摄像机状态 - 优化平滑度
+  // ═══════════════════════════════════════════
+  var cam = { x: 0, y: 0, targetX: 0, targetY: 0, lerp: 0.5, snap: false };
+  var mapState = { rows: [], cols: 0, id: "" };
+
+  // ═══════════════════════════════════════════
+  //  Canvas 引用
+  // ═══════════════════════════════════════════
+  var mainCanvas, mainCtx;
+  var miniCanvas, miniCtx;
+  var viewW, viewH;
+  var viewCols, viewRows;
+
+  // ─── 地点标签 ───
+  var _locationLabels = [];
+
+  // ─── NPC 坐标索引 ───
+  var _npcCoords = {};
+
+  // ─── 路径动画 ───
+  var _pathSet = {};
+  var _animPath = [];
+  var _animIdx = 0;
+
+  // ─── 悬停瓦片 ───
+  var _hoverX = -1, _hoverY = -1;
+  var _mouseScreenX = -1, _mouseScreenY = -1;
+  var _pendingMove = null;
+
+  var _dirty = true;
+  var _rafId = null;
+  var _resizeBound = false;
+  var _keyHandler = null;
+
+  var _npcGradientCache = {};
+  var _npcGradientCacheKey = "";
+
+  function getNpcGradient(ctx, colorKey, innerColor, outerColor) {
+    var cacheKey = viewW + "x" + viewH;
+    if (_npcGradientCacheKey !== cacheKey) {
+      _npcGradientCache = {};
+      _npcGradientCacheKey = cacheKey;
+    }
+    if (_npcGradientCache[colorKey]) {
+      return _npcGradientCache[colorKey];
+    }
+    var g = ctx.createRadialGradient(
+      TILE / 2, TILE / 2, 0,
+      TILE / 2, TILE / 2, TILE * 0.8
+    );
+    g.addColorStop(0, innerColor);
+    g.addColorStop(1, outerColor);
+    _npcGradientCache[colorKey] = g;
+    return g;
   }
 
-  // ─── 人物浮标定位 ───
-  function placeMarker(x, y) {
-    var m = document.querySelector(".player-marker");
-    if (!m) return;
-    m.style.left = (x * 16) + "px";
-    m.style.top  = (y * 16) + "px";
-  }
-
-  function ensureMarker() {
-    var c = document.getElementById("mapContainer");
-    if (!c) return;
-    if (!c.querySelector(".player-marker")) {
-      var m = document.createElement("div");
-      m.className = "player-marker";
-      c.appendChild(m);
+  function markDirty() {
+    _dirty = true;
+    if (!_rafId) {
+      _rafId = requestAnimationFrame(renderLoop);
     }
   }
 
-  // ═══════════════════════════════════════════════════
-  //  渲染地图网格
-  // ═══════════════════════════════════════════════════
+  // ═══════════════════════════════════════════
+  //  初始化 - 优化小地图位置和样式
+  // ═══════════════════════════════════════════
+  function initCanvas() {
+    var container = document.getElementById("mapContainer");
+    if (!container) return;
+
+    if (mainCanvas && mainCanvas.parentNode === container) {
+      resizeCanvas();
+      return;
+    }
+
+    container.innerHTML = "";
+
+    // 主画布
+    mainCanvas = document.createElement("canvas");
+    mainCanvas.id = "mapCanvas";
+    mainCanvas.style.display = "block";
+    mainCanvas.style.cursor = "crosshair";
+    mainCanvas.style.width = "100%";
+    mainCanvas.style.height = "100%";
+    container.appendChild(mainCanvas);
+    
+    // 获取 context
+    mainCtx = mainCanvas.getContext("2d");
+
+    // 小地图画布（左上角）
+    miniCanvas = document.createElement("canvas");
+    miniCanvas.id = "miniMap";
+    miniCanvas.style.cssText =
+      "position:absolute;left:12px;top:12px;border:" + MINI_BORDER +
+      "px solid rgba(80,100,140,0.9);border-radius:8px;cursor:pointer;z-index:5;" +
+      "box-shadow: 0 6px 20px rgba(0,0,0,0.45);background:rgba(10,10,20,0.7);";
+    container.appendChild(miniCanvas);
+    
+    // 获取小地图 context
+    miniCtx = miniCanvas.getContext("2d");
+
+    resizeCanvas();
+    if (!_resizeBound) {
+      window.addEventListener("resize", resizeCanvas);
+      _resizeBound = true;
+    }
+
+    // 鼠标事件
+    mainCanvas.addEventListener("click", onMapClick);
+    mainCanvas.addEventListener("mousemove", onMapHover);
+    mainCanvas.addEventListener("mouseleave", function() { _hoverX = _hoverY = -1; _mouseScreenX = _mouseScreenY = -1; markDirty(); });
+    miniCanvas.addEventListener("click", onMiniClick);
+  }
+
+  function resizeCanvas() {
+    var container = document.getElementById("mapContainer");
+    if (!container || !mainCanvas) return;
+    var dpr = window.devicePixelRatio || 1;
+    viewW = container.clientWidth;
+    viewH = container.clientHeight;
+    mainCanvas.width = Math.round(viewW * dpr);
+    mainCanvas.height = Math.round(viewH * dpr);
+    mainCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    viewCols = Math.ceil(viewW / TILE) + 2;
+    viewRows = Math.ceil(viewH / TILE) + 2;
+
+    var miniW = mapState.cols * MINI_TILE;
+    var miniH = mapState.rows.length * MINI_TILE;
+    miniCanvas.width = miniW;
+    miniCanvas.height = miniH;
+    markDirty();
+  }
+
+  // ═══════════════════════════════════════════
+  //  摄像机逻辑
+  // ═══════════════════════════════════════════
+  function updateCameraTarget(px, py) {
+    var halfCols = viewCols / 2;
+    var halfRows = viewRows / 2;
+
+    var idealX = px - halfCols;
+    var idealY = py - halfRows;
+
+    var maxX = Math.max(0, mapState.cols - viewCols);
+    var maxY = Math.max(0, mapState.rows.length - viewRows);
+
+    cam.targetX = Math.max(0, Math.min(idealX, maxX));
+    cam.targetY = Math.max(0, Math.min(idealY, maxY));
+  }
+
+  function lerpCamera() {
+    if (cam.snap) {
+      cam.x = cam.targetX;
+      cam.y = cam.targetY;
+      cam.snap = false;
+    } else {
+      var dx = cam.targetX - cam.x;
+      var dy = cam.targetY - cam.y;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      var factor;
+      if (App._isMoving) {
+        factor = dist > 2 ? 0.85 : dist > 0.5 ? 0.7 : 0.6;
+      } else {
+        factor = dist > 3 ? 0.8 : dist > 1.5 ? 0.6 : cam.lerp;
+      }
+      cam.x += dx * factor;
+      cam.y += dy * factor;
+      if (Math.abs(cam.x - cam.targetX) < 0.005) cam.x = cam.targetX;
+      if (Math.abs(cam.y - cam.targetY) < 0.005) cam.y = cam.targetY;
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  //  渲染主循环
+  // ═══════════════════════════════════════════
+  function renderLoop() {
+    lerpCamera();
+    updateHoverFromScreen();
+    renderMain();
+    renderMini();
+
+    var camMoving = Math.abs(cam.x - cam.targetX) > 0.01 || Math.abs(cam.y - cam.targetY) > 0.01;
+    var keepRunning = camMoving || _dirty || App._isMoving;
+
+    if (keepRunning) {
+      _dirty = false;
+      _rafId = requestAnimationFrame(renderLoop);
+    } else {
+      _rafId = null;
+    }
+  }
+
+  function _stopRender() {
+    if (_rafId) { cancelAnimationFrame(_rafId); _rafId = null; }
+  }
+
+  // ═══════════════════════════════════════════
+  //  主视口渲染 - 全新美观渲染
+  // ═══════════════════════════════════════════
+  function renderMain() {
+    if (!mainCtx) return;
+    var ctx = mainCtx;
+    ctx.clearRect(0, 0, viewW, viewH);
+
+    var startCol = Math.floor(cam.x);
+    var startRow = Math.floor(cam.y);
+    var subX = (cam.x - startCol) * TILE;
+    var subY = (cam.y - startRow) * TILE;
+
+    var px = App._playerX || 0;
+    var py = App._playerY || 0;
+
+    // 绘制瓦片 - 新视觉效果
+    for (var row = 0; row <= viewRows; row++) {
+      var my = startRow + row;
+      if (my < 0 || my >= mapState.rows.length) continue;
+      var rowData = mapState.rows[my] || "";
+      for (var col = 0; col <= viewCols; col++) {
+        var mx = startCol + col;
+        if (mx < 0 || mx >= mapState.cols) continue;
+        var ch = mx < rowData.length ? rowData[mx] : " ";
+        var sx = col * TILE - subX;
+        var sy = row * TILE - subY;
+        var tileInfo = TERRAIN[ch] || TERRAIN[" "];
+
+        // 绘制瓦片 - 添加细微的视觉效果
+        ctx.fillStyle = tileInfo.fill;
+        ctx.fillRect(sx, sy, TILE, TILE);
+
+        // 添加深浅变化，让地图有层次感
+        if (ch !== " ") {
+          var shade = ((mx + my) % 2 === 0) ? 0.03 : -0.02;
+          ctx.fillStyle = "rgba(0,0,0," + (shade > 0 ? shade : 0) + ")";
+          if (shade < 0) ctx.fillStyle = "rgba(255,255,255," + (-shade) + ")";
+          ctx.fillRect(sx, sy, TILE, TILE);
+        }
+
+        // 悬停高亮
+        if (mx === _hoverX && my === _hoverY) {
+          ctx.strokeStyle = "rgba(80,180,255,0.8)";
+          ctx.lineWidth = 3;
+          ctx.strokeRect(sx + 2, sy + 2, TILE - 4, TILE - 4);
+        }
+      }
+    }
+
+    // 绘制路径（在瓦片后，人物前）
+    for (var row = 0; row <= viewRows; row++) {
+      var my = startRow + row;
+      if (my < 0 || my >= mapState.rows.length) continue;
+      for (var col = 0; col <= viewCols; col++) {
+        var mx = startCol + col;
+        if (mx < 0 || mx >= mapState.cols) continue;
+        var sx = col * TILE - subX;
+        var sy = row * TILE - subY;
+        
+        if (isPathTile(mx, my)) {
+          ctx.strokeStyle = "rgba(80,180,255,0.45)";
+          ctx.setLineDash([5, 4]);
+          ctx.lineWidth = 2;
+          ctx.strokeRect(sx + 3, sy + 3, TILE - 6, TILE - 6);
+          ctx.setLineDash([]);
+        }
+      }
+    }
+
+    // 绘制 NPC 标记 - 更美观的效果
+    for (var npcKey in _npcCoords) {
+      var parts = npcKey.split(",");
+      var nx = parseInt(parts[0], 10);
+      var ny = parseInt(parts[1], 10);
+      
+      if (nx >= startCol && nx <= startCol + viewCols && 
+          ny >= startRow && ny <= startRow + viewRows) {
+        var sx = (nx - cam.x) * TILE;
+        var sy = (ny - cam.y) * TILE;
+        
+        ctx.save();
+        ctx.translate(sx, sy);
+
+        var gradient = getNpcGradient(ctx, "npc_glow", "rgba(255,140,100,0.4)", "rgba(255,140,100,0)");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(-TILE/3, -TILE/3, TILE * 1.7, TILE * 1.7);
+        
+        ctx.fillStyle = "rgba(0,0,0,0.25)";
+        ctx.beginPath();
+        ctx.arc(TILE/2 + 2, TILE/2 + 2, 6, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = "#ff8c64";
+        ctx.beginPath();
+        ctx.arc(TILE/2, TILE/2, 6, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.restore();
+      }
+    }
+
+    // ─── 地点标签 - 更美观 ───
+    ctx.font = "12px 'PingFang SC','Microsoft YaHei',sans-serif";
+    ctx.textAlign = "center";
+    for (var i = 0; i < _locationLabels.length; i++) {
+      var loc = _locationLabels[i];
+      var lx = (loc.x - cam.x) * TILE + TILE / 2;
+      var ly = (loc.y - cam.y) * TILE - 10;
+      if (lx < -80 || lx > viewW + 80 || ly < -30 || ly > viewH + 30) continue;
+      
+      // 标签背景 - 更美观
+      ctx.fillStyle = "rgba(15,15,30,0.75)";
+      var tw = ctx.measureText(loc.name).width;
+      ctx.beginPath();
+      ctx.roundRect(lx - tw/2 - 12, ly - 18, tw + 24, 28, 6);
+      ctx.fill();
+      
+      // 标签边框
+      ctx.strokeStyle = "rgba(100,180,255,0.4)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      
+      // 标签文字
+      ctx.fillStyle = "#f0f0ff";
+      ctx.fillText(loc.name, lx, ly + 2);
+    }
+
+    // ─── 玩家标记 - 直接计算位置 ───
+    var playerScreenX = (px - cam.x) * TILE + TILE / 2;
+    var playerScreenY = (py - cam.y) * TILE + TILE / 2;
+
+    // 玩家主体 - 更精致
+    var playerFill = App._playerMarkerState === "locked" ? "#ff4444" : "#ffffff";
+    var playerStroke = App._playerMarkerState === "locked" ? "#cc0000" : "#50b4ff";
+    var glowColor = App._playerMarkerState === "locked" ? "rgba(255,60,60," : "rgba(80,180,255,";
+
+    // 玩家投影 - 增加深度感
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.beginPath();
+    ctx.arc(playerScreenX + 2, playerScreenY + 2, 7, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 外圈大光晕
+    var glowR = TILE * 1.1;
+    var grd = ctx.createRadialGradient(
+      playerScreenX, playerScreenY, 2,
+      playerScreenX, playerScreenY, glowR
+    );
+    grd.addColorStop(0, glowColor + "0.7)");
+    grd.addColorStop(0.4, glowColor + "0.35)");
+    grd.addColorStop(1, glowColor + "0)");
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.arc(playerScreenX, playerScreenY, glowR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 玩家主体 - 更精致
+    ctx.fillStyle = playerFill;
+    ctx.beginPath();
+    ctx.arc(playerScreenX, playerScreenY, 7, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // 玩家外边框
+    ctx.strokeStyle = playerStroke;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(playerScreenX, playerScreenY, 9, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 方向箭头（最近一次移动方向）
+    if (App._lastDir) {
+      ctx.strokeStyle = "rgba(80,180,255,0.9)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(playerScreenX, playerScreenY);
+      ctx.lineTo(playerScreenX + App._lastDir.x * 14, playerScreenY + App._lastDir.y * 14);
+      ctx.stroke();
+    }
+
+    // ─── 动画路径高亮 ───
+    for (var pi = 0; pi < _animPath.length && _animIdx < _animPath.length; pi++) {
+      if (pi !== _animIdx) continue;
+      var step = _animPath[pi];
+      var asx = (step[0] - cam.x) * TILE + TILE / 2;
+      var asy = (step[1] - cam.y) * TILE + TILE / 2;
+      ctx.strokeStyle = "rgba(255,220,80,0.8)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(asx, asy, TILE * 0.38, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // ─── 坐标显示 - 更简洁 ───
+    ctx.font = "13px 'Courier New',monospace";
+    ctx.fillStyle = "rgba(160,160,190,0.8)";
+    ctx.textAlign = "left";
+    ctx.fillText("(" + px + ", " + py + ")", viewW - 80, viewH - 16);
+  }
+
+  // ═══════════════════════════════════════════
+  //  小地图渲染 - 优化视觉
+  // ═══════════════════════════════════════════
+  function renderMini() {
+    if (!miniCtx) return;
+    var ctx = miniCtx;
+    var cols = mapState.cols;
+    var rows = mapState.rows.length;
+    if (cols === 0 || rows === 0) return;
+
+    ctx.clearRect(0, 0, miniCanvas.width, miniCanvas.height);
+
+    // 绘制地形
+    for (var y = 0; y < rows; y++) {
+      var rowData = mapState.rows[y] || "";
+      for (var x = 0; x < cols; x++) {
+        var ch = x < rowData.length ? rowData[x] : " ";
+        ctx.fillStyle = terrainColor(ch);
+        ctx.fillRect(x * MINI_TILE, y * MINI_TILE, MINI_TILE, MINI_TILE);
+      }
+    }
+
+    // NPC 点
+    ctx.fillStyle = "#ff8c64";
+    for (var key in _npcCoords) {
+      var parts = key.split(",");
+      var nx = parseInt(parts[0], 10);
+      var ny = parseInt(parts[1], 10);
+      ctx.beginPath();
+      ctx.arc(nx * MINI_TILE + MINI_TILE/2, ny * MINI_TILE + MINI_TILE/2, 
+              MINI_TILE * 0.45, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 视口矩形
+    ctx.strokeStyle = "rgba(80,180,255,0.95)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(
+      cam.x * MINI_TILE, 
+      cam.y * MINI_TILE,
+      viewCols * MINI_TILE, 
+      viewRows * MINI_TILE
+    );
+
+    // 玩家点
+    var px = App._playerX || 0;
+    var py = App._playerY || 0;
+    ctx.fillStyle = "#50b4ff";
+    ctx.beginPath();
+    ctx.arc(px * MINI_TILE + MINI_TILE/2, py * MINI_TILE + MINI_TILE/2, 
+            MINI_TILE * 0.7, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // ═══════════════════════════════════════════
+  //  鼠标交互
+  // ═══════════════════════════════════════════
+  function onMapClick(e) {
+    var rect = mainCanvas.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    var tileX = Math.floor((mx / TILE) + cam.x);
+    var tileY = Math.floor((my / TILE) + cam.y);
+    if (tileX < 0 || tileX >= mapState.cols || tileY < 0 || tileY >= mapState.rows.length) return;
+
+    if (App._isMoving) {
+      _pendingMove = { x: tileX, y: tileY };
+      return;
+    }
+    App.moveTo(tileX, tileY);
+  }
+
+  function onMapHover(e) {
+    var rect = mainCanvas.getBoundingClientRect();
+    _mouseScreenX = e.clientX - rect.left;
+    _mouseScreenY = e.clientY - rect.top;
+    updateHoverFromScreen();
+  }
+
+  function updateHoverFromScreen() {
+    if (_mouseScreenX < 0 || _mouseScreenY < 0) return;
+    var newX = Math.floor((_mouseScreenX / TILE) + cam.x);
+    var newY = Math.floor((_mouseScreenY / TILE) + cam.y);
+    if (newX !== _hoverX || newY !== _hoverY) {
+      _hoverX = newX;
+      _hoverY = newY;
+      markDirty();
+    }
+  }
+
+  function onMiniClick(e) {
+    var rect = miniCanvas.getBoundingClientRect();
+    var scaleX = miniCanvas.width / rect.width;
+    var scaleY = miniCanvas.height / rect.height;
+    var mx = (e.clientX - rect.left) * scaleX;
+    var my = (e.clientY - rect.top) * scaleY;
+    var tileX = Math.floor(mx / MINI_TILE);
+    var tileY = Math.floor(my / MINI_TILE);
+    App.moveTo(tileX, tileY);
+  }
+
+  // ═══════════════════════════════════════════
+  //  路径辅助
+  // ═══════════════════════════════════════════
+  function isPathTile(x, y) {
+    return _pathSet[x + "," + y] === true;
+  }
+
+  function setPath(path) {
+    _pathSet = {};
+    for (var i = 0; i < path.length; i++) {
+      _pathSet[path[i][0] + "," + path[i][1]] = true;
+    }
+    markDirty();
+  }
+
+  function clearPath() {
+    _pathSet = {};
+    _animPath = [];
+    _animIdx = 0;
+    markDirty();
+  }
+
+  // ═══════════════════════════════════════════
+  //  构建地点标签
+  // ═══════════════════════════════════════════
+  function buildLocationLabels() {
+    _locationLabels = [];
+    var _locs = (App.mapsData && App.mapsData[App.currentMapId])
+      ? (App.mapsData[App.currentMapId]._locations || {})
+      : {};
+    if (App._mapLocations) {
+      var ml = App._mapLocations[App.currentMapId] || {};
+      for (var name in ml) {
+        var pos = ml[name];
+        _locationLabels.push({ name: name, x: pos[0], y: pos[1] });
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  //  构建 NPC 索引
+  // ═══════════════════════════════════════════
+  function buildNpcIndex() {
+    _npcCoords = {};
+    (App.npcCatalog || []).forEach(function(n) {
+      if (n.map === App.currentMapId && n.x !== undefined && n.y !== undefined) {
+        _npcCoords[n.x + "," + n.y] = n;
+      }
+    });
+  }
+
+  // ═══════════════════════════════════════════
+  //  公开 API
+  // ═══════════════════════════════════════════
   App.renderMap = function(p) {
     var mapInfo = App.mapsData[App.currentMapId];
     if (!mapInfo) return;
 
-    var rows   = mapInfo.rows;
-    var cols   = rows[0] ? rows[0].length : 72;
-    var px     = p.px, py = p.py;
+    var rows = mapInfo.rows;
+    var cols = rows[0] ? rows[0].length : 0;
+    if (cols === 0) return;
 
-    // 更新标题
-    document.getElementById("mapTitle").textContent =
-      "\ud83d\uddfa\ufe0f " + (mapInfo.name || App.currentMapId);
+    var isNewMap = mapState.id !== App.currentMapId;
+    mapState.rows = rows;
+    mapState.cols = cols;
+    mapState.id = App.currentMapId;
 
-    var container = document.getElementById("mapContainer");
-    container.innerHTML = "";
+    App._playerX = p.px;
+    App._playerY = p.py;
 
-    var grid = document.createElement("div");
-    grid.className = "map-grid";
-    grid.style.gridTemplateColumns = "repeat(" + cols + ", 16px)";
+    var mapTitle = document.getElementById("mapTitle");
+    if (mapTitle) mapTitle.textContent = "🗺️ " + (mapInfo.name || App.currentMapId);
 
-    // NPC 坐标集合（从目录中筛选当前地图上的所有 NPC）
-    var npcCoords = {};
-    (App.npcCatalog || []).forEach(function(n) {
-      if (n.map === App.currentMapId && n.x !== undefined && n.y !== undefined)
-        npcCoords[n.x + "," + n.y] = n;
-    });
+    initCanvas();
+    buildNpcIndex();
+    buildLocationLabels();
+    resizeCanvas();
 
-    for (var y = 0; y < rows.length; y++) {
-      var row = rows[y] || "";
-      for (var x = 0; x < cols; x++) {
-        var ch   = x < row.length ? row[x] : " ";
-        var cell = document.createElement("div");
-        cell.className    = "map-cell";
-        cell.dataset.x   = x;
-        cell.dataset.y   = y;
-        cell.innerHTML   = terrainChar(ch);
-        cell.title       = "(" + x + "," + y + ") " + ch;
-        if (x === px && y === py) cell.classList.add("player-pos");
-
-        // NPC 指示器
-        var npcHere = npcCoords[x + "," + y];
-        if (npcHere) {
-          cell.classList.add("has-npc");
-          cell.title = "(" + x + "," + y + ") | " + npcHere.name;
-        }
-
-        cell.onclick = (function(tx, ty) {
-          return function() { App.moveTo(tx, ty); };
-        })(x, y);
-
-        grid.appendChild(cell);
-      }
+    updateCameraTarget(p.px, p.py);
+    if (isNewMap) {
+      cam.snap = true;
     }
-    container.appendChild(grid);
-
-    // 浮动人物标记
-    ensureMarker();
-    placeMarker(px, py);
+    markDirty();
   };
 
-  // ═══════════════════════════════════════════════════
-  //  动画移动
-  // ═══════════════════════════════════════════════════
+  // ─── 步行动画
   App.moveTo = async function(tx, ty) {
     if (App._isMoving) return;
     App._isMoving = true;
 
-    // 清除旧路径
     clearPath();
 
     try {
@@ -122,91 +661,99 @@ window.App = window.App || {};
       var path = data.path || [];
 
       if (path.length === 0) {
-        App.addMsg("system", "\u6b64\u8def\u4e0d\u901a");
-        App._isMoving = false;
+        App.addMsg("system", "此路不通");
         return;
       }
 
-      // 显示路径虚线
-      showPath(path);
+      setPath(path);
 
-      // 步行动画
-      await animatePath(path);
+      for (var i = 0; i < path.length; i++) {
+        var step = path[i];
+        var oldX = App._playerX, oldY = App._playerY;
+        App._playerX = step[0];
+        App._playerY = step[1];
 
-      // 清除路径
-      clearPath();
+        var dx = step[0] - oldX;
+        var dy = step[1] - oldY;
+        if (dx !== 0 || dy !== 0) {
+          App._lastDir = { x: dx, y: dy };
+        }
 
-      // 全量刷新 UI
-      App.updateUI(data);
-    } catch (e) {
-      App.addMsg("system", "\u79fb\u52a8\u5931\u8d25: " + e.message);
-    }
+        _animIdx = i;
+        updateCameraTarget(step[0], step[1]);
+        markDirty();
 
-    App._isMoving = false;
-  };
-
-  // ── 步行动画 ──
-  function animatePath(path) {
-    return new Promise(function(resolve) {
-      var marker = document.querySelector(".player-marker");
-      var i = 0;
-
-      // 清除静态 player-pos 标记
-      var oldPos = document.querySelectorAll(".map-cell.player-pos");
-      for (var j = 0; j < oldPos.length; j++) {
-        oldPos[j].classList.remove("player-pos");
+        await new Promise(function(r) { setTimeout(r, 50); });
       }
 
-      var timer = setInterval(function() {
-        if (i >= path.length) {
-          clearInterval(timer);
+      clearPath();
+      App.updateUI(data);
 
-          // 最终定位 + 到达闪烁
-          var last = path[path.length - 1];
-          placeMarker(last[0], last[1]);
+      if (data.forced_encounter && data.forced_encounter.npc_id) {
+        var fe = data.forced_encounter;
+        var npcInfo = (data.npcs_here || []).find(function(n) { return n.id === fe.npc_id; });
+        var npcName = npcInfo ? npcInfo.name : (fe.blurb || "对方");
+        App.addMsg("system", "🚫 身陷险局 — " + npcName + "挡住了去路！", true);
+        App.selectedNpcId = fe.npc_id;
+        var selEl = document.getElementById("npcSelect");
+        if (selEl) selEl.value = fe.npc_id;
+        var autoMsg = fe.user_line || "[际遇] 狭路相逢，请开口说话。";
+        setTimeout(function() {
+          App.doTalk(autoMsg);
+        }, 600);
+      }
 
-          var dest = cellAt(last[0], last[1]);
-          if (dest) {
-            dest.classList.add("player-pos", "step-arrive");
-            setTimeout(function() {
-              if (dest) dest.classList.remove("step-arrive");
-            }, 400);
-          }
-
-          resolve();
-          return;
-        }
-
-        var s = path[i];
-        placeMarker(s[0], s[1]);
-
-        // 走过格子短暂高亮
-        var c = cellAt(s[0], s[1]);
-        if (c) {
-          c.classList.add("step-active");
+    } catch (e) {
+      var errorMsg = e.message;
+      if (errorMsg.includes("/api/move ")) {
+        errorMsg = errorMsg.replace("/api/move ", "");
+      }
+      
+      var isLockError = errorMsg.includes("🚫") || errorMsg.includes("⚠️");
+      
+      if (isLockError) {
+        App.addMsg("system-error", errorMsg, true);
+        if (App.selectedNpcId && !App.isStreaming) {
           setTimeout(function() {
-            if (c) c.classList.remove("step-active");
-          }, 120);
+            App.doTalk("[系统指令] 我要离开这里，请让我过去。");
+          }, 800);
         }
-
-        i++;
-      }, 80);
-    });
-  }
-
-  // ── 路径虚线 ──
-  function showPath(path) {
-    for (var i = 0; i < path.length; i++) {
-      var c = cellAt(path[i][0], path[i][1]);
-      if (c) c.classList.add("path-waypoint");
+      } else {
+        App.addMsg("system", errorMsg);
+      }
+    } finally {
+      App._isMoving = false;
+      if (_pendingMove) {
+        var next = _pendingMove;
+        _pendingMove = null;
+        App.moveTo(next.x, next.y);
+      }
     }
-  }
+  };
 
-  function clearPath() {
-    var wp = document.querySelectorAll(".map-cell.path-waypoint");
-    for (var j = 0; j < wp.length; j++) {
-      wp[j].classList.remove("path-waypoint");
+  // ─── 键盘控制
+  _keyHandler = function(e) {
+    if (!App._playerX || App._isMoving) return;
+    if (document.activeElement && (document.activeElement.tagName === "INPUT" || 
+        document.activeElement.tagName === "SELECT" ||
+        document.activeElement.tagName === "TEXTAREA")) return;
+
+    var dx = 0, dy = 0;
+    switch (e.key) {
+      case "w": case "W": case "ArrowUp":    dy = -1; break;
+      case "s": case "S": case "ArrowDown":  dy = 1; break;
+      case "a": case "A": case "ArrowLeft":  dx = -1; break;
+      case "d": case "D": case "ArrowRight": dx = 1; break;
+      default: return;
     }
-  }
+    e.preventDefault();
+    App.moveTo(App._playerX + dx, App._playerY + dy);
+  };
+  document.addEventListener("keydown", _keyHandler);
+
+  App.updatePlayerMarker = function(x, y, state) {
+    App._playerMarkerState = state || "normal";
+    markDirty();
+  };
 
 })(window.App);

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>活纸江湖 · 测试中心</title>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/tests.css">
+</head>
+<body class="test-center-body">
+<div class="test-center-container">
+
+  <header class="test-center-header">
+    <h1>🧪 测试中心</h1>
+    <p>运行和管理后端测试脚本 · 活纸江湖诊断工具集</p>
+  </header>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tabFunctional" onclick="TestCenter.switchTab('functional')">⚙️ 功能测试</button>
+    <button class="tab-btn" id="tabInteractive" onclick="TestCenter.switchTab('interactive')">💬 交互测试</button>
+  </div>
+
+  <div id="functionalPanel">
+    <div class="stats-bar" id="statsBar">
+      <div class="stat-card">
+        <h3 id="totalTests">--</h3>
+        <p>可用测试</p>
+      </div>
+      <div class="stat-card">
+        <h3 id="runningCount">0</h3>
+        <p>正在运行</p>
+      </div>
+      <div class="stat-card stat-card-success">
+        <h3 id="successCount">0</h3>
+        <p>成功</p>
+      </div>
+      <div class="stat-card stat-card-error">
+        <h3 id="errorCount">0</h3>
+        <p>失败</p>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <button class="test-center-btn test-center-btn-primary" id="runAllBtn" onclick="TestCenter.runAll()">
+        ▶ 全部测试
+      </button>
+      <div class="toolbar-right">
+        <label class="toggle-label">
+          <input type="checkbox" id="verboseToggle" onchange="TestCenter.toggleVerbose()">
+          详细输出
+        </label>
+      </div>
+    </div>
+
+    <div id="moduleList"></div>
+  </div>
+
+  <div id="interactivePanel" style="display:none;">
+    <div class="interactive-notice">
+      ⚠️ 交互测试需要 LLM API 配置且消耗 Token，每次测试将真实调用 LLM 与 NPC 对话
+    </div>
+
+    <div class="stats-bar" id="interactiveStatsBar">
+      <div class="stat-card">
+        <h3 id="interactiveTotal">--</h3>
+        <p>交互测试</p>
+      </div>
+      <div class="stat-card stat-card-success">
+        <h3 id="interactiveSuccess">0</h3>
+        <p>通过</p>
+      </div>
+      <div class="stat-card stat-card-error">
+        <h3 id="interactiveFailed">0</h3>
+        <p>失败</p>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <button class="test-center-btn test-center-btn-primary" id="interactiveRunAllBtn" onclick="TestCenter.runInteractiveAll()">
+        ▶ 全部交互测试
+      </button>
+      <div class="toolbar-right">
+        <label class="toggle-label">
+          <input type="checkbox" id="interactiveVerboseToggle" onchange="TestCenter.toggleInteractiveVerbose()">
+          详细输出
+        </label>
+      </div>
+    </div>
+
+    <div id="interactiveModuleList"></div>
+  </div>
+
+  <a href="/" class="back-link">← 返回游戏主页</a>
+
+</div>
+
+<script src="js/store.js" defer></script>
+<script src="js/html-utils.js" defer></script>
+<script src="js/api.js" defer></script>
+<script src="js/tests.js" defer></script>
+
+</body>
+</html>

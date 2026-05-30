@@ -1,9 +1,78 @@
-.env
+# ── 环境与密钥 ──
+.env*
+!.env.example
+*.pem
+*.key
+*.p12
+credentials.json
+service-account*.json
+
+# ── Python ──
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.egg
+*.whl
+*.egg-info/
+dist/
+build/
 .venv/
 venv/
+pip-wheel-metadata/
+
+# ── Python 工具缓存 ──
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.pyright/
+
+# ── 测试与覆盖率 ──
+.coverage
+coverage.xml
+htmlcov/
+**/test_reports/
+
+# ── 运行时数据 ──
 resume/
 saves/
 *.log
+*.db
+*.sqlite
+*.tmp
+*.pid
+*.seed
+.shutdown_requested
+backups/
+
+# ── Node.js ──
+node_modules/
+
+# ── 前端构建产物 ──
+static/js/*.min.js
+static/css/*.min.css
+
+# ── Godot ──
 godot/.godot/
+godot/builds/
+godot/exports/
+*.import
+godot/editor/
+
+# ── IDE / 编辑器 ──
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── 操作系统 ──
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── AI 工具 ──
+.trae/
+
+# ── 项目特定 ──
+tools/map_rows.txt

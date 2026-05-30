@@ -1,26 +1,46 @@
 """
-save_system.py — 局外存档：每个角色独立 JSON 存档文件
+save_system.py —局外存档：每个角色独立 JSON 存档文件
 ========================================================
 
 功能：
-  - save_game(p)      → 序列化 PlayerState → saves/<player_id>.json
-  - load_game(pid)    → 从 saves/<player_id>.json 还原 PlayerState
-  - list_saves()      → 列出全部存档的摘要
-  - delete_save(pid)  → 删除存档文件（真实江湖死亡/手动弃档）
+  - save_game(p)      →序列化PlayerState →saves/<player_id>.json
+  - load_game(pid)    →从saves/<player_id>.json 还原 PlayerState
+  - list_saves()      →列出全部存档的摘要
+  - delete_save(pid)  →删除存档文件（真实江湖死亡手动弃档）
 
-存档文件路径：<项目根>/saves/
+存档文件路径：项目根/saves/
 """
 from __future__ import annotations
 
 import json
 import logging
 import os
-from dataclasses import fields
+import re
+import tempfile
+import time
+import uuid
+from dataclasses import fields as dc_fields
 from pathlib import Path
 from typing import Any
 
-from backend.models.player import PlayerState
+_SAFE_ID_RE = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
+
+def _validate_player_id(player_id: str) -> None:
+    if not _SAFE_ID_RE.match(player_id):
+        raise ValueError(f"非法 player_id: {player_id!r}")
+
+import contextlib
+
 from backend.data.factions import FACTIONS
+from backend.models.player import PlayerState
+from backend.systems.constants import (
+    DEFAULT_RESPAWN_X,
+    DEFAULT_RESPAWN_Y,
+    INITIAL_SPIRIT_MAX,
+    INITIAL_VIGOR_MAX,
+    RESPAWN_MIN_STAT,
+    RESPAWN_RATIO,
+)
 
 log = logging.getLogger("save_system")
 
@@ -32,13 +52,13 @@ def _ensure_dir() -> None:
 
 
 def _serialize_player(p: PlayerState) -> dict[str, Any]:
-    """将 PlayerState 转为纯 JSON 可序列化的 dict。
+    """将PlayerState 转为纯JSON 可序列化的dict。
 
     跳过 lock（asyncio.Lock 不可序列化）；
     minds 中的 AgentMind 转为 dict；
     npc_positions 中的 tuple 转为 list。"""
     data: dict[str, Any] = {}
-    for fld in fields(p):
+    for fld in dc_fields(p):
         key = fld.name
         if key == "lock":
             continue
@@ -52,7 +72,7 @@ def _serialize_player(p: PlayerState) -> dict[str, Any]:
 
 
 def _mind_to_dict(mind: Any) -> dict[str, Any]:
-    """AgentMind → dict。"""
+    """AgentMind →dict。"""
     return {
         "items": [item.to_dict() for item in getattr(mind, "items", [])],
         "importance_since_reflect": float(getattr(mind, "importance_since_reflect", 0)),
@@ -71,24 +91,27 @@ def _mind_to_dict(mind: Any) -> dict[str, Any]:
 
 
 def _deserialize_player(data: dict[str, Any]) -> PlayerState:
-    """从 dict 还原 PlayerState。"""
-    # 特殊字段：minds 需要重建 AgentMind
+    """从dict 还原 PlayerState。"""
+    # 特殊字段：minds 需要重建AgentMind
     minds_raw = data.pop("minds", {}) or {}
-    # npc_positions 的 list → tuple
+    # npc_positions 的list →tuple
     npc_pos_raw = data.pop("npc_positions", {}) or {}
 
     # 确保 reputation 完整（老存档兼容）
     rep = data.get("reputation", {})
     if not isinstance(rep, dict):
         rep = {}
-    for k in FACTIONS.keys():
+    for k in FACTIONS:
         rep.setdefault(k, 0)
     data["reputation"] = rep
+
+    valid_keys = {f.name for f in dc_fields(PlayerState) if f.name != 'lock'}
+    data = {k: v for k, v in data.items() if k in valid_keys}
 
     p = PlayerState(**data)
 
     # 还原 minds
-    from backend.memory import Memory, AgentMind
+    from backend.memory import AgentMind, Memory
     for nid, md in minds_raw.items():
         mind = AgentMind()
         mind.importance_since_reflect = float(md.get("importance_since_reflect", 0))
@@ -103,9 +126,7 @@ def _deserialize_player(data: dict[str, Any]) -> PlayerState:
         mind.affect_updated_at = float(md.get("affect_updated_at", 0))
         mind.last_insight_at = float(md.get("last_insight_at", 0))
         mind.linked_memory_ids = set(md.get("linked_memory_ids", []))
-        import uuid
-        import time as _time
-        now_ts = _time.time()
+        now_ts = time.time()
         for item_raw in md.get("items", []):
             mem = Memory(
                 id=str(item_raw.get("id") or uuid.uuid4().hex[:10]),
@@ -122,22 +143,36 @@ def _deserialize_player(data: dict[str, Any]) -> PlayerState:
             mind.items.append(mem)
         p.minds[nid] = mind
 
-    # 还原 npc_positions：list → tuple
-    p.npc_positions = {
-        nid: (str(v[0]), int(v[1]), int(v[2]))
-        for nid, v in npc_pos_raw.items()
-    }
+    # 还原 npc_positions：list →tuple
+    p.npc_positions = {}
+    for nid, val in npc_pos_raw.items():
+        if isinstance(val, (list, tuple)) and len(val) >= 3:
+            try:
+                p.npc_positions[nid] = (str(val[0]), int(val[1]), int(val[2]))
+            except (ValueError, TypeError):
+                continue
 
     # 兼容：没有这些字段的老存档
-    if not hasattr(p, "vigor_max") or not p.vigor_max:
-        p.vigor_max = 100
-    if not hasattr(p, "spirit_max") or not p.spirit_max:
-        p.spirit_max = 100
-    # 体力永远不应从 0 开始（新角色保底 80）
-    if int(getattr(p, "vigor", 0)) <= 0:
-        p.vigor = 80
-    if int(getattr(p, "spirit", 0)) <= 0:
-        p.spirit = 80
+    if not getattr(p, "vigor_max", None) or int(p.vigor_max) <= 0:
+        p.vigor_max = INITIAL_VIGOR_MAX
+    if not getattr(p, "spirit_max", None) or int(p.spirit_max) <= 0:
+        p.spirit_max = INITIAL_SPIRIT_MAX
+    if int(getattr(p, "vigor", 0)) < 0:
+        p.vigor = 0
+    if int(getattr(p, "spirit", 0)) < 0:
+        p.spirit = 0
+
+    for k in ("order", "truth", "hope", "chaos"):
+        p.flags.setdefault(k, 0)
+
+    from backend.data.maps_data import MAPS
+    if p.map_id not in MAPS:
+        p.map_id = 'world'
+    rows = MAPS.get(p.map_id, {}).get("rows", [])
+    max_y = len(rows) - 1
+    max_x = max(len(r) for r in rows) - 1 if rows else 0
+    p.px = max(0, min(max_x, p.px))
+    p.py = max(0, min(max_y, p.py))
 
     return p
 
@@ -147,14 +182,21 @@ def _deserialize_player(data: dict[str, Any]) -> PlayerState:
 # ═══════════════════════════════════════════════════════
 
 def save_game(p: PlayerState) -> str:
-    """保存角色到 JSON 文件。返回保存路径字符串。"""
+    _validate_player_id(p.player_id)
     _ensure_dir()
     data = _serialize_player(p)
     fp = SAVE_DIR / f"{p.player_id}.json"
     try:
-        with open(fp, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        log.info("存档成功: %s (%s, 第%d日, 制钱%d)", p.display_name, p.player_id,
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix='.json.tmp', dir=str(SAVE_DIR))
+        try:
+            with os.fdopen(tmp_fd, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, fp)
+        except Exception:
+            with contextlib.suppress(Exception):
+                os.unlink(tmp_path)
+            raise
+        log.info("存档成功: %s (%s, 第%d日 制钱%d)", p.display_name, p.player_id,
                   p.world_day, p.coins)
         return str(fp)
     except Exception as e:
@@ -163,28 +205,31 @@ def save_game(p: PlayerState) -> str:
 
 
 def load_game(player_id: str) -> PlayerState | None:
-    """从 JSON 文件加载角色。文件不存在返回 None。"""
+    _validate_player_id(player_id)
     fp = SAVE_DIR / f"{player_id}.json"
     if not fp.is_file():
         return None
     try:
-        with open(fp, "r", encoding="utf-8") as f:
+        with open(fp, encoding="utf-8") as f:
             data = json.load(f)
         p = _deserialize_player(data)
+        if p.permadeath and p.dead:
+            raise ValueError(f"角色 {p.display_name} 已在真实江湖中身故，存档已废")
         log.info("存档加载: %s (%s, 第%d日)", p.display_name, p.player_id, p.world_day)
         return p
+    except ValueError:
+        raise
     except Exception as e:
         log.error("存档加载失败 %s: %s", player_id, e)
         return None
 
 
 def list_saves() -> list[dict[str, Any]]:
-    """列出全部存档摘要（用于展示可选角色列表）。"""
     _ensure_dir()
     result: list[dict[str, Any]] = []
     for fp in sorted(SAVE_DIR.glob("*.json")):
         try:
-            with open(fp, "r", encoding="utf-8") as f:
+            with open(fp, encoding="utf-8") as f:
                 data = json.load(f)
             result.append({
                 "player_id": data.get("player_id", fp.stem),
@@ -199,19 +244,20 @@ def list_saves() -> list[dict[str, Any]]:
                 "spirit": data.get("spirit", 0),
                 "ended": data.get("ended", False),
             })
-        except Exception:
+        except Exception as e:
+            log.warning("跳过损坏的存档文件 %s: %s", fp.name, e)
             continue
     return result
 
 
 def delete_save(player_id: str) -> bool:
-    """删除存档文件（真实江湖死亡/手动弃档）。返回是否成功删除。"""
+    _validate_player_id(player_id)
     fp = SAVE_DIR / f"{player_id}.json"
     if not fp.is_file():
         return False
     try:
         fp.unlink()
-        log.info("存档已删除: %s", player_id)
+        log.info("存档已删除 %s", player_id)
         return True
     except Exception as e:
         log.error("删除存档失败 %s: %s", player_id, e)
@@ -221,21 +267,20 @@ def delete_save(player_id: str) -> bool:
 def respawn_at_supply_point(p: PlayerState) -> str:
     """非真实江湖模式下，重伤后返回最近补给点。
 
-    补给点 = {T: 客栈, Y: 驿站, I: 黑店, M: 市集, B: 兵站}
+    补给点= {T: 客栈, Y: 驿站, I: 黑店, M: 市集, B: 兵站}
 
-    在当前地图找最近的补给点格子；找不到则回 county 客栈 (4,2)。
-    恢复 50% 体力/心气，清除 debuff。
+    在当前地图找最近的补给点格子；找不到则回county 客栈 (4,2)。
+    恢复 50% 体力/心气，清除debuff。
     返回一句文本描述。"""
     from backend.data.maps_data import MAPS
-    from backend.systems.pathfinding import walkable
 
     supply_tiles = {"T", "Y", "I", "M", "B"}
-    candidates: list[tuple[int, int, str]] = []  # (manhattan_dist, x, y)
+    candidates: list[tuple[int, int, int]] = []  # (manhattan_dist, x, y)
 
     # 先在当前地图找
     m = MAPS.get(p.map_id)
     if m:
-        rows = m["rows"]
+        rows = m.get("rows", [])
         for y, row in enumerate(rows):
             for x, ch in enumerate(row):
                 if ch in supply_tiles:
@@ -248,14 +293,14 @@ def respawn_at_supply_point(p: PlayerState) -> str:
     else:
         # 回同福栈
         p.map_id = "world"
-        nx, ny = 8, 13
+        nx, ny = DEFAULT_RESPAWN_X, DEFAULT_RESPAWN_Y
 
-    old_map, old_x, old_y = p.map_id, p.px, p.py
-    p.px, p.py = nx, ny
+    _old_map, old_x, old_y = p.map_id, p.px, p.py  # type: ignore[misc]
+    p.px, p.py = nx, ny  # type: ignore[assignment]
     p.dead = False
     p.death_reason = None
-    p.vigor = max(40, p.vigor_max // 2)
-    p.spirit = max(40, p.spirit_max // 2)
+    p.vigor = max(RESPAWN_MIN_STAT, p.vigor_max // RESPAWN_RATIO)
+    p.spirit = max(RESPAWN_MIN_STAT, p.spirit_max // RESPAWN_RATIO)
     p.move_locked = False
     p.move_lock_npc_id = None
     p.trap_reason = None
@@ -270,7 +315,7 @@ def respawn_at_supply_point(p: PlayerState) -> str:
 
     map_name = MAPS.get(p.map_id, {}).get("name", p.map_id)
     msg = f"重伤苏醒，被江湖路人拖至{map_name}补给处。气力心神恢复一半。"
-    log.info("respawn: %s (%s,%s)→(%s,%s)", p.display_name, old_x, old_y, nx, ny)
+    log.info("respawn: %s (%s,%s)→%s,%s)", p.display_name, old_x, old_y, nx, ny)
 
     # 触发事件
     from backend.systems.reputation import push_event

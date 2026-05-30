@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-from backend.models.player import PlayerState
+from typing import Any
+
 from backend.data.maps_data import MAPS
+from backend.data.zones import zone_price_mod
+from backend.models.player import PlayerState
+from backend.systems.constants import MAX_COIN_DELTA, MAX_ITEM_NAME_LEN
 
 # ════════════════════════════════════════════════════════════════════
 #  物品定价表 — 江湖百业行情（单位：制钱/文）
@@ -80,35 +84,8 @@ ITEM_USE_EFFECTS: dict[str, dict[str, object]] = {
     "火折":     {"vigor": 0,   "spirit": 0,   "sleep_debt": 0,  "note": "你点亮了火折，一圈昏黄的光推开黑暗——能看清周围几步了。", "max_per_day": 3},
 }
 
-# 统一地图地区系数：根据格子位置判断所属商圈
-# 返回 (溢价倍率, 说明)
-def zone_price_mod(player_or_px: Any, py: int | None = None) -> tuple[float, str]:
-    """根据玩家位置判断地区价格倍率。支持传入 PlayerState 或 (px, py) 坐标。"""
-    if hasattr(player_or_px, 'px'):
-        px = player_or_px.px
-        py = player_or_px.py
-    else:
-        px = int(player_or_px)
-        py = int(py or 0)
-    # 县域城区 (x:5-20, y:12-20) → 市口平价
-    if 5 <= px <= 20 and 12 <= py <= 20:
-        return (1.00, "县城市口，价稳")
-    # 野径荒野 (x:5-24, y:21-32) → 荒野价高
-    if 5 <= px <= 24 and 21 <= py <= 32:
-        return (1.25, "荒野难得，货价偏高")
-    # 渡口船坞 (x:33-44, y:22-29) → 渡口溢价
-    if 33 <= px <= 44 and 22 <= py <= 29:
-        return (1.08, "渡口客多，坐地起价")
-    # 卧佛寺 (x:22-31, y:5-11) → 佛寺随缘
-    if 22 <= px <= 31 and 5 <= py <= 11:
-        return (0.80, "佛寺随缘施价")
-    # 碾坊 (x:25-35, y:33-40) → 碾坊自产
-    if 25 <= px <= 35 and 33 <= py <= 40:
-        return (0.85, "碾坊自产自销，粮食贱")
-    # 厘卡哨 (x:52-62, y:34-41) → 卡吏抽头
-    if 52 <= px <= 62 and 34 <= py <= 41:
-        return (1.35, "卡吏抽头，往来皆贵")
-    return (1.00, "市口平价")
+# zone_price_mod 已迁移至 backend.data.zones，此处保留引用以兼容
+# 原硬编码坐标范围已统一至 ECONOMY_ZONES 配置
 
 # 保留字典键以兼容（已废弃，改用 zone_price_mod）
 MAP_PRICE_MOD: dict[str, tuple[float, str]] = {
@@ -147,7 +124,7 @@ def apply_coin_delta(p: PlayerState, delta: int | None) -> int:
     """安全更新身上制钱；返回真正生效的 delta（钱不够时缩水到 -coins）。"""
     if not delta:
         return 0
-    d = max(-99999, min(99999, int(delta)))
+    d = max(-MAX_COIN_DELTA, min(MAX_COIN_DELTA, int(delta)))
     if d < 0 and -d > p.coins:
         d = -p.coins
     p.coins = max(0, p.coins + d)
@@ -157,7 +134,7 @@ def apply_coin_delta(p: PlayerState, delta: int | None) -> int:
 def add_items(p: PlayerState, names: list[str]) -> list[str]:
     out: list[str] = []
     for raw in names:
-        name = (raw or "").strip().strip("「」『」\"'")[:12]
+        name = (raw or "").strip().strip("「」『」\"'")[:MAX_ITEM_NAME_LEN]
         if not name:
             continue
         p.inventory[name] = int(p.inventory.get(name, 0)) + 1
@@ -168,7 +145,7 @@ def add_items(p: PlayerState, names: list[str]) -> list[str]:
 def remove_items(p: PlayerState, names: list[str]) -> list[str]:
     out: list[str] = []
     for raw in names:
-        name = (raw or "").strip().strip("「」『」\"'")[:12]
+        name = (raw or "").strip().strip("「」『」\"'")[:MAX_ITEM_NAME_LEN]
         if not name:
             continue
         if name in p.inventory:
@@ -190,7 +167,7 @@ def suggest_item_price(item_name: str, player: Any = None, weather: str | None =
     entry = ITEM_PRICE_CATALOG.get(item_name)
     if not entry:
         return None
-    base = int(entry["base"])
+    base = int(entry["base"])  # type: ignore[arg-type]
     cat = str(entry.get("cat", ""))
 
     # 地区系数（根据玩家位置判断）
@@ -204,7 +181,7 @@ def suggest_item_price(item_name: str, player: Any = None, weather: str | None =
     weather_cat = WEATHER_CAT_MOD.get(weather or "", {}).get(cat, 1.0)
 
     total_mult = map_mult * weather_global * weather_cat
-    local = int(round(base * total_mult))
+    local = round(base * total_mult)
 
     # 构建天气提示
     weather_tip = ""
@@ -217,9 +194,8 @@ def suggest_item_price(item_name: str, player: Any = None, weather: str | None =
         weather_tip = "；".join(parts) if parts else ""
 
     # 构建市场行情提示（含地点与倍数）
-    map_id_hint = ""
     if player and hasattr(player, 'map_id'):
-        map_id_hint = str(getattr(player, 'map_id', ''))
+        pass
     market_hint = f"{map_hint}，{item_name}当地约{local}文（基准{base}文）"
 
     return {
@@ -287,7 +263,6 @@ def format_npc_inventory(p: PlayerState, npc_id: str) -> str:
         # 非商贩型 NPC,但也可能在特定剧情中获得物品
         return ""
 
-    from backend.data.npcs_data import NPCS
     # 过滤掉数量为 0 的项
     active = {k: v for k, v in inv.items() if v > 0}
     if not active:
@@ -312,36 +287,42 @@ def format_npc_inventory(p: PlayerState, npc_id: str) -> str:
 
 def apply_npc_trade(
     p: PlayerState, npc_id: str,
-    items_given_by_player: list[str],   # 玩家交出的物（= NPC 得到）
-    items_given_by_npc: list[str],      # NPC 交出的物（= 玩家得到）
-) -> None:
+    items_given_by_player: list[str],
+    items_given_by_npc: list[str],
+) -> list[str]:
     """在 apply_npc_reply 之后调用,同步 NPC 货柜的增减。
 
-    注意：
-    - items_given_by_player = parsed.items_lose（玩家失去 = NPC 获得）
-    - items_given_by_npc    = parsed.items_gain（玩家获得 = NPC 失去）
+    返回: NPC 实际成功给出的物品列表（库存不足的会被跳过）。
     """
     inv = p.npc_inventories.get(npc_id)
     if inv is None:
         inv = {}
         p.npc_inventories[npc_id] = inv
 
-    # NPC 失去的物（卖/送给玩家的）
+    actually_given = []
     for raw in items_given_by_npc:
-        name = (raw or "").strip().strip("「」『」\"'")[:12]
+        name = (raw or "").strip().strip("「」『」\"'")[:MAX_ITEM_NAME_LEN]
         if not name:
             continue
         current = inv.get(name, 0)
         if current > 0:
             inv[name] = current - 1
-        # 如果 NPC 没有但 LLM 卖了,则不扣负,允许"剧情给物"
+            if inv[name] <= 0:
+                del inv[name]
+            actually_given.append(name)
+        else:
+            continue
 
-    # NPC 得到的物（从玩家收的）
+    if actually_given:
+        add_items(p, actually_given)
+
     for raw in items_given_by_player:
-        name = (raw or "").strip().strip("「」『」\"'")[:12]
+        name = (raw or "").strip().strip("「」『」\"'")[:MAX_ITEM_NAME_LEN]
         if not name:
             continue
         inv[name] = inv.get(name, 0) + 1
+
+    return actually_given
 
 
 def format_economy_context(p: PlayerState, vendor_npc_id: str | None = None) -> str:
@@ -386,7 +367,7 @@ def format_economy_context(p: PlayerState, vendor_npc_id: str | None = None) -> 
         for name, count in sorted(p.inventory.items()):
             price_info = suggest_item_price(name, p, weather)
             if price_info:
-                local = price_info["local"]
+                local = int(price_info["local"])  # type: ignore[arg-type]
                 item_total = local * int(count)
                 inv_vals.append(f"{name}×{count}(≈{item_total}文)")
             else:
@@ -406,7 +387,7 @@ def format_economy_context(p: PlayerState, vendor_npc_id: str | None = None) -> 
         for name, entry in ITEM_PRICE_CATALOG.items():
             cat = str(entry.get("cat", ""))
             w_cat = weather_cat_data.get(cat, 1.0)
-            local_price = int(round(int(entry["base"]) * map_mult * weather_global * w_cat))
+            local_price = round(int(entry["base"]) * map_mult * weather_global * w_cat)  # type: ignore[arg-type]
             by_cat.setdefault(cat, []).append(f"{name}({local_price}文)")
 
         cat_names = {"食": "食水", "文": "文书", "药": "药物", "物": "杂物", "兵": "兵器"}
@@ -491,7 +472,7 @@ def restock_npc_inventories(p: PlayerState) -> list[str]:
         items_restocked: list[str] = []
         for item, _need in to_restock:
             seed_qty = seeds[item]
-            add_qty = max(1, int(round(seed_qty * ratio)))
+            add_qty = max(1, round(seed_qty * ratio))
             cur = inv.get(item, 0)
             # 不超出种子数量
             actual_add = min(add_qty, seed_qty - cur)
@@ -514,7 +495,7 @@ def restock_npc_inventories(p: PlayerState) -> list[str]:
 #  物品消耗 API — 玩家从背包中使用物品（🎮 游戏性）
 # ════════════════════════════════════════════════════════════════════
 
-def use_player_item(p: "PlayerState", item_name: str) -> dict[str, object]:
+def use_player_item(p: PlayerState, item_name: str) -> dict[str, object]:
     """玩家消耗一个背包物品，应用其身心效用并返回叙事描述。
 
     返回格式：
@@ -531,7 +512,7 @@ def use_player_item(p: "PlayerState", item_name: str) -> dict[str, object]:
     - 超每日上限 → 告知今日已用足
     - 生命燃烧中自动解除（进食效果）
     """
-    name = (item_name or "").strip().strip("「」『」\"'")[:12]
+    name = (item_name or "").strip().strip("「」『」\"'")[:MAX_ITEM_NAME_LEN]
     if not name:
         return {"success": False, "note": "空无一物。", "delta": {"vigor": 0, "spirit": 0, "sleep_debt": 0}}
 
@@ -565,14 +546,16 @@ def use_player_item(p: "PlayerState", item_name: str) -> dict[str, object]:
         }
 
     # 日上限检查
-    max_per_day = int(effect.get("max_per_day", 0))
+    max_per_day = int(effect.get("max_per_day", 0) or 0)  # type: ignore[arg-type]
     if max_per_day > 0:
         if not hasattr(p, "item_use_tracker") or p.item_use_tracker is None:
             p.item_use_tracker = {}
         current_day = int(getattr(p, "world_day", 1) or 1)
-        # 翻日清理旧记录
         if p.item_use_tracker.get("_day") != current_day:
-            p.item_use_tracker = {"_day": current_day}
+            p.item_use_tracker["_day"] = current_day
+            keys_to_remove = [k for k in p.item_use_tracker if k != "_day" and not k.startswith("fish_") and not k.startswith("fruit_") and not k.startswith("rest_")]
+            for k in keys_to_remove:
+                del p.item_use_tracker[k]
         used_today = int(p.item_use_tracker.get(name, 0))
         if used_today >= max_per_day:
             return {
@@ -582,16 +565,16 @@ def use_player_item(p: "PlayerState", item_name: str) -> dict[str, object]:
             }
 
     # 应用效用
-    vigor_delta = int(effect.get("vigor", 0))
-    spirit_delta = int(effect.get("spirit", 0))
-    sleep_debt_delta = int(effect.get("sleep_debt", 0))
+    vigor_delta = int(effect.get("vigor", 0) or 0)  # type: ignore[arg-type]
+    spirit_delta = int(effect.get("spirit", 0) or 0)  # type: ignore[arg-type]
+    sleep_debt_delta = int(effect.get("sleep_debt", 0) or 0)  # type: ignore[arg-type]
 
-    from backend.systems.core import apply_vigor_delta, apply_spirit_delta
+    from backend.systems.core import apply_spirit_delta, apply_vigor_delta
     actual_vigor = apply_vigor_delta(p, vigor_delta)
     actual_spirit = apply_spirit_delta(p, spirit_delta)
 
     # 睡眠债变化
-    if sleep_debt_delta < 0:
+    if sleep_debt_delta != 0:
         p.sleep_debt = max(0, int(getattr(p, "sleep_debt", 0)) + sleep_debt_delta)
 
     # 从背包扣除

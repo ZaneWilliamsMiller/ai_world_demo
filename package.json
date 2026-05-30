@@ -1,0 +1,16 @@
+{
+  "name": "living-paper-frontend",
+  "private": true,
+  "type": "module",
+  "description": "Frontend lint tooling for living-paper",
+  "scripts": {
+    "lint": "eslint static/js/ static/tests.html static/index.html",
+    "lint:fix": "eslint static/js/ static/tests.html static/index.html --fix",
+    "arch-check": "python tools/check_arch.py"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "@eslint/js": "^9.0.0",
+    "eslint-plugin-html": "^8.0.0"
+  }
+}

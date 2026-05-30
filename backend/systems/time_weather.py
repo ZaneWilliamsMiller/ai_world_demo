@@ -1,4 +1,16 @@
 from __future__ import annotations
+
+from backend.models.player import PlayerState
+from backend.systems.constants import (
+    COMA_RECOVER_SLEEP_DEBT,
+    COMA_RECOVER_SPIRIT,
+    COMA_RECOVER_VIGOR,
+    RAIN_PROB,
+    SLEEP_DEBT_DIVISOR,
+    WEATHER_CHANGE_PERIOD,
+    WEATHER_CHANGE_PROB,
+)
+
 SHICHEN: tuple[str, ...] = (
     "子时", "丑时", "寅时", "卯时", "辰时", "巳时",
     "午时", "未时", "申时", "酉时", "戌时", "亥时",
@@ -38,10 +50,11 @@ def shichen_phase(idx: int) -> str:
     return "夜里"
 
 
-def advance_clock(p: "PlayerState", ticks: int = 1) -> None:
+def advance_clock(p: PlayerState, ticks: int = 1) -> None:
     """推进世界时钟。每次 tick = 一时辰；溢出转入下一日；附带可能的天气演替。"""
     if ticks <= 0:
         return
+    ticks = min(ticks, 24)
     import random
     old_day = int(p.world_day)
     for _ in range(ticks):
@@ -58,24 +71,24 @@ def advance_clock(p: "PlayerState", ticks: int = 1) -> None:
             p.sleep_debt = int(getattr(p, "sleep_debt", 0)) + 1
             spirit = int(getattr(p, "spirit", 80))
             spirit_max = int(getattr(p, "spirit_max", 100))
-            drain = 1 + p.sleep_debt // 8
+            drain = 1 + p.sleep_debt // SLEEP_DEBT_DIVISOR
             spirit = max(0, min(spirit_max, spirit - drain))
             p.spirit = spirit
             if spirit <= 0:
-                # 昏迷：自动昏睡恢复一段时间
                 p.unconscious_ticks = max(int(getattr(p, "unconscious_ticks", 0)), 2)
-                p.sleep_debt = max(0, p.sleep_debt - 12)
-                p.spirit = min(spirit_max, int(getattr(p, "spirit", 0)) + 45)
-                p.vigor = min(int(getattr(p, "vigor_max", 100)), int(getattr(p, "vigor", 0)) + 12)
+                p.sleep_debt = max(0, p.sleep_debt - COMA_RECOVER_SLEEP_DEBT)
+                recover_spirit = min(spirit_max, int(getattr(p, "spirit", 0)) + COMA_RECOVER_SPIRIT)
+                p.spirit = max(recover_spirit, spirit_max // 3)
+                p.vigor = min(int(getattr(p, "vigor_max", 100)), int(getattr(p, "vigor", 0)) + COMA_RECOVER_VIGOR)
         # 生命燃烧读条：体力归零后倒计时，不进食则饿死
         if int(getattr(p, "life_burn_ticks", 0) or 0) > 0 and int(getattr(p, "vigor", 0) or 0) <= 0:
             p.life_burn_ticks = max(0, int(getattr(p, "life_burn_ticks", 0)) - 1)
             if p.life_burn_ticks <= 0 and not bool(getattr(p, "dead", False)):
                 p.dead = True
                 p.death_reason = "体力燃尽且未得进食，终至饿毙。"
-        if p.world_tick % 3 == 0 and random.random() < 0.5:
+        if p.world_tick % WEATHER_CHANGE_PERIOD == 0 and random.random() < WEATHER_CHANGE_PROB:
             cur = p.weather
-            if random.random() < 0.18:
+            if random.random() < RAIN_PROB:
                 pool = WEATHER_RAIN
             elif is_night(p.world_shichen):
                 pool = WEATHER_NIGHT
@@ -92,5 +105,5 @@ def advance_clock(p: "PlayerState", ticks: int = 1) -> None:
             restock_logs = restock_npc_inventories(p)
             for msg in restock_logs:
                 log.info("restock: %s", msg)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             log.warning("restock check failed: %s", e)
