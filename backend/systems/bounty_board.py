@@ -275,20 +275,41 @@ def check_bounty_progress(p: PlayerState) -> dict[str, Any] | None:
         last_msg = getattr(p, "last_talk_message", None) or ""
 
         if last_npc == target_npc:
-            if ask_about and ask_about.lower() in last_msg.lower():
-                progress["done"] = True
-                npc_name = NPCS.get(target_npc, {}).get("name", target_npc)
-                progress["reason"] = f"已向{npc_name}打探「{ask_about}」。"
-                fsm.complete_step(f"talk_to_npc_{target_npc}")
-                fsm.complete_step(f"ask_about_{ask_about}")
-            elif not ask_about:
-                progress["done"] = True
-                npc_name = NPCS.get(target_npc, {}).get("name", target_npc)
-                progress["reason"] = f"已与{npc_name}交谈。"
-                fsm.complete_step(f"talk_to_npc_{target_npc}")
+            npc_name = NPCS.get(target_npc, {}).get("name", target_npc)
+            ask_matched = False
+            if ask_about:
+                ask_lower = ask_about.lower()
+                msg_lower = last_msg.lower()
+                if ask_lower in msg_lower:
+                    ask_matched = True
+                else:
+                    ask_keywords = [kw for kw in ask_lower if len(kw) >= 2]
+                    if ask_keywords:
+                        hits = sum(1 for kw in ask_keywords if kw in msg_lower)
+                        ask_matched = hits >= max(1, len(ask_keywords) // 2)
+                if ask_matched:
+                    progress["done"] = True
+                    progress["reason"] = f"已向{npc_name}打探「{ask_about}」。"
+                    fsm.complete_step(f"talk_to_npc_{target_npc}")
+                    fsm.complete_step(f"ask_about_{ask_about}")
+                else:
+                    hist_with = p.history.get(target_npc, [])
+                    recent_count = sum(
+                        1 for h in hist_with[-6:]
+                        if h.get("day") == int(p.world_day)
+                    )
+                    if recent_count >= 2:
+                        ask_matched = True
+                        progress["done"] = True
+                        progress["reason"] = f"已与{npc_name}深入交谈。"
+                        fsm.complete_step(f"talk_to_npc_{target_npc}")
+                        fsm.complete_step(f"ask_about_{ask_about}")
+                    else:
+                        progress["reason"] = f"已找到{npc_name}，但尚未问及「{ask_about}」。"
+                        fsm.complete_step(f"talk_to_npc_{target_npc}")
             else:
-                npc_name = NPCS.get(target_npc, {}).get("name", target_npc)
-                progress["reason"] = f"已找到{npc_name}，但尚未问及「{ask_about}」。"
+                progress["done"] = True
+                progress["reason"] = f"已与{npc_name}交谈。"
                 fsm.complete_step(f"talk_to_npc_{target_npc}")
         else:
             npc_name = NPCS.get(target_npc, {}).get("name", target_npc)

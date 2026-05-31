@@ -42,20 +42,30 @@ window.App = window.App || {};
   async function backendGet(url, timeoutMs) {
     var path = url.startsWith("/api") ? url.substring(4) : url;
     var fullUrl = App.API + path;
-    var controller = new AbortController();
-    var timeoutId = setTimeout(function() { controller.abort(); }, timeoutMs || _defaultTimeout);
-    try {
-      var r = await fetch(fullUrl, { cache: 'no-store', signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (!r.ok) {
-        await _handleErrorResponse(r, url);
+    var lastError = null;
+    for (var attempt = 0; attempt < 2; attempt++) {
+      var controller = new AbortController();
+      var timeoutId = setTimeout(function() { controller.abort(); }, timeoutMs || _defaultTimeout);
+      try {
+        var r = await fetch(fullUrl, { cache: 'no-store', signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (!r.ok) {
+          await _handleErrorResponse(r, url);
+        }
+        return await r.json();
+      } catch (e) {
+        clearTimeout(timeoutId);
+        if (e.name === 'AbortError') lastError = new Error('请求超时');
+        else if (e instanceof TypeError) lastError = new Error('网络连接中断，请检查后端服务');
+        else lastError = e;
+        if (attempt === 0 && (e.name === 'AbortError' || e instanceof TypeError)) {
+          await new Promise(function(res) { setTimeout(res, 500); });
+          continue;
+        }
+        throw lastError;
       }
-      return await r.json();
-    } catch (e) {
-      clearTimeout(timeoutId);
-      if (e.name === 'AbortError') throw new Error('请求超时');
-      if (e instanceof TypeError) throw new Error('网络连接中断，请检查后端服务');
-      throw e;
+    }
+    throw lastError;
     }
   }
 
@@ -96,7 +106,7 @@ window.App = window.App || {};
 
   App.fetchState = async function(signal) {
     if (!App.playerId) return null;
-    var path = "/api/state/" + App.playerId;
+    var path = "/state/" + App.playerId;
     var fullUrl = App.API + path;
     var controller = new AbortController();
     var timeoutId = setTimeout(function() { controller.abort(); }, _defaultTimeout);

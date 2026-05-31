@@ -69,6 +69,9 @@ async def _auto_save_loop():
                     _save_log.error("auto-save failed %s: %s", pid, e)
             if saved:
                 _save_log.info("auto-saved %d player(s)", saved)
+            evicted = await room.evict_idle_players()
+            if evicted:
+                _save_log.info("evicted %d idle player(s)", evicted)
         except Exception as e:
             _save_log.error("auto-save loop error: %s", e, exc_info=True)
 

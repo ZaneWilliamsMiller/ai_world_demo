@@ -52,6 +52,24 @@ def shichen_phase(idx: int) -> str:
     return "夜里"
 
 
+def _trim_long_histories(p: PlayerState, max_per_npc: int = 50, keep_recent: int = 20) -> None:
+    history = getattr(p, "history", None)
+    if not history or not isinstance(history, dict):
+        return
+    for npc_id, turns in list(history.items()):
+        if not isinstance(turns, list) or len(turns) <= max_per_npc:
+            continue
+        old_count = len(turns) - keep_recent
+        summary_line = {
+            "user": f"[系统:此前还有{old_count}轮对话，从略]",
+            "assistant": "(知晓)",
+            "day": turns[0].get("day", 0) if turns else 0,
+            "shichen": turns[0].get("shichen", "") if turns else "",
+            "weather": turns[0].get("weather", "") if turns else "",
+        }
+        history[npc_id] = [summary_line] + turns[-keep_recent:]
+
+
 def advance_clock(p: PlayerState, ticks: int = 1) -> None:
     """推进世界时钟。每次 tick = 一时辰；溢出转入下一日；附带可能的天气演替。"""
     if ticks <= 0:
@@ -117,6 +135,8 @@ def advance_clock(p: PlayerState, ticks: int = 1) -> None:
                 execute_plan_step(p, _nid, _mind)
         except Exception as exc:
             logging.warning("NPC %s plan step failed: %s", _nid, exc)
+
+    _trim_long_histories(p)
     # ── NPC 货柜自然补货：世界日翻篇时检测 ──
     if int(p.world_day) > old_day:
         log = logging.getLogger("time_weather")

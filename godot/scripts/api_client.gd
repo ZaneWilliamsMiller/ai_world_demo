@@ -6,6 +6,16 @@ extends Node
 @export var timeout_sec: float = 30.0
 var shutdown_secret: String = ""
 
+const PATH_HEALTH := "/api/health"
+const PATH_TALK_STREAM := "/api/npc/talk_stream"
+const PATH_WAIT := "/api/wait"
+const PATH_SHUTDOWN := "/api/admin/shutdown"
+const PATH_AGENT_ACT := "/api/agent/act"
+const PATH_AGENT_ACT_LOOP := "/api/agent/act_loop"
+const PATH_TESTS_LIST := "/api/tests/list"
+const PATH_TESTS_RUN := "/api/tests/run"
+const PATH_TESTS_LLM := "/api/tests/run-module/unit/llm"
+
 var _req_id: int = 0
 var _active_stream_http: HTTPClient = null
 var _streaming: bool = false
@@ -94,7 +104,7 @@ func talk_stream(npc_id: String, message: String, player_id: String = "") -> voi
 		emit_signal("stream_done", {"error": "已有流式对话进行中，请等待完成或取消", "done": true})
 		return
 	_streaming = true
-	var url_path := "/api/npc/talk_stream"
+	var url_path := PATH_TALK_STREAM
 	var body_dict := {
 		"player_id": player_id if player_id else GameManager.player_id,
 		"npc_id": npc_id,
@@ -246,7 +256,7 @@ func _exit_tree() -> void:
 
 ## Test backend connection.
 func test_backend() -> bool:
-	var res: Dictionary = await request("/api/health", "GET", {})
+	var res: Dictionary = await request(PATH_HEALTH, "GET", {})
 	if res.get("_status", 0) == 200 and res.get("status", "") == "ok":
 		if res.get("shutdown_configured") == "true" and shutdown_secret == "":
 			shutdown_secret_required.emit()
@@ -255,7 +265,7 @@ func test_backend() -> bool:
 
 
 func test_llm() -> bool:
-	var res: Dictionary = await request("/api/tests/run-module/unit/llm", "POST", {})
+	var res: Dictionary = await request(PATH_TESTS_LLM, "POST", {})
 	if res.get("_status", 0) == 200 and res.get("success", false):
 		return true
 	return false
@@ -269,13 +279,13 @@ func shutdown_backend() -> Dictionary:
 	var extra := {}
 	if secret != "":
 		extra["X-Shutdown-Secret"] = secret
-	var res: Dictionary = await request("/api/shutdown", "POST", {}, extra)
+	var res: Dictionary = await request(PATH_SHUTDOWN, "POST", {}, extra)
 	return {"success": res.get("_status", 0) == 200}
 
 
 ## Wait (advance time by 1 tick).
 func player_wait() -> Dictionary:
-	var res: Dictionary = await request("/api/wait", "POST", { "player_id": GameManager.player_id })
+	var res: Dictionary = await request(PATH_WAIT, "POST", { "player_id": GameManager.player_id })
 	if res.get("_status", 0) == 200:
 		res.erase("_status")
 		return res
@@ -283,7 +293,7 @@ func player_wait() -> Dictionary:
 
 ## List available tests.
 func list_tests() -> Dictionary:
-	var res: Dictionary = await request("/api/tests/list", "GET", {})
+	var res: Dictionary = await request(PATH_TESTS_LIST, "GET", {})
 	if res.get("_status", 0) == 200:
 		res.erase("_status")
 		return res
@@ -292,7 +302,7 @@ func list_tests() -> Dictionary:
 
 ## Run a specific test.
 func run_test(test_name: String) -> Dictionary:
-	var res: Dictionary = await request("/api/tests/run/%s" % test_name, "POST", {})
+	var res: Dictionary = await request(PATH_TESTS_RUN + "/%s" % test_name, "POST", {})
 	if res.get("_status", 0) == 200:
 		res.erase("_status")
 		return res
@@ -302,7 +312,7 @@ func run_test(test_name: String) -> Dictionary:
 ## Agent 单步行动
 func agent_act(player_id: String, npc_id: String) -> Dictionary:
 	var body := {"player_id": player_id, "npc_id": npc_id}
-	var res: Dictionary = await request("/api/agent/act", "POST", body)
+	var res: Dictionary = await request(PATH_AGENT_ACT, "POST", body)
 	if res.get("_status", 0) == 200:
 		res.erase("_status")
 		return res
@@ -312,7 +322,7 @@ func agent_act(player_id: String, npc_id: String) -> Dictionary:
 ## Agent 循环行动
 func agent_act_loop(player_id: String, npc_id: String, max_steps: int = 3) -> Dictionary:
 	var body := {"player_id": player_id, "npc_id": npc_id, "max_steps": max_steps}
-	var res: Dictionary = await request("/api/agent/act_loop", "POST", body)
+	var res: Dictionary = await request(PATH_AGENT_ACT_LOOP, "POST", body)
 	if res.get("_status", 0) == 200:
 		res.erase("_status")
 		return res

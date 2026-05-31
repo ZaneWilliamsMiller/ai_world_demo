@@ -164,6 +164,8 @@ def _dijkstra(
                 continue
             ch = rows[ny][nx]
             src = rows[y][x]
+            if not is_passable(ch):
+                continue
             if not can_step_between(src, ch, allow_steep=allow_steep):
                 continue
             nd = d + tile_cost(ch)

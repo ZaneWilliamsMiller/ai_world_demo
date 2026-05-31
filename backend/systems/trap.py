@@ -238,8 +238,8 @@ def survival_action_delta(p: PlayerState, user_message: str) -> dict[str, Any]:
     day_key = str(p.world_day)
 
     if any(k in msg for k in ("吃干粮", "啃干粮")) and int(p.inventory.get("干粮", 0)) > 0:
-        ration_key = f"ration_{day_key}"
-        if tracker.get(ration_key, 0) > 0:
+        ration_key = "干粮"
+        if tracker.get(ration_key, 0) >= 3:
             note = "干粮已在本轮消耗过，不可重复使用。"
         else:
             tracker[ration_key] = tracker.get(ration_key, 0) + 1
@@ -251,7 +251,7 @@ def survival_action_delta(p: PlayerState, user_message: str) -> dict[str, Any]:
             items_lose.append("干粮")
             note = "你嚼了几口干粮,气力略回。"
     elif any(k in msg for k in ("打鱼", "捕鱼", "下网", "摸鱼")) and ch in ("~", "B"):
-        fish_key = f"fish_{day_key}"
+        fish_key = "鲜鱼"
         if tracker.get(fish_key, 0) >= FISH_MAX_PER_DAY:
             note = "今日已多次打鱼,水边再无收获。"
         else:
@@ -262,7 +262,7 @@ def survival_action_delta(p: PlayerState, user_message: str) -> dict[str, Any]:
             items_gain.append("鲜鱼")
             note = "你就着水势摸得一尾鲜鱼。"
     elif any(k in msg for k in ("野果", "采果", "摘果", "吃果")) and ch in ("F", "&", ","):
-        fruit_key = f"fruit_{day_key}"
+        fruit_key = "野果"
         if tracker.get(fruit_key, 0) >= FRUIT_MAX_PER_DAY:
             note = "附近野果已被采尽,明日再来。"
         else:
@@ -274,7 +274,7 @@ def survival_action_delta(p: PlayerState, user_message: str) -> dict[str, Any]:
         if getattr(p, "move_locked", False):
             note = "身处险局，无法安歇。"
         else:
-            rest_key = f"rest_{day_key}"
+            rest_key = "_rest"
             if tracker.get(rest_key, 0) >= REST_MAX_PER_DAY:
                 note = "今日已多次歇息,难以再入睡。"
             else:

@@ -183,18 +183,20 @@ def _build_dynamic_prompt_parts(
     if gossip_block:
         dyn_parts.append(gossip_block)
 
-    dyn_parts.append(world_status_block(p))
-    econ_ctx = format_economy_context(p, vendor_npc_id=npc_id)
-    if econ_ctx:
-        dyn_parts.append(econ_ctx)
-    inv_ctx = format_npc_inventory(p, npc_id)
-    if inv_ctx:
-        dyn_parts.append(inv_ctx)
-    dyn_parts.append(vigor_status_block(p))
-
-    weather_block = npc_weather_awareness_block(p)
-    if weather_block:
-        dyn_parts.append(weather_block)
+    # ── 合并状态 block 并按 token 预算裁剪 ──
+    _status_parts = [
+        world_status_block(p),
+        format_economy_context(p, vendor_npc_id=npc_id),
+        format_npc_inventory(p, npc_id),
+        vigor_status_block(p),
+        npc_weather_awareness_block(p),
+    ]
+    _combined = "\n\n".join(s for s in _status_parts if s)
+    _MAX_STATUS_CHARS = 1200  # ≈600 tokens
+    if _combined:
+        if len(_combined) > _MAX_STATUS_CHARS:
+            _combined = _combined[:_MAX_STATUS_CHARS] + "\n…（状态信息已裁剪）"
+        dyn_parts.append(_combined)
 
     state_block = npc_state_for_dialogue(p, npc_id)
     if state_block:
@@ -265,6 +267,34 @@ def _build_dynamic_prompt_parts(
         f"【秩序{p.flags.get('order', 0)} 求真{p.flags.get('truth', 0)} "
         f"希望{p.flags.get('hope', 0)} 混乱{p.flags.get('chaos', 0)}】（仅作笔触参考，**勿在正文复述数字**）"
     )
+
+    _MAX_DYN_CHARS = 3500
+    _total = sum(len(s) for s in dyn_parts)
+    if _total > _MAX_DYN_CHARS:
+        _PRIORITY_ORDER = [
+            "险局", "险境", "escape_outcome",
+            "【身心此刻】", "【世态此刻】",
+            "【你心里的算盘】", "【你对此客的旧账】",
+            "记忆", "计划", "心境",
+            "闲话", "遭遇", "洞察",
+            "近日", "风闻", "秩序",
+        ]
+        def _priority(s: str) -> int:
+            for i, kw in enumerate(_PRIORITY_ORDER):
+                if kw in s:
+                    return i
+            return len(_PRIORITY_ORDER)
+        dyn_parts.sort(key=_priority)
+        kept = []
+        chars = 0
+        for part in dyn_parts:
+            if chars + len(part) <= _MAX_DYN_CHARS:
+                kept.append(part)
+                chars += len(part)
+            else:
+                break
+        dyn_parts[:] = kept
+
     return dyn_parts
 
 

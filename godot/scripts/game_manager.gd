@@ -392,7 +392,7 @@ func fetch_journal() -> String:
 	var res: Dictionary = await ApiClient.request("/api/journal/" + player_id, "GET", {})
 	if res.has("error"):
 		return ""
-	return res.get("journal", res.get("text", ""))
+	return JSON.stringify(res.get("history", []))
 
 
 func fetch_state() -> void:

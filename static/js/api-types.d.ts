@@ -472,6 +472,16 @@ export interface TalkStreamDoneEvent {
   done?: boolean;
   interrupted?: boolean | null;
   error?: string | null;
+  player?: PlayerPublic;
+  npcs_here?: NpcBrief[];
+  delta?: TalkDelta;
+  flags?: Record<string, number>;
+  favor?: Record<string, number>;
+  rumors?: any[];
+  events?: any[];
+  atmosphere?: string;
+  server_ms?: number;
+  llm_fallback?: boolean | null;
 }
 
 export interface TestInfoResponse {

@@ -87,7 +87,7 @@ window.App = window.App || {};
               App.addMsg("system", "⚠️ 与服务器连接中断，请检查后端服务是否运行");
             }
           } else if (_pollErrorCount >= 3) {
-            fetch("/api/health", { cache: "no-store" })
+            fetch(App.API + "/health", { cache: "no-store" })
               .then(function() { _pollErrorCount = 0; })
               .catch(function() { App.addMsg("system", "⚠️ 与服务器连接中断，请检查后端服务是否运行"); });
           }
@@ -490,7 +490,7 @@ window.App = window.App || {};
       if (event.persisted) {
         var co = document.getElementById("connectingOverlay");
         if (co) co.style.display = "flex";
-        fetch("/api/health", { cache: "no-store" })
+        fetch(App.API + "/health", { cache: "no-store" })
           .then(function() {
             if (co) co.style.display = "none";
           })
@@ -505,7 +505,7 @@ window.App = window.App || {};
       App._showOfflineScreen();
     });
 
-    fetch("/api/health", { cache: "no-store" })
+    fetch(App.API + "/health", { cache: "no-store" })
       .then(function(r) {
         if (!r.ok) throw new Error("HTTP " + r.status);
         return r.json();

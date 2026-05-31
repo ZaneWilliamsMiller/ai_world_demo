@@ -63,13 +63,48 @@ def _tokenize_internal(text: str) -> set[str]:
     return set(tokenize(text))
 
 
+_SYNONYM_GROUPS: list[set[str]] = [
+    {"银钱", "铜板", "制钱", "钱", "银", "文钱", "贯"},
+    {"干粮", "口粮", "粮", "食", "饭", "馍"},
+    {"客栈", "旅店", "驿站", "宿处", "同福栈"},
+    {"衙门", "县衙", "官府", "公门"},
+    {"漕帮", "漕口帮", "帮坞", "帮里"},
+    {"镖局", "镖行", "走镖"},
+    {"江湖", "武林", "绿林"},
+    {"船", "舟", "渡船", "渡口"},
+    {"刀", "剑", "兵刃", "兵器"},
+    {"信", "书信", "密信", "函"},
+]
+
+_SYNONYM_MAP: dict[str, str] = {}
+for _grp in _SYNONYM_GROUPS:
+    _rep = min(_grp, key=len)
+    for _w in _grp:
+        if _w not in _SYNONYM_MAP:
+            _SYNONYM_MAP[_w] = _rep
+
+
+def _expand_synonyms(tokens: set[str]) -> set[str]:
+    expanded = set(tokens)
+    for t in tokens:
+        syn = _SYNONYM_MAP.get(t)
+        if syn:
+            expanded.add(syn)
+            for w, s in _SYNONYM_MAP.items():
+                if s == syn:
+                    expanded.add(w)
+    return expanded
+
+
 def text_relevance(query: str, doc: str) -> float:
-    """基于词/字符二元组的 Jaccard 相似度。0..1。"""
+    """基于词/字符二元组的 Jaccard 相似度（含同义词扩展）。0..1。"""
     a, b = tokenize(query), tokenize(doc)
     if not a or not b:
         return 0.0
-    inter = len(a & b)
-    union = len(a | b)
+    a_exp = _expand_synonyms(a)
+    b_exp = _expand_synonyms(b)
+    inter = len(a_exp & b_exp)
+    union = len(a_exp | b_exp)
     return inter / union if union else 0.0
 
 

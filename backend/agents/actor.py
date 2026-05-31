@@ -153,57 +153,17 @@ def decide_next_action(mind: mem.AgentMind, p: PlayerState, npc_id: str) -> NpcA
 
 
 def execute_plan_step(p: PlayerState, npc_id: str, mind: mem.AgentMind) -> NpcActionResult:
-    """同步执行一步计划。"""
-    action = decide_next_action(mind, p, npc_id)
-    sh_name = shichen_name(p.world_shichen)
-    world_day = int(p.world_day)
-    meta = NPCS.get(npc_id, {})
-    npc_short = meta.get("short", npc_id)
-
-    if action == NpcAction.IDLE:
-        return NpcActionResult(
-            action_type=NpcAction.IDLE,
-            description=f"{npc_short}无事可做",
-            success=True,
-        )
-
-    pos_snapshot = p.npc_positions.get(npc_id)
-    old_pos = pos_snapshot
+    """同步兼容入口：委托给异步版本。"""
     try:
-        if action == NpcAction.MOVE:
-            return _execute_move(p, npc_id, mind, sh_name, world_day, npc_short)
-        if action == NpcAction.TALK:
-            return _execute_talk(p, npc_id, mind, sh_name, world_day, npc_short)
-        if action == NpcAction.REST:
-            return _execute_rest(mind, sh_name, world_day, npc_short)
-    except Exception as e:
-        if old_pos is not None:
-            p.npc_positions[npc_id] = old_pos
-        log.warning("action rollback for npc=%s: %s", npc_id, e)
-        try:
-            import time as _time
-
-            from backend.observability.tracker import CallRecord, get_tracker
-            get_tracker().record(CallRecord(
-                timestamp=_time.time(),
-                operation="npc_action_rollback",
-                model="",
-                player_id=p.player_id,
-                npc_id=npc_id,
-                parse_success=False,
-                schema_violations=["action_rollback"],
-                latency_ms=0,
-                status="error",
-            ))
-        except Exception:
-            pass
-        return NpcActionResult(
-            action_type=action,
-            description=f"{npc_short}行动异常",
-            success=False,
-        )
-
-    return NpcActionResult(action_type=NpcAction.IDLE, description="未知行动", success=False)
+        loop = asyncio.get_running_loop()
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            return pool.submit(
+                asyncio.run,
+                execute_plan_step_async(p, npc_id, mind)
+            ).result()
+    except RuntimeError:
+        return asyncio.run(execute_plan_step_async(p, npc_id, mind))
 
 
 def _execute_move(
@@ -247,14 +207,15 @@ def _execute_talk(
     npc_short: str,
 ) -> NpcActionResult:
     try:
-        return asyncio.run(_execute_talk_async(p, npc_id, mind, sh_name, world_day, npc_short))
-    except RuntimeError:
+        loop = asyncio.get_running_loop()
         import concurrent.futures
         with concurrent.futures.ThreadPoolExecutor() as pool:
             return pool.submit(
                 asyncio.run,
                 _execute_talk_async(p, npc_id, mind, sh_name, world_day, npc_short)
             ).result()
+    except RuntimeError:
+        return asyncio.run(_execute_talk_async(p, npc_id, mind, sh_name, world_day, npc_short))
 
 
 async def _execute_talk_async(
@@ -329,6 +290,20 @@ async def _execute_talk_async(
         desc = fallback_desc
 
     record_observation(mind, desc, world_day=world_day, world_shichen=sh_name, importance=3.0)
+
+    other_mind = None
+    try:
+        from backend.agents.game_state import get_or_init_mind
+        other_mind = get_or_init_mind(p, other_id)
+    except Exception:
+        pass
+    if other_mind is not None:
+        npc_short_self = NPCS.get(npc_id, {}).get("short", npc_id)
+        other_obs = f"{npc_short_self}来找我闲聊了"
+        if dialogue_lines:
+            other_obs += f"：{dialogue_lines[0][:60]}"
+        record_observation(other_mind, other_obs, world_day=world_day, world_shichen=sh_name, importance=3.0)
+
     return NpcActionResult(
         action_type=NpcAction.TALK,
         description=desc,
