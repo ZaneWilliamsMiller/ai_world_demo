@@ -6,7 +6,7 @@ import asyncio
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from backend.api.schema import DeleteSaveResponse, InitResponse, SaveResponse, SavesListResponse
+from backend.api.schema import ClearAllSavesResponse, DeleteSaveResponse, InitResponse, SaveResponse, SavesListResponse
 from backend.api.views import build_init_response
 from backend.systems.core import init_npc_positions
 from backend.systems.economy import init_npc_inventories
@@ -76,3 +76,19 @@ async def remove_save(body: DeleteSaveBody):
     ok = await asyncio.to_thread(delete_save, body.player_id)
     await room.remove_player(body.player_id)
     return {"ok": ok}
+
+
+@router.post("/api/saves/clear-all", response_model=ClearAllSavesResponse)
+async def clear_all_saves():
+    from backend.systems.save_system import SAVE_DIR
+    count = 0
+    for fp in SAVE_DIR.glob("*.json"):
+        try:
+            fp.unlink()
+            count += 1
+        except Exception:
+            pass
+    from backend.session.store import room
+    room.players.clear()
+    room._last_access.clear()
+    return {"ok": True, "deleted": count}

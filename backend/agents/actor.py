@@ -121,7 +121,7 @@ def _build_npc_talk_messages(
 
 
 def decide_next_action(mind: mem.AgentMind, p: PlayerState, npc_id: str) -> NpcAction:
-    """读取当前时辰的计划项决定行动。"""
+    """读取当前时辰的计划项决定行动。被悬赏通缉的NPC更倾向于移动/隐藏。"""
     from backend.systems.npc_state import _parse_plan_target
 
     sh_name = shichen_name(p.world_shichen)
@@ -129,9 +129,22 @@ def decide_next_action(mind: mem.AgentMind, p: PlayerState, npc_id: str) -> NpcA
     if not plan:
         return NpcAction.IDLE
 
+    story_events = getattr(p, "story_events", []) or []
+    is_wanted = any(
+        evt.get("bounty_hint", {}).get("target_npc") == npc_id
+        and evt.get("bounty_hint", {}).get("type") == "缉拿"
+        for evt in story_events
+    )
+
     has_move = any(kw in plan for kw in _MOVE_KW)
     has_rest = any(kw in plan for kw in _REST_KW)
     has_talk = any(kw in plan for kw in _TALK_KW)
+
+    if is_wanted:
+        if has_move or has_rest:
+            return NpcAction.MOVE
+        if not has_talk:
+            return NpcAction.MOVE
 
     if has_move:
         target = _parse_plan_target(plan)
@@ -153,15 +166,13 @@ def decide_next_action(mind: mem.AgentMind, p: PlayerState, npc_id: str) -> NpcA
 
 
 def execute_plan_step(p: PlayerState, npc_id: str, mind: mem.AgentMind) -> NpcActionResult:
-    """同步兼容入口：委托给异步版本。"""
+    """同步兼容入口：在已有事件循环中用 run_until_complete，否则 asyncio.run。"""
     try:
         loop = asyncio.get_running_loop()
         import concurrent.futures
         with concurrent.futures.ThreadPoolExecutor() as pool:
-            return pool.submit(
-                asyncio.run,
-                execute_plan_step_async(p, npc_id, mind)
-            ).result()
+            fut = pool.submit(asyncio.run, execute_plan_step_async(p, npc_id, mind))
+            return fut.result(timeout=120)
     except RuntimeError:
         return asyncio.run(execute_plan_step_async(p, npc_id, mind))
 
@@ -210,10 +221,8 @@ def _execute_talk(
         loop = asyncio.get_running_loop()
         import concurrent.futures
         with concurrent.futures.ThreadPoolExecutor() as pool:
-            return pool.submit(
-                asyncio.run,
-                _execute_talk_async(p, npc_id, mind, sh_name, world_day, npc_short)
-            ).result()
+            fut = pool.submit(asyncio.run, _execute_talk_async(p, npc_id, mind, sh_name, world_day, npc_short))
+            return fut.result(timeout=120)
     except RuntimeError:
         return asyncio.run(_execute_talk_async(p, npc_id, mind, sh_name, world_day, npc_short))
 
@@ -295,8 +304,8 @@ async def _execute_talk_async(
     try:
         from backend.agents.game_state import get_or_init_mind
         other_mind = get_or_init_mind(p, other_id)
-    except Exception:
-        pass
+    except Exception as _e:
+        log.debug("Failed to get mind for %s: %s", other_id, _e)
     if other_mind is not None:
         npc_short_self = NPCS.get(npc_id, {}).get("short", npc_id)
         other_obs = f"{npc_short_self}来找我闲聊了"
@@ -373,8 +382,8 @@ async def execute_plan_step_async(
                 latency_ms=0,
                 status="error",
             ))
-        except Exception:
-            pass
+        except Exception as _e:
+            log.debug("act_loop observation record failed: %s", _e)
         return NpcActionResult(
             action_type=action,
             description=f"{npc_short}行动异常",

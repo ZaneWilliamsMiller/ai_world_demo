@@ -126,6 +126,65 @@ NPC_RELATIONSHIPS: dict[str, list[dict[str, Any]]] = {
         {"target": "bangzhang", "attitude": "互不招惹", "note": "漕口帮的人赌钱从不赖账,但赢了他们的钱也不安生"},
         {"target": "yulaog", "attitude": "互不招惹", "note": "渡头老艄公不赌,但替我捎过口信——算半个熟人"},
     ],
+    "niangzi": [
+        {"target": "xuanzhen", "attitude": "生意往来", "note": "那道人也卖药，抢了我不少客，但偶尔也从他那进些稀罕药材"},
+        {"target": "zhanggui", "attitude": "生意往来", "note": "同福栈的伤药都是我供的，掌柜按月结账不拖欠"},
+        {"target": "bullya", "attitude": "心存芥蒂", "note": "皂隶总来查我私售的虎狼药，得打点着"},
+    ],
+    "xiaofan": [
+        {"target": "yaren", "attitude": "互不招惹", "note": "牙人看不起走街串巷的，但我的消息比他还快"},
+        {"target": "lika", "attitude": "心存芥蒂", "note": "厘卡的吏员追着我收税，恨不得把我赶出县境"},
+        {"target": "lizheng", "attitude": "面上客气", "note": "墟上里正偶尔托我带东西，不好得罪"},
+        {"target": "zhanggui", "attitude": "生意往来", "note": "同福栈的掌柜偶尔从我这进些小物件"},
+    ],
+    "laogeng": [
+        {"target": "bullya", "attitude": "面上客气", "note": "皂隶夜里巡逻，更夫打更，井水不犯河水"},
+        {"target": "hei", "attitude": "互不招惹", "note": "野径那家店夜里动静大，我装没听见"},
+        {"target": "jianfei", "attitude": "心存芥蒂", "note": "芦荡里夜里有人出没，撞见过一回，吓得我三天没敢走那条路"},
+    ],
+    "cuiwei": [
+        {"target": "aling", "attitude": "旧交", "note": "阿泠比我小几岁，刚来画舫时是我照应的"},
+        {"target": "zhanggui", "attitude": "面上客气", "note": "掌柜偶尔来喝茶，出手大方但不惹事"},
+        {"target": "bangzhang", "attitude": "心存芥蒂", "note": "漕口帮的人来闹过场，老鸨都不敢吭声"},
+    ],
+    "tiejiang": [
+        {"target": "biaotou", "attitude": "生意往来", "note": "镖局的刀剑都是我修的，赵铁鹰识货"},
+        {"target": "bullya", "attitude": "心存芥蒂", "note": "衙门要征我去打兵器，能推就推"},
+        {"target": "zhanggui", "attitude": "生意往来", "note": "同福栈的灶具铁器都是我打的"},
+    ],
+    "mianfen": [
+        {"target": "lizheng", "attitude": "面上客气", "note": "墟上里正是老主顾，吃面从不给钱但也不找麻烦"},
+        {"target": "zhanggui", "attitude": "互不招惹", "note": "城里掌柜看不上墟口的面摊，但他的伙计常来"},
+        {"target": "yaren", "attitude": "互不招惹", "note": "牙人来吃面总想赊账，我可不惯着"},
+        {"target": "bullya", "attitude": "心存芥蒂", "note": "官差来白吃面，敢怒不敢言"},
+    ],
+    "shuishi": [
+        {"target": "bangzhang", "attitude": "面上客气", "note": "帮掌管着码头上的一切，不敢不听"},
+        {"target": "yulaog", "attitude": "交好", "note": "渔老七是码头上少有的好人，偶尔帮我挡帮里的差事"},
+        {"target": "lika", "attitude": "心存芥蒂", "note": "厘卡查船时，总是我们这些小水手被盘问"},
+    ],
+    "buzhuang": [
+        {"target": "yaren", "attitude": "生意往来", "note": "牙人帮我进过几批布，抽头狠但货还算实在"},
+        {"target": "bullya", "attitude": "心存芥蒂", "note": "皂隶总来「巡查」，分明是觊觎家产"},
+        {"target": "zhanggui", "attitude": "互不招惹", "note": "同福栈的掌柜跟我一样做正经生意，互不掺和"},
+    ],
+    "youmin": [
+        {"target": "lizheng", "attitude": "面上客气", "note": "里正管着鱼鳞册，我能不能留下来全看他"},
+        {"target": "seng", "attitude": "交好", "note": "卧佛寺的和尚给过粥和草棚，是这县里头一个善人"},
+        {"target": "bullya", "attitude": "心存芥蒂", "note": "皂隶总想把我们赶出县境，得躲着走"},
+        {"target": "jianfei", "attitude": "互不招惹", "note": "芦荡里的匪人招我入伙，我没敢答应也没敢告发"},
+    ],
+    "nvdao": [
+        {"target": "xuanzhen", "attitude": "旧交", "note": "玄真子是旧识，当年一起在茅山修过道，后来各走各路"},
+        {"target": "seng", "attitude": "面上客气", "note": "寺里的和尚不待见道士，但面上还过得去"},
+        {"target": "shusheng", "attitude": "互不招惹", "note": "书院的人嫌我旁门左道，我嫌他们酸腐"},
+    ],
+    "puocha": [
+        {"target": "bullya", "attitude": "面上客气", "note": "雷三是皂隶，比我高一级，得罪不起"},
+        {"target": "yaren", "attitude": "生意往来", "note": "牙人给我的好处不少，帮他递话通风"},
+        {"target": "lizheng", "attitude": "互不招惹", "note": "墟上的里正偶尔托我递条子，给点跑腿费"},
+        {"target": "lika", "attitude": "互不招惹", "note": "厘卡的吏员和我同在衙门混饭吃，井水不犯河水"},
+    ],
 }
 
 
@@ -141,11 +200,13 @@ def who_knows(npc_id: str) -> list[dict[str, Any]]:
 
 def relationship_context(npc_id: str) -> str:
     """生成给该 NPC 注入的「人脉心念」文本块"""
+    from backend.data.npcs_data import NPCS
     rels = NPC_RELATIONSHIPS.get(npc_id)
     if not rels:
         return ""
     lines = ["【你脑中映出的几张脸（以下人物你可能在对话中自然提起，不必硬塞）】"]
     for r in rels[:6]:
         target_id = r["target"]
-        lines.append(f"· {target_id}（{r['attitude']}）：{r['note']}")
+        target_name = NPCS.get(target_id, {}).get("short", target_id)
+        lines.append(f"· {target_name}（{r['attitude']}）：{r['note']}")
     return "\n".join(lines)

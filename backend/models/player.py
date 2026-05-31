@@ -86,6 +86,8 @@ class PlayerState:
     active_bounty: dict[str, Any] | None = None
     completed_bounties: list[str] = field(default_factory=list)
     last_bounty_refresh_day: int = 0
+    # ── 故事事件（2026-05-31 新增，悬赏叙事前提）──
+    story_events: list[dict[str, Any]] = field(default_factory=list)
     # 悬赏进度追踪：记录最近一次对话及行进信息（用于 check_bounty_progress）
     last_talk_npc_id: str | None = None
     last_talk_message: str | None = None
@@ -108,7 +110,7 @@ class PlayerState:
 
     def _ensure_defaults(self) -> None:
         """确保旧版存档反序列化后缺失的字段被补全。"""
-        for attr in ("bounties", "completed_bounties", "rumors", "events"):
+        for attr in ("bounties", "completed_bounties", "rumors", "events", "story_events"):
             if getattr(self, attr, None) is None:
                 setattr(self, attr, [])
         for attr in ("favor", "inventory", "minds", "npc_positions",

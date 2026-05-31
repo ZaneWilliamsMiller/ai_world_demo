@@ -160,4 +160,5 @@ def build_init_response(p: PlayerState) -> dict[str, Any]:
         "factions": factions_public(),
         "map_locations": map_locations_public(),
         "events": list(p.events[-10:]),
+        "story_events": _strip_private(getattr(p, "story_events", []) or []),
     }

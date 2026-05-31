@@ -28,35 +28,54 @@ def pytest_collection_modifyitems(items):
             item.add_marker(pytest.mark.interactive)
 
 _LOCK_FILE = None
+_LOCK_ACQUIRED = False
 
 
 def _acquire_lock(f):
+    global _LOCK_ACQUIRED
     if sys.platform == "win32":
         import msvcrt
-        msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)
+        for _ in range(50):
+            try:
+                msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+                _LOCK_ACQUIRED = True
+                return
+            except OSError:
+                time.sleep(0.1)
+        raise RuntimeError("Could not acquire interactive test lock after 5s")
     else:
         import fcntl
         fcntl.flock(f, fcntl.LOCK_EX)
+        _LOCK_ACQUIRED = True
 
 
 def _release_lock(f):
+    global _LOCK_ACQUIRED
+    if not _LOCK_ACQUIRED:
+        return
     if sys.platform == "win32":
         import msvcrt
-        msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+        try:
+            msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+        except OSError:
+            pass
     else:
         import fcntl
         fcntl.flock(f, fcntl.LOCK_UN)
+    _LOCK_ACQUIRED = False
 
 
 @pytest.fixture(autouse=True, scope="session")
 def _serial_lock():
     global _LOCK_FILE
     lock_path = Path(__file__).resolve().parent / ".interactive.lock"
-    with open(lock_path, "w") as f:
-        _LOCK_FILE = f
-        _acquire_lock(_LOCK_FILE)
-        yield
-        _release_lock(_LOCK_FILE)
+    f = open(lock_path, "w")
+    _LOCK_FILE = f
+    _acquire_lock(_LOCK_FILE)
+    yield
+    _release_lock(_LOCK_FILE)
+    f.close()
+    _LOCK_FILE = None
     with contextlib.suppress(Exception):
         lock_path.unlink(missing_ok=True)
 

@@ -9,7 +9,7 @@ import unittest
 from backend.data.atmosphere import TILE_ATMOSPHERE, WORLD_REGIONS
 from backend.data.factions import FACTIONS
 from backend.data.maps_data import MAP_AMBUSH_MARKERS, MAP_LOCATIONS, MAPS
-from backend.data.npcs_data import NPC_SEEDS, NPCS
+from backend.data.npcs_data import NPC_FACTION, NPC_HABITS, NPC_SEEDS, NPCS
 from backend.data.prompts import FIXED_INTRO, WORLD_NAME
 from backend.data.relationships import NPC_RELATIONSHIPS
 from backend.data.zones import ECONOMY_ZONES, SAFE_ZONES
@@ -132,6 +132,93 @@ class TestZones(unittest.TestCase):
     def test_each_safe_zone_has_label(self):
         for zone_id, zone_data in SAFE_ZONES.items():
             self.assertIn("label", zone_data, f"Safe zone '{zone_id}' missing 'label'")
+
+
+MAP_MAX_X = 149
+MAP_MAX_Y = 99
+
+
+class TestNpcsDataExtended(unittest.TestCase):
+    def test_non_always_npcs_have_cell(self):
+        for npc_id, npc_data in NPCS.items():
+            if npc_data.get("always"):
+                continue
+            self.assertIn("cell", npc_data, f"Non-always NPC '{npc_id}' missing 'cell'")
+            cell = npc_data["cell"]
+            self.assertIsInstance(cell, tuple, f"NPC '{npc_id}' cell is not tuple")
+            self.assertEqual(len(cell), 3, f"NPC '{npc_id}' cell must be (map_id, x, y)")
+            x = cell[1]
+            y = cell[2]
+            self.assertGreaterEqual(x, 0, f"NPC '{npc_id}' cell x={x} < 0")
+            self.assertLessEqual(x, MAP_MAX_X, f"NPC '{npc_id}' cell x={x} > {MAP_MAX_X}")
+            self.assertGreaterEqual(y, 0, f"NPC '{npc_id}' cell y={y} < 0")
+            self.assertLessEqual(y, MAP_MAX_Y, f"NPC '{npc_id}' cell y={y} > {MAP_MAX_Y}")
+
+    def test_habits_npcs_in_npcs_dict(self):
+        for npc_id in NPC_HABITS:
+            self.assertIn(npc_id, NPCS, f"NPC_HABITS key '{npc_id}' not in NPCS")
+
+    def test_seeds_have_three_entries(self):
+        for npc_id, seeds in NPC_SEEDS.items():
+            self.assertEqual(len(seeds), 3, f"NPC_SEEDS['{npc_id}'] has {len(seeds)} entries, expected 3")
+
+    def test_faction_values_valid(self):
+        valid_factions = {"yamen", "biaoju", "caobang", "lulin", "shuyuan", None}
+        for npc_id, faction in NPC_FACTION.items():
+            self.assertIn(
+                faction, valid_factions,
+                f"NPC_FACTION['{npc_id}'] = {faction!r} not in valid set"
+            )
+
+    def test_wander_npcs_have_anchor_radius(self):
+        for npc_id, npc_data in NPCS.items():
+            if "wander_anchor_radius" in npc_data:
+                self.assertIn(
+                    "wander_maps_whitelist", npc_data,
+                    f"NPC '{npc_id}' has wander_anchor_radius but missing wander_maps_whitelist"
+                )
+
+
+class TestRelationshipsExtended(unittest.TestCase):
+    def test_target_npcs_exist(self):
+        for npc_id, rels in NPC_RELATIONSHIPS.items():
+            for rel in rels:
+                target = rel.get("target", "")
+                self.assertIn(
+                    target, NPCS,
+                    f"NPC '{npc_id}' relationship target '{target}' not in NPCS"
+                )
+
+    def test_attitude_values_valid(self):
+        known_attitudes = {
+            "挚交", "交好", "面上客气", "互不招惹", "心存芥蒂",
+            "势同水火", "生意往来", "旧交", "暧昧线人", "面上恭敬", "老主顾",
+        }
+        for npc_id, rels in NPC_RELATIONSHIPS.items():
+            for rel in rels:
+                attitude = rel.get("attitude", "")
+                self.assertIn(
+                    attitude, known_attitudes,
+                    f"NPC '{npc_id}' relationship attitude '{attitude}' not in known values"
+                )
+
+    def test_no_self_reference(self):
+        for npc_id, rels in NPC_RELATIONSHIPS.items():
+            for rel in rels:
+                target = rel.get("target", "")
+                self.assertNotEqual(
+                    npc_id, target,
+                    f"NPC '{npc_id}' has self-referencing relationship"
+                )
+
+    def test_note_non_empty(self):
+        for npc_id, rels in NPC_RELATIONSHIPS.items():
+            for rel in rels:
+                note = rel.get("note", "")
+                self.assertTrue(
+                    note and note.strip(),
+                    f"NPC '{npc_id}' relationship with '{rel.get('target')}' has empty note"
+                )
 
 
 if __name__ == "__main__":

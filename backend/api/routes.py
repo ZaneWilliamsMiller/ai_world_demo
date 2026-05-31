@@ -16,6 +16,7 @@ from backend.data.prompts import WORLD_NAME
 router = APIRouter()
 
 from backend.api.admin_routes import router as admin_router
+from backend.api.evolution_routes import router as evolution_router
 from backend.api.npc_routes import router as npc_router
 from backend.api.player_routes import router as player_router
 from backend.api.save_routes import router as save_router
@@ -25,6 +26,7 @@ router.include_router(player_router)
 router.include_router(npc_router)
 router.include_router(save_router)
 router.include_router(admin_router)
+router.include_router(evolution_router)
 
 if settings.enable_test_routes:
     from backend.api.dev import router as test_router

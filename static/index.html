@@ -80,6 +80,25 @@
     </div>
   </div>
 
+  <!-- ========== 世界演进界面 ========== -->
+  <div class="overlay" id="evolutionOverlay" style="display:none;">
+    <div class="evolution-box">
+      <div class="evolution-header">
+        <h2>📜 江湖纪事 · 世界演进</h2>
+        <div class="evolution-progress">
+          <span id="evoDayLabel">第1日</span>
+          <div class="evo-progress-bar"><div class="evo-progress-fill" id="evoProgressFill"></div></div>
+          <span id="evoShichenLabel">辰时</span>
+        </div>
+      </div>
+      <div class="evolution-log" id="evolutionLog"></div>
+      <div class="evolution-footer">
+        <button id="evoEnterBtn" onclick="App.endEvolution()">踏入江湖</button>
+        <span id="evoStatusText">世界正在演进...</span>
+      </div>
+    </div>
+  </div>
+
   <!-- ========== 游戏主界面 ========== -->
 
   <!-- 顶栏 -->
@@ -101,16 +120,26 @@
     <div class="map-panel">
       <div class="panel-title" id="mapTitle">🗺️ 地图</div>
       <div class="map-container" id="mapContainer"></div>
-      <div id="bountyOverlay" class="bounty-overlay">
-        <div class="bounty-overlay-header">
-          <h3>📜 悬赏榜</h3>
-          <button id="bountyOverlayClose" class="bounty-overlay-close">✕</button>
+      <div id="bountyOverlay" class="map-overlay map-overlay-top">
+        <div class="map-overlay-header">
+          <h3>📜 悬赏榜 <span id="bountyCountdown" style="font-size:10px;color:var(--text-muted);font-weight:400;"></span></h3>
+          <button id="bountyOverlayClose" class="map-overlay-close">✕</button>
         </div>
-        <div id="bountyOverlayContent" class="bounty-overlay-content"></div>
-        <div class="bounty-overlay-actions" id="bountyOverlayActions">
-          <button id="bountyRefreshBtn">刷新悬赏</button>
-          <button id="bountyCompleteBtn">完成悬赏</button>
-          <button id="bountyAbandonBtn">放弃悬赏</button>
+        <div id="bountyOverlayContent" class="map-overlay-content"></div>
+        <div class="map-overlay-actions" id="bountyOverlayActions">
+          <button id="bountyRefreshBtn">🔄 刷新</button>
+          <button id="bountyCompleteBtn">✅ 完成</button>
+          <button id="bountyAbandonBtn">❌ 放弃</button>
+        </div>
+      </div>
+      <div id="npcOverlay" class="map-overlay map-overlay-bottom">
+        <div class="map-overlay-header">
+          <button id="npcOverlayClose" class="map-overlay-close">✕</button>
+          <h3>🧑🤝🧑 此地图人物</h3>
+        </div>
+        <div id="npcOverlayContent" class="map-overlay-content">
+          <ul class="npc-list" id="npcList"></ul>
+          <div class="portal-list" id="portalList"></div>
         </div>
       </div>
       <div id="loadingOverlay" class="loading-overlay" style="display:none;" role="status" aria-label="加载中">
@@ -173,10 +202,6 @@
           <span class="npc-summary-text" id="npcSummaryText">此地图人物: 暂无</span>
           <span class="npc-expand-btn" id="npcExpandBtn">展开 ▾</span>
         </div>
-        <div class="npc-collapsible" id="npcCollapsible">
-          <ul class="npc-list" id="npcList"></ul>
-          <div class="portal-list" id="portalList"></div>
-        </div>
       </div>
 
       <!-- 悬赏榜 -->
@@ -186,13 +211,13 @@
           <span class="bounty-summary-text" id="bountySummaryText">悬赏: 暂无</span>
           <span class="bounty-expand-btn" id="bountyExpandBtn">展开 ▾</span>
         </div>
-        <div class="bounty-collapsible" id="bountyCollapsible">
-          <div id="bountyContent" class="bounty-inline-content"></div>
-          <div class="bounty-inline-actions" id="bountyInlineActions">
-            <button id="bountyRefreshBtn2">🔄 刷新悬赏</button>
-            <button id="bountyCompleteBtn2">✅ 完成</button>
-            <button id="bountyAbandonBtn2">❌ 放弃</button>
-          </div>
+      </div>
+
+      <!-- 江湖事 -->
+      <div class="story-section" id="storySection" style="display:none;">
+        <div class="story-summary" id="storySummary">
+          <span class="story-summary-icon">📰</span>
+          <span class="story-summary-text" id="storySummaryText">江湖事</span>
         </div>
       </div>
 
@@ -269,6 +294,7 @@
 <script src="js/confirm.js?v=3" defer></script>
 <script src="js/auth.js?v=3" defer></script>
 <script src="js/main.js?v=3" defer></script>
+<script src="js/evolution.js?v=2" defer></script>
 
 </body>
 </html>

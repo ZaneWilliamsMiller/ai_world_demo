@@ -140,14 +140,45 @@ class TestViewsNpcsHere:
 
 
 class TestBountyBoard:
-    def test_random_location_uses_map_locations(self):
-        from backend.systems.bounty_board import _random_location
-        p = make_player()
-        map_id, loc_name, px, py = _random_location(p)
-        assert map_id == "world"
-        assert loc_name != ""
+    def test_get_location_coords_returns_valid(self):
+        from backend.systems.bounty_board import _get_location_coords
+        from backend.data.maps_data import MAP_LOCATIONS
+        map_id = "world"
+        for loc_name in list(MAP_LOCATIONS.get(map_id, {}).keys())[:3]:
+            px, py = _get_location_coords(map_id, loc_name)
+            assert px >= 0
+            assert py >= 0
+
+    def test_get_location_coords_fallback(self):
+        from backend.systems.bounty_board import _get_location_coords
+        px, py = _get_location_coords("world", "nonexistent_place")
         assert px >= 0
         assert py >= 0
+
+    def test_generate_bounties_from_events(self):
+        from backend.systems.bounty_board import generate_bounties_from_events
+        p = make_player()
+        events = [
+            {
+                "id": "evt_test1",
+                "desc": "一名逃犯潜入城中",
+                "severity": "moderate",
+                "faction": "yamen",
+                "location": "市口",
+                "bounty_hint": {
+                    "type": "缉拿",
+                    "target_npc": "zhanggui",
+                    "location": "市口",
+                },
+            }
+        ]
+        bounties = generate_bounties_from_events(p, events)
+        assert len(bounties) == 1
+        b = bounties[0]
+        assert b["type"] == "缉拿"
+        assert b["story_event_id"] == "evt_test1"
+        assert "task_fsm" in b
+        assert b["reward"].get("coins", 0) > 0
 
     def test_complete_bounty_idempotent(self):
         from backend.systems.bounty_board import complete_bounty

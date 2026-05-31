@@ -7,10 +7,44 @@ window.App = window.App || {};
   "use strict";
 
   let _statePollTimer = null;
-  let _bountyRefreshTimer = null;
+  let _bountyCountdownTimer = null;
+  let _bountyCountdown = 120;
   let _shuttingDown = false;
 
   const HtmlUtils = App.HtmlUtils;
+
+  function _positionOverlays() {
+    var mapPanel = document.querySelector('.map-panel');
+    var bountySection = document.getElementById('bountySection');
+    var npcSection = document.getElementById('npcSection');
+    var bountyOvl = document.getElementById('bountyOverlay');
+    var npcOvl = document.getElementById('npcOverlay');
+    if (!mapPanel) return;
+    var mapRect = mapPanel.getBoundingClientRect();
+    if (bountySection && bountyOvl) {
+      var bountyRect = bountySection.getBoundingClientRect();
+      var topOffset = bountyRect.top - mapRect.top;
+      bountyOvl.style.top = topOffset + 'px';
+      var maxH = mapRect.height - topOffset;
+      if (maxH < 100) maxH = 100;
+      bountyOvl.style.maxHeight = maxH + 'px';
+    }
+    if (npcSection && npcOvl) {
+      var npcRect = npcSection.getBoundingClientRect();
+      var bottomOffset = mapRect.bottom - npcRect.bottom;
+      npcOvl.style.bottom = bottomOffset + 'px';
+      var maxH2 = mapRect.height - bottomOffset;
+      if (maxH2 < 100) maxH2 = 100;
+      npcOvl.style.maxHeight = maxH2 + 'px';
+    }
+  }
+
+  function _updateBountyCountdown() {
+    var el = document.getElementById('bountyCountdown');
+    if (el) {
+      el.textContent = _bountyCountdown > 0 ? '(' + _bountyCountdown + 's)' : '';
+    }
+  }
 
   App.toggleConfigPanel = function() {
     const overlay = document.getElementById("configOverlay");
@@ -43,6 +77,7 @@ window.App = window.App || {};
     App.displayName = name || "江湖客";
     App.mapsData    = data.maps || {};
     App.selectedNpcId = null;
+    App._lastBountyIds = ((data.player || {}).bounties || data.bounties || []).map(function(b) { return b.id; });
 
     const loginOverlay = document.getElementById("loginOverlay");
     const topbar = document.getElementById("topbar");
@@ -82,7 +117,17 @@ window.App = window.App || {};
           _pollErrorCount++;
           var msg = err.message || '';
           if (msg.includes('404')) {
-            App.doLogout();
+            if (App.playerId) {
+              App.loadPlayer(App.playerId).then(function(loadData) {
+                App.updateUI(loadData);
+                _pollErrorCount = 0;
+                App.addMsg("system", "🔄 已从存档重新加载");
+              }).catch(function() {
+                App.doLogout();
+              });
+            } else {
+              App.doLogout();
+            }
           } else if (msg.includes('网络连接中断')) {
             if (_pollErrorCount >= 2) {
               App.addMsg("system", "⚠️ 与服务器连接中断，请检查后端服务是否运行");
@@ -96,13 +141,19 @@ window.App = window.App || {};
       }
     }, 30000);
 
-    if (_bountyRefreshTimer) { clearInterval(_bountyRefreshTimer); _bountyRefreshTimer = null; }
-    _bountyRefreshTimer = setInterval(function() {
+    _bountyCountdown = 120;
+    if (_bountyCountdownTimer) { clearInterval(_bountyCountdownTimer); _bountyCountdownTimer = null; }
+    _bountyCountdownTimer = setInterval(function() {
       if (_shuttingDown || !_pageVisible) return;
-      if (App.playerId && !App.isStreaming) {
-        App.doBountyRefresh();
+      _bountyCountdown--;
+      if (_bountyCountdown <= 0) {
+        _bountyCountdown = 120;
+        if (App.playerId && !App.isStreaming) {
+          App.doBountyCheckAutoRefresh();
+        }
       }
-    }, 120000);
+      _updateBountyCountdown();
+    }, 1000);
   };
 
   App.doLogout = function() {
@@ -111,7 +162,7 @@ window.App = window.App || {};
       "确定要退出游戏吗？<br><br>\u26a0\ufe0f <b>未存档的进度将丢失</b>",
       function() {
         if (_statePollTimer) { clearInterval(_statePollTimer); _statePollTimer = null; }
-        if (_bountyRefreshTimer) { clearInterval(_bountyRefreshTimer); _bountyRefreshTimer = null; }
+        if (_bountyCountdownTimer) { clearInterval(_bountyCountdownTimer); _bountyCountdownTimer = null; }
         App.cancelTalkStream();
         if (App._actLoopAbortController) { App._actLoopAbortController.abort(); App._actLoopAbortController = null; }
         App.playerId = null;
@@ -136,7 +187,7 @@ window.App = window.App || {};
           if (oldErr) oldErr.remove();
         }
         var dialogueArea = document.getElementById("dialogueArea");
-        if (dialogueArea) dialogueArea.innerHTML = "";
+        if (dialogueArea) dialogueArea.replaceChildren();
       }
     );
   };
@@ -223,8 +274,31 @@ window.App = window.App || {};
         App.addMsg("system", data.board_text || "悬赏榜已刷新");
         App.updateUI(data);
       }
+      _bountyCountdown = 120;
+      _updateBountyCountdown();
     } catch (e) {
       App.addMsg("system", "刷新悬赏失败: " + e.message);
+    }
+  };
+
+  App.doBountyCheckAutoRefresh = async function() {
+    if (!App.playerId) return;
+    try {
+      var prevBountyIds = (App._lastBountyIds || []).slice().sort().join(",");
+      const data = await App.bountyRefresh();
+      if (data) {
+        var newBountyIds = (data.bounties || []).map(function(b) { return b.id; }).slice().sort().join(",");
+        if (newBountyIds !== prevBountyIds && newBountyIds.length > 0) {
+          App.addMsg("system", "📰 悬赏榜有更新！");
+          App.updateUI(data);
+        }
+        App._lastBountyIds = (data.bounties || []).map(function(b) { return b.id; });
+      }
+      _bountyCountdown = 120;
+      _updateBountyCountdown();
+    } catch (_e) {
+      _bountyCountdown = 120;
+      _updateBountyCountdown();
     }
   };
 
@@ -385,7 +459,7 @@ window.App = window.App || {};
 
           _shuttingDown = true;
           if (_statePollTimer) { clearInterval(_statePollTimer); _statePollTimer = null; }
-          if (_bountyRefreshTimer) { clearInterval(_bountyRefreshTimer); _bountyRefreshTimer = null; }
+          if (_bountyCountdownTimer) { clearInterval(_bountyCountdownTimer); _bountyCountdownTimer = null; }
 
           if (overlay) {
             const resultIcon = backendSuccess ? "\u2705" : "\ud83d\udf36";
@@ -551,32 +625,20 @@ window.App = window.App || {};
     var bountyAbandonBtn = document.getElementById("bountyAbandonBtn");
     if (bountyAbandonBtn) bountyAbandonBtn.addEventListener("click", function() { App.doBountyAbandon(); });
 
-    var bountyRefreshBtn2 = document.getElementById("bountyRefreshBtn2");
-    if (bountyRefreshBtn2) bountyRefreshBtn2.addEventListener("click", function() { App.doBountyRefresh(); });
-    var bountyCompleteBtn2 = document.getElementById("bountyCompleteBtn2");
-    if (bountyCompleteBtn2) bountyCompleteBtn2.addEventListener("click", function() { App.doBountyComplete(); });
-    var bountyAbandonBtn2 = document.getElementById("bountyAbandonBtn2");
-    if (bountyAbandonBtn2) bountyAbandonBtn2.addEventListener("click", function() { App.doBountyAbandon(); });
-
     var bountyExpandBtn = document.getElementById("bountyExpandBtn");
     var bountyOverlay = document.getElementById("bountyOverlay");
     var bountyOverlayClose = document.getElementById("bountyOverlayClose");
     var bountySummary = document.getElementById("bountySummary");
-    var bountyCollapsible = document.getElementById("bountyCollapsible");
-    if (bountySummary) {
+    if (bountySummary && bountyOverlay) {
       bountySummary.addEventListener("click", function() {
-        if (bountyCollapsible) {
-          var isVisible = bountyCollapsible.classList.contains("visible");
-          if (isVisible) {
-            bountyCollapsible.classList.remove("visible");
-            if (bountyExpandBtn) bountyExpandBtn.textContent = "展开 ▾";
-          } else {
-            bountyCollapsible.classList.add("visible");
-            if (bountyExpandBtn) bountyExpandBtn.textContent = "收起 ▴";
-          }
-        }
-        if (bountyOverlay) {
+        var isVisible = bountyOverlay.classList.contains("visible");
+        if (isVisible) {
           bountyOverlay.classList.remove("visible");
+          if (bountyExpandBtn) bountyExpandBtn.textContent = "展开 ▾";
+        } else {
+          _positionOverlays();
+          bountyOverlay.classList.add("visible");
+          if (bountyExpandBtn) bountyExpandBtn.textContent = "收起 ▴";
         }
       });
     }
@@ -588,18 +650,26 @@ window.App = window.App || {};
     }
 
     var npcSummary = document.getElementById("npcSummary");
-    var npcCollapsible = document.getElementById("npcCollapsible");
+    var npcOverlay = document.getElementById("npcOverlay");
+    var npcOverlayClose = document.getElementById("npcOverlayClose");
     var npcExpandBtn = document.getElementById("npcExpandBtn");
-    if (npcSummary && npcCollapsible) {
+    if (npcSummary && npcOverlay) {
       npcSummary.addEventListener("click", function() {
-        var isVisible = npcCollapsible.classList.contains("visible");
+        var isVisible = npcOverlay.classList.contains("visible");
         if (isVisible) {
-          npcCollapsible.classList.remove("visible");
+          npcOverlay.classList.remove("visible");
           if (npcExpandBtn) npcExpandBtn.textContent = "展开 ▾";
         } else {
-          npcCollapsible.classList.add("visible");
+          _positionOverlays();
+          npcOverlay.classList.add("visible");
           if (npcExpandBtn) npcExpandBtn.textContent = "收起 ▴";
         }
+      });
+    }
+    if (npcOverlayClose && npcOverlay) {
+      npcOverlayClose.addEventListener("click", function() {
+        npcOverlay.classList.remove("visible");
+        if (npcExpandBtn) npcExpandBtn.textContent = "展开 ▾";
       });
     }
 
@@ -622,6 +692,15 @@ window.App = window.App || {};
     });
     var inputBar = document.querySelector(".input-bar");
     if (inputBar) inputBar.appendChild(watchNpcBtn);
+
+    window.addEventListener('resize', function() {
+      var bountyOvl = document.getElementById('bountyOverlay');
+      var npcOvl = document.getElementById('npcOverlay');
+      if ((bountyOvl && bountyOvl.classList.contains('visible')) ||
+          (npcOvl && npcOvl.classList.contains('visible'))) {
+        _positionOverlays();
+      }
+    });
   });
 
 })(window.App);

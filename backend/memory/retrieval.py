@@ -132,14 +132,12 @@ def remove_mind_index(mind: Any) -> None:
 
 
 def mark_index_dirty(mind: Any) -> None:
-    """标记索引需重建。"""
     idx = _mind_indexes.get(id(mind))
     if idx is not None:
         idx.rebuild(mind.items)
 
 
 def add_to_index(mind: Any, mem_id: str, mem_text: str) -> None:
-    """索引增量更新（仅新增记忆，不重建）。"""
     idx = _mind_indexes.get(id(mind))
     if idx is not None:
         idx.index(mem_id, mem_text)

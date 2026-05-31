@@ -37,6 +37,7 @@ from backend.api.schema import (
 )
 from backend.api.views import npcs_here as _npcs_here
 from backend.api.views import player_public as _player_public
+from backend.api.views import _strip_private
 from backend.data.factions import FACTIONS
 from backend.data.npcs_data import NPCS
 from backend.data.prompts import SOCIETY_BIBLE, WORLD_NAME
@@ -304,11 +305,14 @@ async def npc_talk(body: TalkBody, bg: BackgroundTasks):
         is_light_inquiry = body.message.startswith("[系统指令·问路")
         is_fallback = False
         try:
-            raw = await chat_completion(
-                messages,
-                temperature=TALK_TEMPERATURE,
-                max_tokens=TALK_LIGHT_MAX_TOKENS if is_light_inquiry else TALK_FULL_MAX_TOKENS,
-                response_format={"type": "json_object"},
+            raw = await asyncio.wait_for(
+                chat_completion(
+                    messages,
+                    temperature=TALK_TEMPERATURE,
+                    max_tokens=TALK_LIGHT_MAX_TOKENS if is_light_inquiry else TALK_FULL_MAX_TOKENS,
+                    response_format={"type": "json_object"},
+                ),
+                timeout=60.0,
             )
             parsed = parse_npc_reply_json(raw)
         except Exception as e:
@@ -902,6 +906,7 @@ from backend.systems.bounty_board import (
     format_bounty_board,
     generate_bounties,
     refresh_bounties,
+    refresh_bounties_with_story,
 )
 from backend.systems.constants import BOUNTY_COUNT_RANGE
 from backend.systems.task_fsm import TaskFSM
@@ -923,13 +928,22 @@ class AbandonBountyBody(BaseModel):
 
 @router.post("/api/bounty/refresh", response_model=BountyRefreshResponse)
 async def bounty_refresh(body: RefreshBountyBody):
+    from backend.systems.constants import BOUNTY_REFRESH_INTERVAL_DAYS
     p = _get_active_player(body.player_id)
     async with p.lock:
-        refresh_bounties(p)
-        if not p.bounties:
-            p.bounties = generate_bounties(p, count=random.randint(*BOUNTY_COUNT_RANGE))
+        cur_day = int(p.world_day)
+        last_refresh_day = int(getattr(p, "last_bounty_refresh_day", 0) or 0)
+        needs_refresh = (cur_day - last_refresh_day >= BOUNTY_REFRESH_INTERVAL_DAYS) or not p.bounties
+        if needs_refresh:
+            try:
+                await refresh_bounties_with_story(p)
+            except Exception as e:
+                log.warning("LLM story refresh failed, falling back: %s", e)
+                refresh_bounties(p)
+            if not p.bounties:
+                p.bounties = generate_bounties(p, count=random.randint(*BOUNTY_COUNT_RANGE))
         board_text = format_bounty_board(p)
-        return {"bounties": p.bounties, "board_text": board_text, "player": _player_public(p)}
+        return {"bounties": p.bounties, "board_text": board_text, "player": _player_public(p), "story_events": _strip_private(getattr(p, "story_events", []) or [])}
 
 
 @router.post("/api/bounty/accept", response_model=BountyAcceptResponse)

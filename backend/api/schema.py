@@ -184,6 +184,7 @@ class InitResponse(BaseModel):
     factions: dict[str, str] = Field(default_factory=dict)
     map_locations: dict[str, dict[str, list[int]]] = Field(default_factory=dict)
     events: list[Any] = Field(default_factory=list)
+    story_events: list[Any] = Field(default_factory=list)
 
 
 class MoveResponse(BaseModel):
@@ -215,6 +216,7 @@ class StateResponse(BaseModel):
     rumors: list[Any] = Field(default_factory=list)
     atmosphere: str = ""
     events: list[Any] = Field(default_factory=list)
+    story_events: list[Any] = Field(default_factory=list)
     factions: dict[str, str] = Field(default_factory=dict)
     npc_catalog: list[Any] = Field(default_factory=list)
     map_locations: dict[str, dict[str, list[int]]] = Field(default_factory=dict)
@@ -344,6 +346,7 @@ class BountyRefreshResponse(BaseModel):
     bounties: list[Any] = Field(default_factory=list)
     board_text: str = ""
     player: PlayerPublic
+    story_events: list[Any] = Field(default_factory=list)
 
 
 class BountyAcceptResponse(BaseModel):
@@ -390,6 +393,15 @@ class SaveResponse(BaseModel):
 
 class DeleteSaveResponse(BaseModel):
     ok: bool = False
+
+
+class ClearAllSavesResponse(BaseModel):
+    ok: bool = True
+    deleted: int = 0
+
+
+class EvolutionCancelResponse(BaseModel):
+    ok: bool = True
 
 
 class AdminMetricsResponse(BaseModel):

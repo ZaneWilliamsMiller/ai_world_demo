@@ -1,12 +1,10 @@
 """
-悬赏榜系统（2026-05-26 新增）
+悬赏榜系统（2026-05-26 新增，2026-05-31 重构）
 
-玩家可在县衙、镖局、漕口帮坞看到悬赏榜。
-悬赏任务类型：
-  - 缉拿逃犯（需要找到特定 NPC 或地点）
-  - 押送镖物（移动类任务，护送 NPC 到指定格）
-  - 打探消息（打探类任务，与特定 NPC 对话获取情报）
-  - 寻回失物（探索类任务，在指定地图格触发）
+悬赏由故事事件驱动：
+  1. LLM 根据世界状态生成故事事件（逃犯潜逃、货物失窃、帮派纷争等）
+  2. 官方机构（衙门/镖局/漕帮）据此发布悬赏
+  3. 故事事件写入相关 NPC 记忆，NPC 会据此调整行为和对话
 
 完成悬赏可获得：
   - 制钱（coin_delta）
@@ -15,9 +13,9 @@
   - NPC 好感（favor_delta）
 
 设计要点：
-  - 悬赏榜动态生成，基于当前世界状态（时辰、天气、玩家声望）
+  - 悬赏必须有叙事前提（故事事件），不再随机生成
   - 拒绝「空气完成任务」：必须有真实的行动/对话/移动才能判定完成
-  - 与记忆系统集成：完成任务后写入记忆流
+  - 与记忆系统集成：故事事件和完成悬赏均写入记忆流
 """
 from __future__ import annotations
 
@@ -29,7 +27,7 @@ import backend.memory as mem
 from backend.agents.game_state import get_or_init_mind
 from backend.data.factions import FACTIONS
 from backend.data.maps_data import MAP_LOCATIONS
-from backend.data.npcs_data import NPCS
+from backend.data.npcs_data import NPCS, NPC_FACTION
 from backend.models.player import PlayerState
 from backend.systems.constants import BOUNTY_COUNT_RANGE, BOUNTY_REFRESH_INTERVAL_DAYS
 from backend.systems.core import apply_favor
@@ -38,54 +36,20 @@ from backend.systems.time_weather import shichen_name
 
 log = logging.getLogger("bounty")
 
-# ─── 悬赏任务模板 ─────────────────────
-_BOUNTY_TEMPLATES = [
-    {
-        "id": "bounty_capture",
-        "type": "缉拿",
-        "title": "缉拿逃犯{target_name}",
-        "desc": "衙门通缉{target_name}（{target_short}），有人见其在{location}一带出没。",
-        "requires": {"talk_to_npc": "{target_id}", "ask_about": "逃犯下落"},
-        "reward": {"coins": 200, "rep": {"yamen": 2}, "favor": {"{target_id}": -2}},
-        "min_rep": {"yamen": 1},  # 至少需要衙门声望 1 才能接
-    },
-    {
-        "id": "bounty_escort",
-        "type": "押送",
-        "title": "护送{target_name}至{dest_name}",
-        "desc": "{target_name}需从{location}被护送至{dest_name}，途中可能遇袭。",
-        "requires": {"move_to": "{location_id}", "with_npc": "{target_id}"},
-        "reward": {"coins": 300, "rep": {"biaoju": 2, "yamen": 1}},
-        "min_rep": {"biaoju": 1},
-    },
-    {
-        "id": "bounty_investigate",
-        "type": "打探",
-        "title": "打探{target_name}之虚实",
-        "desc": "有人想了解{target_name}（{target_short}）最近在干什么，去向{location}的人打听。",
-        "requires": {"talk_to_npc": "{location_npc_id}", "ask_about": "{target_name}"},
-        "reward": {"coins": 150, "rep": {"caobang": 1, "yamen": 1}, "items_gain": ["密信"]},
-        "min_rep": {},
-    },
-    {
-        "id": "bounty_retrieve",
-        "type": "寻回",
-        "title": "寻回遗失的{lost_item}",
-        "desc": "有人在{location}遗失了{lost_item}，捡到者请送至{target_name}处。",
-        "requires": {"move_to": "{location_id}", "have_item": "{lost_item}"},
-        "reward": {"coins": 100, "favor": {"{target_id}": 3}, "items_gain": ["谢礼"]},
-        "min_rep": {},
-    },
-]
+_SEVERITY_REWARD_MAP = {
+    "minor": {"coins": 100, "rep_delta": 1},
+    "moderate": {"coins": 200, "rep_delta": 2},
+    "major": {"coins": 350, "rep_delta": 3},
+}
 
-# ─── 活跃悬赏榜（每个玩家独立）─────────────────────
-#  p.bounties: list[dict] = []  玩家当前可接的悬赏
-#  p.active_bounty: dict | None  当前正在做的悬赏
-#  p.completed_bounties: list[str]  已完成的悬赏 ID
+_FACTION_BOUNTY_AUTHORITY = {
+    "yamen": "衙门",
+    "biaoju": "镖局",
+    "caobang": "漕帮",
+}
 
 
 def _requires_to_sub_steps(requires: dict[str, str]) -> list[dict]:
-    """将 requires 字典转为 sub_steps 列表。"""
     label_map = {
         "talk_to_npc": "与{v}交谈",
         "ask_about": "打听{v}的消息",
@@ -100,100 +64,145 @@ def _requires_to_sub_steps(requires: dict[str, str]) -> list[dict]:
     return steps
 
 
-def _random_target_npc(p: PlayerState) -> str | None:
-    """随机选一个非玩家、非隐藏的 NPC。"""
-    candidates = [nid for nid, m in NPCS.items() if not m.get("hidden") and nid != "jiang"]
-    if not candidates:
-        return None
-    return random.choice(candidates)
-
-
-def _random_location(p: PlayerState) -> tuple[str, str, int, int]:
-    """随机选一个地图格作为地点，返回 (map_id, loc_name, px, py)。"""
-    map_id = p.map_id
+def _get_location_coords(map_id: str, loc_name: str) -> tuple[int, int]:
     locs = MAP_LOCATIONS.get(map_id, {})
-    if locs:
-        loc_name = random.choice(list(locs.keys()))
-        coords = locs[loc_name]
-        return (map_id, loc_name, coords[0], coords[1])
-    return (map_id, "市口", 25, 28)
+    coords = locs.get(loc_name)
+    if coords:
+        return (coords[0], coords[1])
+    return (25, 28)
 
 
-def generate_bounties(p: PlayerState, count: int = 3) -> list[dict[str, Any]]:
-    """为玩家生成悬赏榜（基于当前世界状态）。"""
-    result = []
-    used_templates = set()
-
-    for _ in range(count):
-        # 随机选一个模板（不重复）
-        available = [t for t in _BOUNTY_TEMPLATES if t["id"] not in used_templates]
-        if not available:
-            break
-        tmpl = random.choice(available)
-        used_templates.add(tmpl["id"])
-
-        # 填充模板变量
-        target_id = _random_target_npc(p)
-        if not target_id:
+def _find_npc_at_location(p: PlayerState, map_id: str, loc_name: str) -> str | None:
+    npc_pos_data = getattr(p, "npc_positions", {})
+    loc_coords = _get_location_coords(map_id, loc_name)
+    best_npc = None
+    best_dist = 999
+    for nid, m in NPCS.items():
+        if m.get("hidden") or nid == "jiang":
             continue
-        target_meta = NPCS.get(target_id, {})
-        target_name = target_meta.get("name", target_id)
-        target_short = target_meta.get("short", target_id)
+        pos = npc_pos_data.get(nid)
+        if pos and len(pos) >= 3 and pos[0] == map_id:
+            dist = abs(int(pos[1]) - loc_coords[0]) + abs(int(pos[2]) - loc_coords[1])
+            if dist < best_dist:
+                best_dist = dist
+                best_npc = nid
+    if best_npc and best_dist <= 8:
+        return best_npc
+    visible = [nid for nid, m in NPCS.items() if not m.get("hidden") and nid != "jiang"]
+    return random.choice(visible) if visible else None
 
-        map_id, loc_name, loc_px, loc_py = _random_location(p)
-        # 再随机选一个目的地 NPC/位置（用于押送类）
-        dest_id = _random_target_npc(p)
-        if not dest_id:
-            dest_id = target_id
-        dest_meta = NPCS.get(dest_id, {})
-        dest_name = dest_meta.get("name", dest_id)
 
-        # 对于 location_npc：选一个在当前地点活跃的 NPC
-        location_npc_id = target_id
-        npc_pos_data = getattr(p, "npc_positions", {})
-        for nid, m in NPCS.items():
-            if m.get("hidden") or nid == "jiang":
-                continue
-            pos = npc_pos_data.get(nid)
-            if pos and len(pos) >= 3 and pos[0] == map_id:
-                location_npc_id = nid
-                break
-        location_npc_meta = NPCS.get(location_npc_id, {})
-        location_npc_name = location_npc_meta.get("name", location_npc_id)
+def generate_bounties_from_events(
+    p: PlayerState,
+    story_events: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """从故事事件派生悬赏——每个事件生成一个悬赏。"""
+    result = []
 
-        fmt = {
-            "target_name": target_name,
-            "target_short": target_short,
-            "target_id": target_id,
-            "location": loc_name,
-            "location_id": loc_name,
-            "location_npc_id": location_npc_id,   # NPC id (用于 requires 匹配)
-            "location_npc": location_npc_name,    # NPC 显示名 (用于用户展示)
-            "dest_name": dest_name,
-            "dest_id": dest_name,
-            "lost_item": "旧信物",
-        }
+    for evt in story_events:
+        hint = evt.get("bounty_hint", {})
+        btype = hint.get("type", "打探")
+        target_npc = hint.get("target_npc", "")
+        target_item = hint.get("target_item", "")
+        loc_name = hint.get("location", evt.get("location", ""))
+        faction = evt.get("faction", "yamen")
+        severity = evt.get("severity", "moderate")
 
-        title = tmpl["title"].format(**fmt)
-        desc = tmpl["desc"].format(**fmt)
+        if not target_npc:
+            visible = [nid for nid, m in NPCS.items() if not m.get("hidden") and nid != "jiang"]
+            target_npc = random.choice(visible) if visible else ""
+        if not loc_name:
+            loc_names = list(MAP_LOCATIONS.get(p.map_id, {}).keys())
+            loc_name = random.choice(loc_names) if loc_names else "市口"
 
-        # 填充 requires 字典（模板占位符替换为实际值）
-        raw_req = tmpl["requires"].copy()
+        target_meta = NPCS.get(target_npc, {})
+        target_name = target_meta.get("name", target_npc)
+        target_short = target_meta.get("short", target_npc)
+        fac_name = _FACTION_BOUNTY_AUTHORITY.get(faction, "衙门")
+
         requires: dict[str, str] = {}
-        for k, v in raw_req.items():
-            requires[k] = str(v).format(**fmt)
+        title = ""
+        desc = evt.get("desc", "")
+
+        if btype == "缉拿":
+            requires = {
+                "talk_to_npc": target_npc,
+                "ask_about": f"{target_name}下落",
+            }
+            title = f"缉拿{target_name}"
+            if not desc:
+                desc = f"{fac_name}通缉{target_name}（{target_short}），有人见其在{loc_name}一带出没。"
+
+        elif btype == "押送":
+            dest_npc = _find_npc_at_location(p, p.map_id, loc_name) or target_npc
+            dest_name = NPCS.get(dest_npc, {}).get("name", dest_npc)
+            requires = {
+                "move_to": loc_name,
+                "with_npc": target_npc,
+            }
+            title = f"护送{target_name}至{dest_name}"
+            if not desc:
+                desc = f"{target_name}需从{loc_name}被护送至{dest_name}，途中可能遇袭。"
+
+        elif btype == "寻回":
+            if not target_item:
+                target_item = "旧信物"
+            requires = {
+                "move_to": loc_name,
+                "have_item": target_item,
+            }
+            title = f"寻回{target_item}"
+            if not desc:
+                desc = f"有人在{loc_name}遗失了{target_item}，捡到者请送至{target_name}处。"
+
+        else:  # 打探
+            location_npc = _find_npc_at_location(p, p.map_id, loc_name) or target_npc
+            requires = {
+                "talk_to_npc": location_npc,
+                "ask_about": target_name,
+            }
+            title = f"打探{target_name}之虚实"
+            if not desc:
+                desc = f"有人想了解{target_name}（{target_short}）最近在干什么，去向{loc_name}的人打听。"
+
+        sev = _SEVERITY_REWARD_MAP.get(severity, _SEVERITY_REWARD_MAP["moderate"])
+        reward: dict[str, Any] = {"coins": sev["coins"]}
+
+        rep_fac = faction if faction in FACTIONS else "yamen"
+        reward["rep"] = {rep_fac: sev["rep_delta"]}
+        if btype == "押送":
+            reward["rep"].setdefault("biaoju", 0)
+            reward["rep"]["biaoju"] = reward["rep"].get("biaoju", 0) + 1
+        elif btype == "打探":
+            reward["rep"].setdefault("caobang", 0)
+            reward["rep"]["caobang"] = reward["rep"].get("caobang", 0) + 1
+            reward["items_gain"] = ["密信"]
+        elif btype == "寻回":
+            reward["favor"] = {target_npc: 3}
+            reward["items_gain"] = ["谢礼"]
+        elif btype == "缉拿":
+            reward["favor"] = {target_npc: -2}
+
+        min_rep: dict[str, int] = {}
+        if btype == "缉拿" and faction == "yamen":
+            min_rep = {"yamen": 1}
+        elif btype == "押送" and faction == "biaoju":
+            min_rep = {"biaoju": 1}
+
+        loc_px, loc_py = _get_location_coords(p.map_id, loc_name)
 
         bounty: dict[str, Any] = {
-            "id": f"{tmpl['id']}_{random.randint(1000, 9999)}",
-            "type": tmpl["type"],
+            "id": f"bounty_{btype}_{random.randint(1000, 9999)}",
+            "type": btype,
             "title": title,
             "desc": desc,
-            "reward": tmpl["reward"].copy(),
+            "reward": reward,
             "requires": requires,
-            "min_rep": tmpl.get("min_rep", {}),
+            "min_rep": min_rep,
             "issued_at_day": int(p.world_day),
             "issued_at_shichen": shichen_name(p.world_shichen),
-            "_target_coords": (map_id, loc_px, loc_py),
+            "_target_coords": (p.map_id, loc_px, loc_py),
+            "story_event_id": evt.get("id", ""),
         }
 
         fsm = TaskFSM(initial_state=TaskState.AVAILABLE)
@@ -205,15 +214,18 @@ def generate_bounties(p: PlayerState, count: int = 3) -> list[dict[str, Any]]:
     return result
 
 
+def generate_bounties(p: PlayerState, count: int = 3) -> list[dict[str, Any]]:
+    """兼容旧接口：无故事事件时用规则化回退生成。"""
+    from backend.systems.story_events import _fallback_story_events
+    events = _fallback_story_events(p, count)
+    return generate_bounties_from_events(p, events)
+
+
 def can_accept_bounty(p: PlayerState, bounty: dict[str, Any]) -> tuple[bool, str]:
-    """检查玩家是否满足接取悬赏的条件。"""
-    # 已完成的不许重复接
     if bounty["id"] in (p.completed_bounties or []):
         return False, "此悬赏已完成，不可重复接取。"
-    # 已有进行中的悬赏
     if p.active_bounty is not None:
         return False, "请先完成或放弃当前悬赏。"
-    # 声望门槛
     min_rep = bounty.get("min_rep", {})
     for fac, threshold in min_rep.items():
         cur = int((p.reputation or {}).get(fac, 0))
@@ -224,7 +236,6 @@ def can_accept_bounty(p: PlayerState, bounty: dict[str, Any]) -> tuple[bool, str
 
 
 def accept_bounty(p: PlayerState, bounty_id: str) -> tuple[bool, str]:
-    """接取一个悬赏。接取时快照目标坐标（押送类后续用）。"""
     bounties = p.bounties or []
     bounty = next((b for b in bounties if b["id"] == bounty_id), None)
     if not bounty:
@@ -252,13 +263,6 @@ def accept_bounty(p: PlayerState, bounty_id: str) -> tuple[bool, str]:
 
 
 def check_bounty_progress(p: PlayerState) -> dict[str, Any] | None:
-    """检查当前悬赏的完成进度（在玩家行动后调用）。
-
-    非简化实现：真实判定玩家是否完成了悬赏要求。
-    - 缉拿/打探类：需与目标 NPC 对话，且内容涉及关键话题
-    - 押送类：需移动到目的地坐标
-    - 寻回类：需拥有目标物品
-    """
     bounty = p.active_bounty
     if not bounty:
         return None
@@ -283,7 +287,7 @@ def check_bounty_progress(p: PlayerState) -> dict[str, Any] | None:
                 if ask_lower in msg_lower:
                     ask_matched = True
                 else:
-                    ask_keywords = [kw for kw in ask_lower if len(kw) >= 2]
+                    ask_keywords = [ask_lower[i:i+2] for i in range(len(ask_lower) - 1)] if len(ask_lower) >= 2 else [ask_lower]
                     if ask_keywords:
                         hits = sum(1 for kw in ask_keywords if kw in msg_lower)
                         ask_matched = hits >= max(1, len(ask_keywords) // 2)
@@ -357,7 +361,6 @@ def check_bounty_progress(p: PlayerState) -> dict[str, Any] | None:
 
 
 def complete_bounty(p: PlayerState) -> tuple[bool, str, dict[str, Any]]:
-    """完成当前悬赏，发放奖励。"""
     bounty = p.active_bounty
     if not bounty:
         return False, "当前没有进行中的悬赏。", {}
@@ -379,37 +382,31 @@ def complete_bounty(p: PlayerState) -> tuple[bool, str, dict[str, Any]]:
 
     reward = bounty.get("reward", {})
 
-    # 发钱
     coins = int(reward.get("coins", 0))
     if coins:
         from backend.systems.economy import apply_coin_delta
         apply_coin_delta(p, coins)
 
-    # 发声望
     rep = reward.get("rep", {})
     if rep:
         from backend.systems.reputation import apply_rep_delta
         apply_rep_delta(p, rep)
 
-    # 发物品
     items = reward.get("items_gain", [])
     if items:
         from backend.systems.economy import add_items
         add_items(p, items)
 
-    # 发好感
     favor = reward.get("favor", {})
     for nid, delta in favor.items():
         apply_favor(p, nid, delta)
 
-    # 记录完成
     if p.completed_bounties is None:
         p.completed_bounties = []
     p.completed_bounties.append(bounty["id"])
 
-    # 写入记忆
-    mind = get_or_init_mind(p, "jiang")  # 风闻子记录
-    mem.record_observation(  # type: ignore[attr-defined]
+    mind = get_or_init_mind(p, "jiang")
+    mem.record_observation(
         mind,
         f"完成悬赏「{bounty['title']}」，获{coins}文钱。",
         world_day=int(p.world_day),
@@ -417,7 +414,26 @@ def complete_bounty(p: PlayerState) -> tuple[bool, str, dict[str, Any]]:
         importance=5.0,
     )
 
-    # 清除活跃悬赏
+    story_evt_id = bounty.get("story_event_id", "")
+    if story_evt_id:
+        story_events = getattr(p, "story_events", []) or []
+        for se in story_events:
+            if se.get("id") == story_evt_id:
+                se["resolved"] = True
+                for npc_id in se.get("involved_npcs", []):
+                    try:
+                        npc_mind = get_or_init_mind(p, npc_id)
+                        mem.record_observation(
+                            npc_mind,
+                            f"悬赏「{bounty['title']}」已被人完成。",
+                            world_day=int(p.world_day),
+                            world_shichen=shichen_name(p.world_shichen),
+                            importance=4.0,
+                        )
+                    except Exception as _e:
+                        log.debug("Failed to write bounty completion to %s memory: %s", npc_id, _e)
+                break
+
     p.active_bounty = None
     p.last_talk_npc_id = None
     p.last_talk_message = None
@@ -426,7 +442,6 @@ def complete_bounty(p: PlayerState) -> tuple[bool, str, dict[str, Any]]:
 
 
 def abandon_bounty(p: PlayerState) -> tuple[bool, str]:
-    """放弃当前悬赏。"""
     if not p.active_bounty:
         return False, "当前没有进行中的悬赏。"
     title = p.active_bounty["title"]
@@ -438,14 +453,19 @@ def abandon_bounty(p: PlayerState) -> tuple[bool, str]:
 
 
 def format_bounty_board(p: PlayerState) -> str:
-    """格式化悬赏榜，用于 LLM prompt 注入。"""
     bounties = p.bounties or []
     if not bounties:
         return ""
 
+    story_events = getattr(p, "story_events", []) or []
+    evt_map = {e.get("id", ""): e for e in story_events}
+
     lines = ["【悬赏榜】县衙、镖局、漕口帮坞等处可见下列悬赏："]
     for b in bounties:
-        lines.append(f"· [{b['type']}] {b['title']} —— {b['desc'][:60]}")
+        evt = evt_map.get(b.get("story_event_id", ""))
+        if evt and evt.get("desc"):
+            lines.append(f"  近日，{evt['desc'][:50]}")
+        lines.append(f"  → [{b['type']}] {b['title']} —— {b['desc'][:60]}")
         reward_parts = []
         if b["reward"].get("coins"):
             reward_parts.append(f"{b['reward']['coins']}文")
@@ -454,16 +474,48 @@ def format_bounty_board(p: PlayerState) -> str:
                 fac_name = FACTIONS.get(fac, fac)
                 reward_parts.append(f"{fac_name}声望{d:+d}")
         if reward_parts:
-            lines.append(f"  悬赏：{'; '.join(reward_parts)}")
+            lines.append(f"    悬赏：{'; '.join(reward_parts)}")
     return "\n".join(lines)
 
 
+async def refresh_bounties_with_story(p: PlayerState) -> None:
+    """刷新悬赏榜：先由 LLM 生成故事事件，再派生悬赏。"""
+    from backend.systems.story_events import generate_story_events, write_story_events_to_memory
+
+    old_events = getattr(p, "story_events", []) or []
+    resolved_ids = set()
+    for evt in old_events:
+        if evt.get("resolved"):
+            resolved_ids.add(evt.get("id", ""))
+    active_evt_id = ""
+    if p.active_bounty:
+        active_evt_id = p.active_bounty.get("story_event_id", "")
+
+    surviving = [
+        e for e in old_events
+        if e.get("id", "") not in resolved_ids or e.get("id", "") == active_evt_id
+    ]
+
+    count = random.randint(*BOUNTY_COUNT_RANGE)
+    events = await generate_story_events(p, count=count)
+
+    p.story_events = surviving + events
+    write_story_events_to_memory(p, events)
+
+    p.bounties = generate_bounties_from_events(p, events)
+    p.last_bounty_refresh_day = int(p.world_day)
+    log.info(
+        "Refreshed bounties with %d story events for player %s on day %d",
+        len(events), p.player_id, int(p.world_day),
+    )
+
+
 def refresh_bounties(p: PlayerState) -> None:
-    """刷新悬赏榜（每 3 日可刷新一次）。"""
+    """同步刷新（兼容旧接口，不调用 LLM）。"""
     last_refresh_day = int(getattr(p, "last_bounty_refresh_day", 0) or 0)
     cur_day = int(p.world_day)
     if cur_day - last_refresh_day < BOUNTY_REFRESH_INTERVAL_DAYS:
         return
     p.bounties = generate_bounties(p, count=random.randint(*BOUNTY_COUNT_RANGE))
     p.last_bounty_refresh_day = cur_day
-    log.info("Refreshed bounties for player %s on day %d", p.player_id, cur_day)
+    log.info("Refreshed bounties (fallback) for player %s on day %d", p.player_id, cur_day)

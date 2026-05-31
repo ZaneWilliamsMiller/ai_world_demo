@@ -95,8 +95,8 @@ class SessionStore:
                     self.players.pop(pid, None)
                     self._last_access.pop(pid, None)
                 evicted += 1
-            except Exception:
-                pass
+            except Exception as _e:
+                log.debug("Evict player %s failed: %s", pid, _e)
 
         return evicted
 

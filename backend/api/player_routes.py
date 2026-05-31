@@ -15,6 +15,7 @@ from backend.api.views import map_locations_public as _map_locations_public
 from backend.api.views import npc_catalog as _npc_catalog
 from backend.api.views import npcs_here as _npcs_here
 from backend.api.views import player_public as _player_public
+from backend.api.views import _strip_private
 from backend.data.atmosphere import scene_context
 from backend.data.maps_data import MAPS
 from backend.data.npcs_data import NPCS, STORY_ORDER
@@ -76,6 +77,12 @@ async def hello(body: HelloBody):
     p = await room.get_or_create(body.player_id, body.display_name, body.gender, body.permadeath)
     init_npc_positions(p)
     init_npc_inventories(p)
+    if not getattr(p, "story_events", None) and not getattr(p, "bounties", None):
+        try:
+            from backend.systems.bounty_board import refresh_bounties_with_story
+            await refresh_bounties_with_story(p)
+        except Exception as _e:
+            logging.debug("Initial story event generation failed: %s", _e)
     return build_init_response(p)
 
 
@@ -368,6 +375,7 @@ async def get_state(player_id: str = Path(..., min_length=1, max_length=64)):
             "rumors": list(p.rumors),
             "atmosphere": scene_context(p),
             "events": list(p.events[-10:]),
+            "story_events": _strip_private(getattr(p, "story_events", []) or []),
             "factions": _factions_public(),
             "npc_catalog": _npc_catalog(p),
             "map_locations": _map_locations_public(),

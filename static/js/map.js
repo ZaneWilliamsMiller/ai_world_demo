@@ -325,7 +325,7 @@ window.App = window.App || {};
       return;
     }
 
-    container.innerHTML = "";
+    container.replaceChildren();
 
     // 主画布
     mainCanvas = document.createElement("canvas");

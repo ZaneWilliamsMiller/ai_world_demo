@@ -123,8 +123,8 @@ def tile_hazard_reason(p: PlayerState) -> str | None:
 
 def maybe_collapse_from_attrs(p: PlayerState) -> dict[str, Any] | None:
     """属性归零的硬兜底:保证不会出现长锁不死的循环。"""
-    v = int(getattr(p, "vigor", 100))
-    s = int(getattr(p, "spirit", 100))
+    v = int(getattr(p, "vigor", 80))
+    s = int(getattr(p, "spirit", 80))
     if v <= 0 and s <= 0:
         p.dead = True
         p.death_reason = "气力心神俱断,倒于此地。"

@@ -17,7 +17,7 @@ window.App = window.App || {};
     try {
       var saves = await App.fetchSaves();
       var list = document.getElementById("savesList");
-      list.innerHTML = "";
+      list.replaceChildren();
       if (saves.length === 0) {
         var emptyDiv = document.createElement("div");
         emptyDiv.textContent = "暂无存档";
@@ -89,25 +89,8 @@ window.App = window.App || {};
     var permadeath = document.getElementById("inpPermadeath").checked;
     console.log("[App] startNewGame:", { name: name, gender: gender, permadeath: permadeath });
 
-    try {
-      console.log("[App] calling createPlayer...");
-      var result = await App.createPlayer(name, gender, permadeath);
-      console.log("[App] createPlayer OK:", result);
-      App.onGameReady(result.data, result.pid, result.data.display_name);
-    } catch (e) {
-      console.error("[App] createPlayer FAILED:", e);
-      var errDiv = document.createElement("div");
-      errDiv.className = "login-error";
-      errDiv.style.cssText = "color:#ef5350;margin-top:8px;font-size:13px;";
-      errDiv.textContent = "\u274c 创建角色失败：" + e.message;
-      var loginFormEl = document.getElementById("loginForm");
-      if (loginFormEl) {
-        var oldErr = loginFormEl.querySelector(".login-error");
-        if (oldErr) oldErr.remove();
-        loginFormEl.appendChild(errDiv);
-      }
-      if (btn) { btn.disabled = false; btn.textContent = "踏入江湖"; }
-    }
+    var pid = "web_" + Date.now();
+    App.startEvolution(pid, name, gender, permadeath);
   };
 
   App.loadGame = async function() {

@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -185,11 +186,14 @@ async def reflect(
     user = f"近期见闻：\n{bullets}"
     _reflect_violations = []
     try:
-        raw = await chat_completion(
-            [{"role": "system", "content": sys}, {"role": "user", "content": user}],
-            temperature=REFLECT_TEMPERATURE,
-            max_tokens=REFLECT_MAX_TOKENS,
-            response_format={"type": "json_object"}
+        raw = await asyncio.wait_for(
+            chat_completion(
+                [{"role": "system", "content": sys}, {"role": "user", "content": user}],
+                temperature=REFLECT_TEMPERATURE,
+                max_tokens=REFLECT_MAX_TOKENS,
+                response_format={"type": "json_object"}
+            ),
+            timeout=90.0,
         )
         data = json.loads(raw)
         insights = data.get("insights", [])
@@ -429,12 +433,15 @@ async def cross_reflect(
         user = f"关于「{tname}」近期的见闻：\n{obs_bullets}"
 
         try:
-            raw = await chat_completion(
-                [{"role": "system", "content": sys},
-                 {"role": "user", "content": user}],
-                temperature=CROSS_REFLECT_TEMPERATURE,
-                max_tokens=CROSS_REFLECT_MAX_TOKENS,
-                response_format={"type": "json_object"},
+            raw = await asyncio.wait_for(
+                chat_completion(
+                    [{"role": "system", "content": sys},
+                     {"role": "user", "content": user}],
+                    temperature=CROSS_REFLECT_TEMPERATURE,
+                    max_tokens=CROSS_REFLECT_MAX_TOKENS,
+                    response_format={"type": "json_object"},
+                ),
+                timeout=90.0,
             )
             data = json.loads(raw)
             social_insights = data.get("insights", [])
@@ -494,11 +501,14 @@ async def plan_day(
 
     _plan_violations = []
     try:
-        raw = await chat_completion(
-            [{"role": "system", "content": sys}, {"role": "user", "content": user}],
-            temperature=PLAN_TEMPERATURE,
-            max_tokens=PLAN_MAX_TOKENS,
-            response_format={"type": "json_object"}
+        raw = await asyncio.wait_for(
+            chat_completion(
+                [{"role": "system", "content": sys}, {"role": "user", "content": user}],
+                temperature=PLAN_TEMPERATURE,
+                max_tokens=PLAN_MAX_TOKENS,
+                response_format={"type": "json_object"}
+            ),
+            timeout=90.0,
         )
         data = json.loads(raw)
         summary = str(data.get("summary", ""))[:60]

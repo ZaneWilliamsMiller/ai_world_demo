@@ -80,7 +80,7 @@ window.App = window.App || {};
     var inv = p.inventory || {};
     var statInv = document.getElementById("statInv");
     if (!statInv) return;
-    statInv.innerHTML = "";
+    statInv.replaceChildren();
 
     var keys = Object.keys(inv);
     if (keys.length === 0) {
@@ -221,10 +221,15 @@ window.App = window.App || {};
     var p = data.player || {};
     var bounties = p.bounties || [];
     var activeBounty = p.active_bounty;
+    var storyEvents = data.story_events || [];
+
+    var evtMap = {};
+    storyEvents.forEach(function(e) {
+      if (e.id) evtMap[e.id] = e;
+    });
 
     var targets = [
-      document.getElementById("bountyOverlayContent"),
-      document.getElementById("bountyContent")
+      document.getElementById("bountyOverlayContent")
     ];
 
     targets.forEach(function(contentEl) {
@@ -241,7 +246,14 @@ window.App = window.App || {};
         activeTitle.className = "bounty-title";
         activeTitle.textContent = (activeBounty.title || "进行中") + " ✓";
         activeInfo.appendChild(activeTitle);
-        if (activeBounty.desc) {
+
+        var activeEvt = activeBounty.story_event_id ? evtMap[activeBounty.story_event_id] : null;
+        if (activeEvt && activeEvt.desc) {
+          var activeStory = document.createElement("div");
+          activeStory.className = "bounty-story";
+          activeStory.textContent = "事由：" + activeEvt.desc;
+          activeInfo.appendChild(activeStory);
+        } else if (activeBounty.desc) {
           var activeDesc = document.createElement("div");
           activeDesc.className = "bounty-desc";
           activeDesc.textContent = activeBounty.desc;
@@ -310,12 +322,19 @@ window.App = window.App || {};
         title.textContent = b.title || b.name || "悬赏";
         infoDiv.appendChild(title);
 
-        if (b.desc) {
+        var evt = b.story_event_id ? evtMap[b.story_event_id] : null;
+        if (evt && evt.desc) {
+          var storyDiv = document.createElement("div");
+          storyDiv.className = "bounty-story";
+          storyDiv.textContent = "事由：" + evt.desc;
+          infoDiv.appendChild(storyDiv);
+        } else if (b.desc) {
           var desc = document.createElement("div");
           desc.className = "bounty-desc";
           desc.textContent = b.desc;
           infoDiv.appendChild(desc);
         }
+
         var rewardEl = document.createElement("div");
         rewardEl.className = "bounty-reward";
         rewardEl.textContent = "奖励: " + _formatReward(b.reward);
@@ -355,6 +374,18 @@ window.App = window.App || {};
       summaryText.textContent = "悬赏: " + bounties.length + "项可接";
     } else {
       summaryText.textContent = "悬赏: 暂无";
+    }
+
+    var storyEvents = data.story_events || [];
+    var storySection = document.getElementById("storySection");
+    var storySummaryText = document.getElementById("storySummaryText");
+    if (storySection && storySummaryText) {
+      if (storyEvents.length > 0) {
+        storySection.style.display = "";
+        storySummaryText.textContent = "江湖事: " + storyEvents.map(function(e) { return e.title || ""; }).filter(Boolean).join("、");
+      } else {
+        storySection.style.display = "none";
+      }
     }
   }
 
@@ -414,7 +445,7 @@ window.App = window.App || {};
     var mapInfo = App.mapsData[App.currentMapId];
     var div = document.getElementById("portalList");
     if (!div) return;
-    div.innerHTML = "";
+    div.replaceChildren();
 
     if (!mapInfo || !mapInfo.portals || mapInfo.portals.length === 0) {
       var emptySpan = document.createElement("span");

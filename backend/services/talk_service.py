@@ -48,6 +48,14 @@ from backend.systems.constants import (
     MOOD_PERMADEATH_AROUSAL,
     MOOD_PERMADEATH_VALENCE,
     MOOD_POSITIVE_WORD_VALENCE,
+    NPC_ALLY_FAVOR_THRESHOLD,
+    NPC_ALLY_REP_THRESHOLD,
+    NPC_ALERT_FAVOR_THRESHOLD,
+    NPC_ALERT_REP_THRESHOLD,
+    NPC_HOSTILE_FAVOR_THRESHOLD,
+    NPC_HOSTILE_REP_THRESHOLD,
+    NPC_TRUST_FAVOR_THRESHOLD,
+    NPC_TRUST_REP_THRESHOLD,
 )
 from backend.systems.core import (
     apply_favor,
@@ -243,12 +251,21 @@ def _build_dynamic_prompt_parts(
         dyn_parts.append(
             f"【你心里的算盘】你与{fac_name}有牵连；"
             f"此人在{fac_name}里的名声目前为 {rep_v:+d}（百格制，越高越受待见）。"
-            f"在你眼里 {('值得抬手' if rep_v >= 25 else '可结纳' if rep_v >= 8 else '陌路一个' if rep_v > -8 else '面相可疑' if rep_v > -25 else '该被刁难')}。"
+            f"在你眼里 {('值得抬手' if rep_v >= NPC_ALLY_REP_THRESHOLD else '可结纳' if rep_v >= NPC_TRUST_REP_THRESHOLD else '陌路一个' if rep_v > NPC_ALERT_REP_THRESHOLD else '面相可疑' if rep_v > NPC_HOSTILE_REP_THRESHOLD else '该被刁难')}。"
         )
 
     rb = recent_events_block(p, npc_id)
     if rb:
         dyn_parts.append(rb)
+
+    from backend.systems.story_events import format_story_events_for_prompt, format_bounty_context_for_prompt
+    story_block = format_story_events_for_prompt(p, npc_id)
+    if story_block:
+        dyn_parts.append(story_block)
+
+    bounty_ctx = format_bounty_context_for_prompt(p, npc_id)
+    if bounty_ctx:
+        dyn_parts.append(bounty_ctx)
 
     if npc_id != "jiang" and p.rumors:
         dyn_parts.append(
@@ -260,7 +277,7 @@ def _build_dynamic_prompt_parts(
     if fav != 0:
         dyn_parts.append(
             f"【你对此客的旧账】上回与你相处后，你对他的感受为 {fav:+d}（-100..+100）。"
-            f"{'已成熟客' if fav >= 30 else '面熟有交' if fav >= 8 else '生人' if fav > -8 else '心存芥蒂' if fav > -30 else '势同水火'}。"
+            f"{'已成熟客' if fav >= NPC_ALLY_FAVOR_THRESHOLD else '面熟有交' if fav >= NPC_TRUST_FAVOR_THRESHOLD else '生人' if fav > NPC_ALERT_FAVOR_THRESHOLD else '心存芥蒂' if fav > NPC_HOSTILE_FAVOR_THRESHOLD else '势同水火'}。"
         )
 
     dyn_parts.append(
