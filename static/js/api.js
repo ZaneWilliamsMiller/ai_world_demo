@@ -66,7 +66,6 @@ window.App = window.App || {};
       }
     }
     throw lastError;
-    }
   }
 
   App.backendPost = backendPost;

@@ -45,7 +45,10 @@ window.App = window.App || {};
       }
       if (cancelBtn) cancelBtn.classList.remove("visible");
       if (_streamTimeout) clearTimeout(_streamTimeout);
-      if (textEl) textEl.textContent = visibleText;
+      if (textEl) {
+        textEl.textContent = visibleText;
+        textEl.classList.remove("streaming");
+      }
       App.scrollToBottom();
     }
 
@@ -54,6 +57,12 @@ window.App = window.App || {};
 
       var msgDiv = App.addMsg("npc", {speaker: npcName, text: "..."}, false);
       textEl = msgDiv.querySelector(".msg-text");
+      if (textEl) textEl.classList.add("streaming");
+
+      var npcInfo = App.npcsHere.find(function(n) { return n.id === App.selectedNpcId; });
+      if (npcInfo && npcInfo.faction) {
+        msgDiv.classList.add("faction-" + npcInfo.faction);
+      }
 
       var decoder = new TextDecoder();
       var buf = "";

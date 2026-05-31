@@ -122,6 +122,17 @@
         <span style="color:#ff7043;">●</span> NPC
         <span style="color:var(--text-muted);">WASD/方向键 移动 | 点击地图/小地图 寻路</span>
       </div>
+      <div class="dpad" id="dpad">
+        <div></div>
+        <button onclick="App.moveTo((App._playerX||0),(App._playerY||0)-1)">↑</button>
+        <div></div>
+        <button onclick="App.moveTo((App._playerX||0)-1,(App._playerY||0))">←</button>
+        <div></div>
+        <button onclick="App.moveTo((App._playerX||0)+1,(App._playerY||0))">→</button>
+        <div></div>
+        <button onclick="App.moveTo((App._playerX||0),(App._playerY||0)+1)">↓</button>
+        <div></div>
+      </div>
     </div>
 
     <!-- ========== 右栏：状态 + NPC + 对话 ========== -->
@@ -174,6 +185,14 @@
           <span class="bounty-summary-icon">📜</span>
           <span class="bounty-summary-text" id="bountySummaryText">悬赏: 暂无</span>
           <span class="bounty-expand-btn" id="bountyExpandBtn">展开 ▾</span>
+        </div>
+        <div class="bounty-collapsible" id="bountyCollapsible">
+          <div id="bountyContent" class="bounty-inline-content"></div>
+          <div class="bounty-inline-actions" id="bountyInlineActions">
+            <button id="bountyRefreshBtn2">🔄 刷新悬赏</button>
+            <button id="bountyCompleteBtn2">✅ 完成</button>
+            <button id="bountyAbandonBtn2">❌ 放弃</button>
+          </div>
         </div>
       </div>
 

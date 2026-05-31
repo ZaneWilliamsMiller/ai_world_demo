@@ -7,6 +7,7 @@ window.App = window.App || {};
   "use strict";
 
   let _statePollTimer = null;
+  let _bountyRefreshTimer = null;
   let _shuttingDown = false;
 
   const HtmlUtils = App.HtmlUtils;
@@ -94,6 +95,14 @@ window.App = window.App || {};
         });
       }
     }, 30000);
+
+    if (_bountyRefreshTimer) { clearInterval(_bountyRefreshTimer); _bountyRefreshTimer = null; }
+    _bountyRefreshTimer = setInterval(function() {
+      if (_shuttingDown || !_pageVisible) return;
+      if (App.playerId && !App.isStreaming) {
+        App.doBountyRefresh();
+      }
+    }, 120000);
   };
 
   App.doLogout = function() {
@@ -102,6 +111,7 @@ window.App = window.App || {};
       "确定要退出游戏吗？<br><br>\u26a0\ufe0f <b>未存档的进度将丢失</b>",
       function() {
         if (_statePollTimer) { clearInterval(_statePollTimer); _statePollTimer = null; }
+        if (_bountyRefreshTimer) { clearInterval(_bountyRefreshTimer); _bountyRefreshTimer = null; }
         App.cancelTalkStream();
         if (App._actLoopAbortController) { App._actLoopAbortController.abort(); App._actLoopAbortController = null; }
         App.playerId = null;
@@ -375,6 +385,7 @@ window.App = window.App || {};
 
           _shuttingDown = true;
           if (_statePollTimer) { clearInterval(_statePollTimer); _statePollTimer = null; }
+          if (_bountyRefreshTimer) { clearInterval(_bountyRefreshTimer); _bountyRefreshTimer = null; }
 
           if (overlay) {
             const resultIcon = backendSuccess ? "\u2705" : "\ud83d\udf36";
@@ -540,19 +551,32 @@ window.App = window.App || {};
     var bountyAbandonBtn = document.getElementById("bountyAbandonBtn");
     if (bountyAbandonBtn) bountyAbandonBtn.addEventListener("click", function() { App.doBountyAbandon(); });
 
+    var bountyRefreshBtn2 = document.getElementById("bountyRefreshBtn2");
+    if (bountyRefreshBtn2) bountyRefreshBtn2.addEventListener("click", function() { App.doBountyRefresh(); });
+    var bountyCompleteBtn2 = document.getElementById("bountyCompleteBtn2");
+    if (bountyCompleteBtn2) bountyCompleteBtn2.addEventListener("click", function() { App.doBountyComplete(); });
+    var bountyAbandonBtn2 = document.getElementById("bountyAbandonBtn2");
+    if (bountyAbandonBtn2) bountyAbandonBtn2.addEventListener("click", function() { App.doBountyAbandon(); });
+
     var bountyExpandBtn = document.getElementById("bountyExpandBtn");
     var bountyOverlay = document.getElementById("bountyOverlay");
     var bountyOverlayClose = document.getElementById("bountyOverlayClose");
     var bountySummary = document.getElementById("bountySummary");
-    if (bountySummary && bountyOverlay) {
+    var bountyCollapsible = document.getElementById("bountyCollapsible");
+    if (bountySummary) {
       bountySummary.addEventListener("click", function() {
-        var isVisible = bountyOverlay.classList.contains("visible");
-        if (isVisible) {
+        if (bountyCollapsible) {
+          var isVisible = bountyCollapsible.classList.contains("visible");
+          if (isVisible) {
+            bountyCollapsible.classList.remove("visible");
+            if (bountyExpandBtn) bountyExpandBtn.textContent = "展开 ▾";
+          } else {
+            bountyCollapsible.classList.add("visible");
+            if (bountyExpandBtn) bountyExpandBtn.textContent = "收起 ▴";
+          }
+        }
+        if (bountyOverlay) {
           bountyOverlay.classList.remove("visible");
-          if (bountyExpandBtn) bountyExpandBtn.textContent = "展开 ▾";
-        } else {
-          bountyOverlay.classList.add("visible");
-          if (bountyExpandBtn) bountyExpandBtn.textContent = "收起 ▴";
         }
       });
     }

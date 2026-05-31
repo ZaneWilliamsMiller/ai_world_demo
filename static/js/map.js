@@ -12,12 +12,14 @@ window.App = window.App || {};
   // ═══════════════════════════════════════════
   //  常量 & 颜色 - 全新美观配色
   // ═══════════════════════════════════════════
-  var TILE = 28;                          // 主视口瓦片像素 - 更大更舒适
-  var MINI_TILE = 2;                     // 小地图瓦片像素 - 缩小
-  var _MINI_PAD = 8;                      // 小地图内边距
-  var MINI_BORDER = 2;                   // 小地图边框宽
+  var TILE = 36;
+  var MINI_TILE = 2;
+  var _MINI_PAD = 8;
+  var MINI_BORDER = 2;
 
-  // 游戏风格配色 - 肉鸽风格
+  var _weatherType = "";
+  var _isNight = false;
+
   var TERRAIN = {
     "#": { fill: "#2e2845", border: "#5a50a0", label: "城墙", deco: "brick" },
     ".": { fill: "#4a4230", border: "#5e5640", label: "平地" },
@@ -36,7 +38,7 @@ window.App = window.App || {};
     "@": { fill: "#5a1a2a", border: "#902a3a", label: "危险", deco: "danger" },
     "!": { fill: "#3a0a0a", border: "#701a1a", label: "深渊", deco: "abyss" },
     "^": { fill: "#4a4a58", border: "#6a6a80", label: "悬崖", deco: "cliff" },
-    "&": { fill: "#1a3a3a", border: "#2a5a5a", label: "伏击点" },
+    "&": { fill: "#1a3a3a", border: "#2a5a5a", label: "伏击点", deco: "bush" },
     " ": { fill: "#06060c", label: "虚空" },
   };
 
@@ -47,146 +49,183 @@ window.App = window.App || {};
   function _drawDeco(ctx, sx, sy, deco, fill, border) {
     var cx = sx + TILE / 2;
     var cy = sy + TILE / 2;
+    var H = TILE;
+    var W = TILE;
     ctx.save();
     switch (deco) {
       case "brick":
         ctx.strokeStyle = "rgba(120,110,180,0.35)";
-        ctx.lineWidth = 0.8;
+        ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(sx + 3, cy); ctx.lineTo(sx + TILE - 3, cy);
-        ctx.moveTo(cx, sy + 3); ctx.lineTo(cx, cy);
-        ctx.moveTo(sx + TILE * 0.25, cy); ctx.lineTo(sx + TILE * 0.25, sy + TILE - 3);
-        ctx.moveTo(sx + TILE * 0.75, cy); ctx.lineTo(sx + TILE * 0.75, sy + TILE - 3);
+        ctx.moveTo(sx + 4, cy); ctx.lineTo(sx + W - 4, cy);
+        ctx.moveTo(cx, sy + 4); ctx.lineTo(cx, cy);
+        ctx.moveTo(sx + W * 0.25, cy); ctx.lineTo(sx + W * 0.25, sy + H - 4);
+        ctx.moveTo(sx + W * 0.75, cy); ctx.lineTo(sx + W * 0.75, sy + H - 4);
+        ctx.moveTo(sx + W * 0.5, cy); ctx.lineTo(sx + W * 0.5, sy + H - 4);
         ctx.stroke();
         break;
       case "grass":
-        ctx.strokeStyle = "rgba(80,160,80,0.45)";
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = "rgba(80,180,80,0.5)";
+        ctx.lineWidth = 1.2;
         ctx.beginPath();
-        ctx.moveTo(cx - 4, sy + TILE - 4); ctx.lineTo(cx - 2, sy + TILE - 10);
-        ctx.moveTo(cx, sy + TILE - 3); ctx.lineTo(cx + 1, sy + TILE - 11);
-        ctx.moveTo(cx + 4, sy + TILE - 4); ctx.lineTo(cx + 3, sy + TILE - 9);
+        ctx.moveTo(cx - 6, sy + H - 5); ctx.lineTo(cx - 4, sy + H - 16);
+        ctx.moveTo(cx - 2, sy + H - 4); ctx.lineTo(cx - 1, sy + H - 18);
+        ctx.moveTo(cx + 2, sy + H - 5); ctx.lineTo(cx + 1, sy + H - 17);
+        ctx.moveTo(cx + 6, sy + H - 4); ctx.lineTo(cx + 5, sy + H - 14);
         ctx.stroke();
+        ctx.fillStyle = "rgba(255,180,200,0.35)";
+        ctx.beginPath(); ctx.arc(cx + 8, sy + H - 14, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "rgba(200,200,100,0.3)";
+        ctx.beginPath(); ctx.arc(cx - 8, sy + H - 12, 1.5, 0, Math.PI * 2); ctx.fill();
         break;
       case "wave":
-        ctx.strokeStyle = "rgba(100,180,240,0.35)";
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = "rgba(100,180,240,0.4)";
+        ctx.lineWidth = 1.2;
         ctx.beginPath();
-        ctx.moveTo(sx + 3, cy - 3);
-        ctx.quadraticCurveTo(sx + TILE * 0.3, cy - 7, sx + TILE * 0.5, cy - 3);
-        ctx.quadraticCurveTo(sx + TILE * 0.7, cy + 1, sx + TILE - 3, cy - 3);
-        ctx.moveTo(sx + 5, cy + 4);
-        ctx.quadraticCurveTo(sx + TILE * 0.3, cy, sx + TILE * 0.5, cy + 4);
-        ctx.quadraticCurveTo(sx + TILE * 0.7, cy + 8, sx + TILE - 5, cy + 4);
+        ctx.moveTo(sx + 4, cy - 4);
+        ctx.quadraticCurveTo(sx + W * 0.3, cy - 10, sx + W * 0.5, cy - 4);
+        ctx.quadraticCurveTo(sx + W * 0.7, cy + 2, sx + W - 4, cy - 4);
+        ctx.moveTo(sx + 6, cy + 5);
+        ctx.quadraticCurveTo(sx + W * 0.3, cy - 1, sx + W * 0.5, cy + 5);
+        ctx.quadraticCurveTo(sx + W * 0.7, cy + 11, sx + W - 6, cy + 5);
         ctx.stroke();
+        ctx.fillStyle = "rgba(180,220,255,0.25)";
+        ctx.beginPath(); ctx.arc(cx + 6, cy - 6, 1.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cx - 8, cy + 2, 1, 0, Math.PI * 2); ctx.fill();
         break;
       case "tree":
-        ctx.fillStyle = "rgba(40,100,40,0.5)";
+        ctx.fillStyle = "rgba(30,90,30,0.6)";
         ctx.beginPath();
-        ctx.moveTo(cx, sy + 4); ctx.lineTo(cx - 6, cy + 2); ctx.lineTo(cx + 6, cy + 2);
+        ctx.moveTo(cx, sy + 4); ctx.lineTo(cx - 10, cy + 4); ctx.lineTo(cx + 10, cy + 4);
         ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "rgba(40,110,40,0.5)";
         ctx.beginPath();
-        ctx.moveTo(cx, sy + 8); ctx.lineTo(cx - 5, cy + 6); ctx.lineTo(cx + 5, cy + 6);
+        ctx.moveTo(cx, sy + 10); ctx.lineTo(cx - 8, cy + 8); ctx.lineTo(cx + 8, cy + 8);
         ctx.closePath(); ctx.fill();
-        ctx.fillStyle = "rgba(80,50,30,0.5)";
-        ctx.fillRect(cx - 1, cy + 4, 2, TILE - cy + sy - 6);
+        ctx.fillStyle = "rgba(70,45,25,0.6)";
+        ctx.fillRect(cx - 2, cy + 6, 4, H - cy + sy - 10);
         break;
       case "rock":
-        ctx.strokeStyle = "rgba(140,120,100,0.4)";
-        ctx.lineWidth = 1;
+        ctx.fillStyle = "rgba(120,100,80,0.35)";
         ctx.beginPath();
-        ctx.moveTo(cx - 5, sy + TILE - 5); ctx.lineTo(cx - 3, cy - 2);
-        ctx.lineTo(cx + 2, sy + 5); ctx.lineTo(cx + 6, cy + 1);
-        ctx.lineTo(cx + 4, sy + TILE - 5);
+        ctx.moveTo(cx - 8, sy + H - 6); ctx.lineTo(cx - 5, cy - 4);
+        ctx.lineTo(cx + 2, sy + 6); ctx.lineTo(cx + 9, cy + 2);
+        ctx.lineTo(cx + 7, sy + H - 6);
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = "rgba(160,140,110,0.4)";
+        ctx.lineWidth = 1;
         ctx.stroke();
         break;
       case "swamp":
         ctx.fillStyle = "rgba(80,70,30,0.4)";
+        ctx.beginPath(); ctx.arc(cx - 4, cy, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cx + 6, cy + 4, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cx, cy - 5, 1.5, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = "rgba(100,90,40,0.3)";
+        ctx.lineWidth = 0.8;
         ctx.beginPath();
-        ctx.arc(cx - 3, cy, 2, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath();
-        ctx.arc(cx + 4, cy + 3, 1.5, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath();
-        ctx.arc(cx, cy - 4, 1, 0, Math.PI * 2); ctx.fill();
+        ctx.moveTo(cx - 6, cy + 8); ctx.quadraticCurveTo(cx, cy + 4, cx + 6, cy + 8);
+        ctx.stroke();
         break;
       case "inn":
-        ctx.fillStyle = "rgba(220,170,50,0.6)";
+        ctx.fillStyle = "rgba(220,170,50,0.65)";
         ctx.beginPath();
-        ctx.moveTo(cx, sy + 3); ctx.lineTo(sx + 4, sy + 10); ctx.lineTo(sx + TILE - 4, sy + 10);
+        ctx.moveTo(cx, sy + 3); ctx.lineTo(sx + 5, sy + 12); ctx.lineTo(sx + W - 5, sy + 12);
         ctx.closePath(); ctx.fill();
-        ctx.fillStyle = "rgba(180,130,40,0.5)";
-        ctx.fillRect(cx - 4, sy + 10, 8, TILE - 14);
-        ctx.fillStyle = "rgba(255,200,80,0.7)";
-        ctx.fillRect(cx - 1, sy + 12, 2, 3);
+        ctx.fillStyle = "rgba(180,130,40,0.55)";
+        ctx.fillRect(cx - 6, sy + 12, 12, H - 18);
+        ctx.fillStyle = "rgba(255,200,80,0.8)";
+        ctx.fillRect(cx - 2, sy + 15, 3, 4);
+        ctx.fillStyle = "rgba(200,50,30,0.6)";
+        ctx.fillRect(cx + 5, sy + 3, 6, 8);
+        ctx.fillRect(cx + 4, sy + 2, 8, 3);
         break;
       case "tower":
-        ctx.fillStyle = "rgba(90,110,170,0.5)";
-        ctx.fillRect(cx - 3, sy + 6, 6, TILE - 10);
-        ctx.fillStyle = "rgba(110,130,190,0.6)";
+        ctx.fillStyle = "rgba(90,110,170,0.55)";
+        ctx.fillRect(cx - 4, sy + 8, 8, H - 14);
+        ctx.fillStyle = "rgba(110,130,190,0.65)";
         ctx.beginPath();
-        ctx.moveTo(cx, sy + 2); ctx.lineTo(cx - 5, sy + 8); ctx.lineTo(cx + 5, sy + 8);
+        ctx.moveTo(cx, sy + 2); ctx.lineTo(cx - 7, sy + 10); ctx.lineTo(cx + 7, sy + 10);
         ctx.closePath(); ctx.fill();
         ctx.fillStyle = "rgba(200,200,240,0.5)";
-        ctx.fillRect(cx - 1, sy + 10, 2, 2);
+        ctx.fillRect(cx - 1, sy + 13, 2, 3);
+        ctx.fillStyle = "rgba(200,50,30,0.5)";
+        ctx.fillRect(cx + 4, sy + 4, 5, 6);
         break;
       case "ruin":
         ctx.strokeStyle = "rgba(120,90,110,0.5)";
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(sx + 5, sy + TILE - 5); ctx.lineTo(sx + 5, cy);
-        ctx.moveTo(sx + TILE - 5, sy + TILE - 5); ctx.lineTo(sx + TILE - 5, cy + 3);
-        ctx.moveTo(sx + 4, cy); ctx.lineTo(sx + TILE - 4, cy + 3);
-        ctx.stroke();
-        ctx.fillStyle = "rgba(100,70,90,0.3)";
-        ctx.fillRect(sx + 6, cy + 1, 4, 3);
-        break;
-      case "market":
-        ctx.fillStyle = "rgba(200,170,40,0.5)";
-        ctx.beginPath();
-        ctx.moveTo(sx + 3, cy + 2); ctx.lineTo(cx, sy + 4); ctx.lineTo(sx + TILE - 3, cy + 2);
-        ctx.lineTo(sx + TILE - 3, sy + TILE - 4); ctx.lineTo(sx + 3, sy + TILE - 4);
-        ctx.closePath(); ctx.fill();
-        ctx.fillStyle = "rgba(240,200,60,0.6)";
-        ctx.fillRect(cx - 1, cy + 2, 2, TILE / 2 - 4);
-        break;
-      case "bridge":
-        ctx.strokeStyle = "rgba(180,80,80,0.5)";
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(sx + 3, cy); ctx.lineTo(sx + TILE - 3, cy);
-        ctx.moveTo(sx + 3, cy + 4); ctx.lineTo(sx + TILE - 3, cy + 4);
+        ctx.moveTo(sx + 6, sy + H - 6); ctx.lineTo(sx + 6, cy - 2);
+        ctx.moveTo(sx + W - 6, sy + H - 6); ctx.lineTo(sx + W - 6, cy + 4);
+        ctx.moveTo(sx + 5, cy - 2); ctx.lineTo(sx + W - 5, cy + 4);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(100,70,90,0.3)";
+        ctx.fillRect(sx + 8, cy + 1, 6, 4);
+        break;
+      case "market":
+        ctx.fillStyle = "rgba(200,170,40,0.55)";
+        ctx.beginPath();
+        ctx.moveTo(sx + 4, cy + 2); ctx.lineTo(cx, sy + 4); ctx.lineTo(sx + W - 4, cy + 2);
+        ctx.lineTo(sx + W - 4, sy + H - 5); ctx.lineTo(sx + 4, sy + H - 5);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "rgba(240,200,60,0.65)";
+        ctx.fillRect(cx - 1, cy + 4, 2, H / 2 - 6);
+        ctx.fillStyle = "rgba(200,50,30,0.4)";
+        ctx.fillRect(sx + 6, sy + H - 8, 4, 3);
+        ctx.fillRect(sx + W - 10, sy + H - 8, 4, 3);
+        break;
+      case "bridge":
+        ctx.strokeStyle = "rgba(180,80,80,0.55)";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(sx + 4, cy); ctx.lineTo(sx + W - 4, cy);
+        ctx.moveTo(sx + 4, cy + 5); ctx.lineTo(sx + W - 4, cy + 5);
         ctx.stroke();
         ctx.strokeStyle = "rgba(160,70,70,0.4)";
-        ctx.lineWidth = 1;
-        for (var bi = 0; bi < 3; bi++) {
-          var bx = sx + 5 + bi * 7;
-          ctx.beginPath(); ctx.moveTo(bx, cy - 2); ctx.lineTo(bx, cy + 6); ctx.stroke();
+        ctx.lineWidth = 1.2;
+        for (var bi = 0; bi < 4; bi++) {
+          var bx = sx + 6 + bi * 7;
+          ctx.beginPath(); ctx.moveTo(bx, cy - 3); ctx.lineTo(bx, cy + 8); ctx.stroke();
         }
         break;
       case "danger":
-        ctx.fillStyle = "rgba(200,40,60,0.3)";
+        ctx.fillStyle = "rgba(200,40,60,0.35)";
         ctx.beginPath();
-        ctx.moveTo(cx, sy + 4); ctx.lineTo(cx + 5, sy + TILE - 5); ctx.lineTo(cx - 5, sy + TILE - 5);
+        ctx.moveTo(cx, sy + 5); ctx.lineTo(cx + 7, sy + H - 6); ctx.lineTo(cx - 7, sy + H - 6);
         ctx.closePath(); ctx.fill();
-        ctx.fillStyle = "rgba(255,80,80,0.6)";
-        ctx.fillRect(cx - 1, cy + 2, 2, 4);
-        ctx.fillRect(cx - 0.5, cy, 1, 2);
+        ctx.fillStyle = "rgba(255,80,80,0.7)";
+        ctx.fillRect(cx - 1.5, cy + 3, 3, 5);
+        ctx.fillRect(cx - 0.5, cy, 1.5, 3);
         break;
       case "abyss":
-        var ag = ctx.createRadialGradient(cx, cy, 0, cx, cy, TILE / 2);
-        ag.addColorStop(0, "rgba(0,0,0,0.5)");
-        ag.addColorStop(0.6, "rgba(60,10,10,0.3)");
+        var ag = ctx.createRadialGradient(cx, cy, 0, cx, cy, W / 2);
+        ag.addColorStop(0, "rgba(0,0,0,0.6)");
+        ag.addColorStop(0.5, "rgba(60,10,10,0.35)");
         ag.addColorStop(1, "rgba(0,0,0,0)");
         ctx.fillStyle = ag;
-        ctx.fillRect(sx, sy, TILE, TILE);
+        ctx.fillRect(sx, sy, W, H);
         break;
       case "cliff":
-        ctx.strokeStyle = "rgba(100,100,130,0.4)";
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = "rgba(100,100,130,0.45)";
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(sx + 3, sy + 4); ctx.lineTo(sx + TILE - 3, sy + TILE - 4);
-        ctx.moveTo(sx + TILE - 3, sy + 4); ctx.lineTo(sx + 3, sy + TILE - 4);
+        ctx.moveTo(sx + 4, sy + 5); ctx.lineTo(sx + W - 4, sy + H - 5);
+        ctx.moveTo(sx + W - 4, sy + 5); ctx.lineTo(sx + 4, sy + H - 5);
         ctx.stroke();
+        ctx.fillStyle = "rgba(80,80,110,0.2)";
+        ctx.beginPath();
+        ctx.moveTo(cx, sy + 4); ctx.lineTo(cx + 6, cy); ctx.lineTo(cx, sy + H - 4); ctx.lineTo(cx - 6, cy);
+        ctx.closePath(); ctx.fill();
+        break;
+      case "bush":
+        ctx.fillStyle = "rgba(40,100,80,0.45)";
+        ctx.beginPath(); ctx.arc(cx - 4, cy + 2, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cx + 5, cy - 1, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cx, cy - 5, 3.5, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = "rgba(60,120,80,0.3)";
+        ctx.lineWidth = 0.8;
+        ctx.beginPath(); ctx.moveTo(cx, cy + 7); ctx.lineTo(cx, cy + H - 4); ctx.stroke();
         break;
     }
     ctx.restore();
@@ -393,7 +432,8 @@ window.App = window.App || {};
     renderMini();
 
     var camMoving = Math.abs(cam.x - cam.targetX) > 0.01 || Math.abs(cam.y - cam.targetY) > 0.01;
-    var keepRunning = camMoving || _dirty || App._isMoving;
+    var hasWeatherAnim = _weatherType === "rain" || _weatherType === "storm" || _weatherType === "snow";
+    var keepRunning = camMoving || _dirty || App._isMoving || hasWeatherAnim;
 
     if (keepRunning) {
       _dirty = false;
@@ -616,6 +656,46 @@ window.App = window.App || {};
     ctx.fillStyle = "rgba(160,160,190,0.8)";
     ctx.textAlign = "left";
     ctx.fillText("(" + px + ", " + py + ")", viewW - 80, viewH - 16);
+
+    if (_isNight) {
+      ctx.fillStyle = "rgba(8,8,30,0.35)";
+      ctx.fillRect(0, 0, viewW, viewH);
+      var nightGrd = ctx.createRadialGradient(
+        playerScreenX, playerScreenY, TILE,
+        playerScreenX, playerScreenY, TILE * 5
+      );
+      nightGrd.addColorStop(0, "rgba(8,8,30,0)");
+      nightGrd.addColorStop(1, "rgba(8,8,30,0.3)");
+      ctx.fillStyle = nightGrd;
+      ctx.fillRect(0, 0, viewW, viewH);
+    }
+
+    if (_weatherType === "rain" || _weatherType === "storm") {
+      ctx.strokeStyle = "rgba(120,160,220,0.25)";
+      ctx.lineWidth = 1;
+      var now = Date.now();
+      for (var ri = 0; ri < 60; ri++) {
+        var rx = (ri * 37 + now * 0.3) % viewW;
+        var ry = (ri * 53 + now * 0.8) % viewH;
+        ctx.beginPath();
+        ctx.moveTo(rx, ry);
+        ctx.lineTo(rx - 2, ry + 8);
+        ctx.stroke();
+      }
+    } else if (_weatherType === "fog" || _weatherType === "mist") {
+      ctx.fillStyle = "rgba(180,190,210,0.12)";
+      ctx.fillRect(0, 0, viewW, viewH);
+    } else if (_weatherType === "snow") {
+      ctx.fillStyle = "rgba(240,245,255,0.35)";
+      var snowNow = Date.now();
+      for (var si = 0; si < 40; si++) {
+        var sx2 = (si * 41 + snowNow * 0.05) % viewW;
+        var sy2 = (si * 67 + snowNow * 0.15) % viewH;
+        ctx.beginPath();
+        ctx.arc(sx2, sy2, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
   }
 
   // ═══════════════════════════════════════════
@@ -788,6 +868,13 @@ window.App = window.App || {};
 
     App._playerX = p.px;
     App._playerY = p.py;
+
+    _isNight = !!p.world_is_night;
+    var w = (p.weather || "").toLowerCase();
+    if (w.indexOf("雨") >= 0 || w.indexOf("暴") >= 0) _weatherType = "rain";
+    else if (w.indexOf("雾") >= 0 || w.indexOf("霾") >= 0) _weatherType = "fog";
+    else if (w.indexOf("雪") >= 0) _weatherType = "snow";
+    else _weatherType = "";
 
     var mapTitle = document.getElementById("mapTitle");
     if (mapTitle) mapTitle.textContent = "🗺️ " + (mapInfo.name || App.currentMapId);
