@@ -100,6 +100,16 @@ window.App = window.App || {};
       App.npcsHere = npcs;
     }
 
+    var summaryText = document.getElementById("npcSummaryText");
+    if (summaryText) {
+      if (App.npcsHere && App.npcsHere.length > 0) {
+        var names = App.npcsHere.map(function(n) { return n.name; }).join("、");
+        summaryText.textContent = "此地图人物: " + App.npcsHere.length + "人 — " + names;
+      } else {
+        summaryText.textContent = "此地图人物: 附近无人";
+      }
+    }
+
     var ul = document.getElementById("npcList");
     if (!ul) return;
     ul.innerHTML = "";

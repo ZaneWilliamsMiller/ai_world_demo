@@ -156,10 +156,16 @@
       </div>
 
       <!-- NPC 列表 + 界门 -->
-      <div class="npc-section">
-        <h3>🧑🤝🧑 此地图人物</h3>
-        <ul class="npc-list" id="npcList"></ul>
-        <div class="portal-list" id="portalList"></div>
+      <div class="npc-section" id="npcSection">
+        <div class="npc-summary" id="npcSummary">
+          <span class="npc-summary-icon">🧑🤝🧑</span>
+          <span class="npc-summary-text" id="npcSummaryText">此地图人物: 暂无</span>
+          <span class="npc-expand-btn" id="npcExpandBtn">展开 ▾</span>
+        </div>
+        <div class="npc-collapsible" id="npcCollapsible">
+          <ul class="npc-list" id="npcList"></ul>
+          <div class="portal-list" id="portalList"></div>
+        </div>
       </div>
 
       <!-- 悬赏榜 -->

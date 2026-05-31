@@ -337,24 +337,58 @@
 
 /* ─── NPC 列表 ─── */
 .npc-section {
-  flex: 1;
-  overflow-y: auto;
+  flex-shrink: 0;
   border-bottom: 2px solid rgba(42, 42, 74, 0.6);
-  min-height: 0;
-}
-
-.npc-section h3 {
-  padding: 10px 20px;
-  font-size: 12px;
-  color: var(--accent-yellow);
-  letter-spacing: 3px;
-  position: sticky;
-  top: 0;
-  background: rgba(21, 21, 37, 0.95);
+  background: var(--glass-bg);
   backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(42, 42, 74, 0.6);
-  z-index: 1;
-  font-weight: 900;
+  overflow: hidden;
+}
+.npc-summary {
+  padding: 8px 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  transition: background 0.12s ease;
+}
+.npc-summary:hover {
+  background: rgba(96, 165, 250, 0.04);
+}
+.npc-summary-icon {
+  font-size: 13px;
+}
+.npc-summary-text {
+  flex: 1;
+  color: var(--accent-yellow);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.npc-expand-btn {
+  font-size: 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 3px;
+  letter-spacing: 1px;
+  transition: all 0.12s ease;
+}
+.npc-expand-btn:hover {
+  color: var(--accent-yellow);
+  border-color: var(--accent-yellow);
+}
+.npc-collapsible {
+  display: none;
+  max-height: 200px;
+  overflow-y: auto;
+  border-top: 1px solid rgba(42, 42, 74, 0.6);
+}
+.npc-collapsible.visible {
+  display: block;
 }
 
 .npc-list {

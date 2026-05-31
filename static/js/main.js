@@ -563,6 +563,22 @@ window.App = window.App || {};
       });
     }
 
+    var npcSummary = document.getElementById("npcSummary");
+    var npcCollapsible = document.getElementById("npcCollapsible");
+    var npcExpandBtn = document.getElementById("npcExpandBtn");
+    if (npcSummary && npcCollapsible) {
+      npcSummary.addEventListener("click", function() {
+        var isVisible = npcCollapsible.classList.contains("visible");
+        if (isVisible) {
+          npcCollapsible.classList.remove("visible");
+          if (npcExpandBtn) npcExpandBtn.textContent = "展开 ▾";
+        } else {
+          npcCollapsible.classList.add("visible");
+          if (npcExpandBtn) npcExpandBtn.textContent = "收起 ▴";
+        }
+      });
+    }
+
     var cancelStreamBtn = document.getElementById("cancelStreamBtn");
     if (cancelStreamBtn) {
       cancelStreamBtn.addEventListener("click", function() {
